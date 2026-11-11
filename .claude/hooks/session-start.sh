@@ -1,5 +1,5 @@
 #!/bin/bash
-# Cloud sessions only: give the program the pectinos checkout it builds against
+# Cloud sessions only: give QUINCE the pectinos checkout it builds against
 # (the SDK, CANNER, SIMMER; the Makefile's PECTIN_ROOT) at the commit
 # PECTIN_REV pins, and build the tools, so `make test`, `make` and `make
 # sim-smoke` work from the first turn. A computer of your own keeps its own
