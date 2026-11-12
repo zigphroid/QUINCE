@@ -158,8 +158,9 @@ enum {
 	  ((f) & PB3D_F_COLOUR_MASK) == PB3D_F_RGBA ? 2u : 0u))
 
 /* DEPTHRANGE: word 1 near, word 2 far, in the stored depth's units, 0 to
- * 0xFFFF, far at or above near (one below it is refused). PB turns q into a 16-bit depth d that keeps q's order and
- * stores near + (d (far - near + 1) >> 16). A frame starts at 0, 0xFFFF.
+ * 0xFFFF, far at or above near: PB refuses any far below near. PB turns
+ * q into a 16-bit depth d that keeps q's order and stores
+ * near + (d (far - near + 1) >> 16). A frame starts at 0, 0xFFFF.
  * GLQuake's view weapon is drawn at 0 to 0.3 of the range, so it is
  * always in front of the world. */
 #define PB3D_DEPTH_NEAR     0x0000u
@@ -176,7 +177,9 @@ enum {
  * to the viewport, and so must PB, as a Voodoo's clip registers did. */
 
 /* The words the command at w takes, out of left words: 0 if it isn't one
- * of these, its argument has a bit no command has, or it runs past left. */
+ * of these, its argument has a bit no command has, it is a STATE with
+ * depth test 3 or a DEPTHRANGE with far below near, or it runs past
+ * left. */
 uint32_t pb3d_cmd_words(const uint16_t *w, uint32_t left);
 
 /* --- the encoder: commands into a buffer --- */

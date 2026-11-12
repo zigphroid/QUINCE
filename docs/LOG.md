@@ -844,10 +844,17 @@ Rounding the last shift alone, the issue's first suggestion, wasn't
 enough. RA's floor left q 0.5 at 0x3FFFFFFF, and the shift can't undo
 that. `depth_test`'s two checks are now exact, not within 1.
 
-The scene's CRC and e1m1's 300 frames drawn by the model are unchanged,
-so no picture moved. The cost to PB: one add each for the sum's and
-the shift's rounding, plus a different constant in RA's divide, which
-runs once a triangle.
+Pictures do move, a little. The scene's CRC and the 76 e1m1 frames
+`test-quake` draws through the model are unchanged, but on the demo
+dumps about 40% of frames do (demo1 418 of 1,020, demo2 344 of 1,033,
+demo3 534 of 1,143): 1 to 4 pixels each in the frames the review
+sampled, at most 33 in a channel. A constant q on a step's edge still lands a step farther
+about one pixel in 20 (one in 7 before), so the bias is cut, not gone
+(PB3D.md's depth rule). `test_pbmodel`'s `depth_rounding` holds it:
+random triangles, a pixel a step off as often nearer as farther.
+
+The cost to PB: one add each for the sum's and the shift's rounding,
+plus a different constant in RA's divide, which runs once a triangle.
 
 Alternatives:
 - Keep the floors and say "about" in PB3D.md. That leaves the bias.

@@ -89,10 +89,14 @@ uses the same R.
   is 0 or less), and q = Sd x RA / 2^(46 - sh - qs) rounded to nearest,
   held to 32 bits. That is the screen-linear mean of the vertices' q, to
   about a 65,536th (Sd's 16 bits), under the 12-bit mantissa's step
-  below, and as likely above as below: until #21 every step rounded
-  down, so a constant q came out under itself, and a q on a step's edge
-  (0.5) a whole step farther. A triangle drawn twice gets the same depth
-  both times.
+  below. Against the vertices' q as cut to 16 bits (`>> qs`, which
+  floors), a pixel a step off is as often nearer as farther. The bias
+  is cut, not gone: a constant q on a step's edge (0.5, say) still lands
+  a step farther about one pixel in 20, never nearer, because Sd's
+  rounding falls under it half the time; until #21, when every step
+  rounded down, it was about one in 7. Against the q sent, before
+  `>> qs`, depth is still farther more often than nearer. A triangle
+  drawn twice gets the same depth both times.
 - **The format:** a 4-bit exponent and a 12-bit mantissa, as Voodoo's
   w-buffer, so every distance gets about a 4,096th of itself in precision.
   q at or above 1.0 is taken as 0x7FFFFFFF. With lz the leading zeros of q
