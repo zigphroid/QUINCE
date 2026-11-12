@@ -580,8 +580,9 @@ Mac in `~/src/quince-board-run/m2m3/`.
   share of a frame the GL layer has made longer. Why it's half isn't
   measured: the XIP cache and PSRAM weigh more on the board (inferred). softfp is out of the
   timedemo's top 25; `__aeabi_ddiv` is 1.1% of the server run.
-- **CANNER against GCC** is 17% slower on demo1 and 16% on e1m1, against
-  22% and 12% in M1.
+- **GCC against CANNER**: GCC's build takes 17% less time a frame on
+  demo1 and 16% less on e1m1, against 22% and 12% in M1 (CANNER's is 20%
+  slower on both).
 - **What PB is sent**, at the board's own frame rate: demo1 27 KB a
   frame, 590 KB/s at 21.8 fps (vertices 554 KB/s), e1m1 602 KB/s; PB-ASKS
   has the row. Textures at load are 151 and 2.6 MB, none reloaded.
@@ -592,9 +593,10 @@ Mac in `~/src/quince-board-run/m2m3/`.
   samples. `make heat`'s 64 KB budget keeps 257 functions (64.7 KB),
   which hold more than 99% of the samples, and moves 881 (142.5 KB) to
   PSRAM. M1's file named blocks (`nullgl.c:glVertex3fv+10`, 5,187 of
-  them); this one names whole functions, from the same THERMO, `heat.py`
-  and pin, so the difference is in the jar (not looked into). The heat
-  build wasn't timed this run.
+  them); this one names whole functions, because the kernel had no room
+  for the count by offset (THERMO.md: it takes a halfword a halfword of
+  code; inferred: Quake's hunk had the PSRAM). `make heat` cuts by
+  function, so it takes either. The heat build wasn't timed this run.
 
 What it says: the CPU's half of a real renderer runs at 22 fps in
 CANNER's build and 26 in GCC's, short of the 30 fps target, and the

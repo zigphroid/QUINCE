@@ -232,12 +232,16 @@ can hold it back is flow control.
 | The compact vertex, two passes | 3,950 | 16 | 66 (3 KB of headers) | 2.2 | 4.0 |
 | The compact vertex, two textures a pixel | about 2,750 (inferred) | 16 | 47 | 1.6 | 2.8 |
 | M2 as measured on the PC: one pass, cut and culled, every command | 2,412 | 12.7 on average | 32 | 1.1 | 1.9 |
-| M2 on the board (CANNER, M3's floats; 590 KB/s at its own 21.8 fps) | 1,838 | 14.1 on average | 27 | 0.89 | 1.6 |
+| M2 on the board (CANNER, M3's floats; 590 KB/s at its own 21.8 fps) | 1,838 | 14.1 on average | 27 | 0.87 | 1.6 |
 
 The third row assumed the world is about 60% of the vertices and the
-lightmap pass sends it twice (inferred). The last is what the GL layer
-sends (M2 PR 2, LOG 2026-11-12): demo1 on the PC, whose frames follow the
-PC's clock, so the board's will differ a little. A vertex averages 12.7
+lightmap pass sends it twice (inferred). The last two are what the GL
+layer sends (M2 PR 2 and PR 3, LOG 2026-11-12): demo1 on the PC, then on
+the board. The timedemo's frames follow the clock, and the board's sent
+14% fewer words and 21% fewer vertices than the PC's do today (16,000
+words, 2,325 vertices; the PC row is from before PR 2's last changes);
+inferred to be the client's interpolation at 22 fps against the PC's
+thousands. MB/s here is MiB. A vertex averages 12.7 to 14.1
 bytes because the HUD's and the models' are smaller than the world's,
 and the primitives off the screen (about 240 a frame) aren't sent. Load
 is 2.6 MB of texture indices, well under a second.
