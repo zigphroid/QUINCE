@@ -37,6 +37,19 @@ static int to_int(const char *s, int *out)
 	return 0;
 }
 
+/* The shell hands a program its words in capitals (DEMO1, E1M1), and
+ * Quake's pak names are lower case and compared exactly (COM_FindFile's
+ * strcmp, common.c), so the name is lowered here. */
+static char *lower(const char *s)
+{
+	static char buf[64];
+	size_t i;
+	for (i = 0; s[i] && i < sizeof buf - 1; i++)
+		buf[i] = s[i] >= 'A' && s[i] <= 'Z' ? s[i] - 'A' + 'a' : s[i];
+	buf[i] = 0;
+	return buf;
+}
+
 int qbench_parse(int argc, char **argv, struct qbench_run *run)
 {
 	char *words[4];
@@ -63,7 +76,9 @@ int qbench_parse(int argc, char **argv, struct qbench_run *run)
 	} else
 		return -1;
 	run->basedir = words[0];
-	run->name = words[2];
+	if (strlen(words[2]) >= 64)
+		return -1;
+	run->name = lower(words[2]);
 	return 0;
 }
 

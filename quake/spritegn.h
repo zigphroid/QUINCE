@@ -63,6 +63,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // must match definition in modelgen.h
 #ifndef SYNCTYPE_T
 #define SYNCTYPE_T
+// QUINCE: the fields of the file formats below that were enums are ints.
+// On arm-none-eabi an enum is as small as its values (1 byte here: GCC's
+// default, and CANNER's), but the files hold 4 bytes, so with the enum
+// every skin and frame after the first was read 3 bytes short.
 typedef enum {ST_SYNC=0, ST_RAND } synctype_t;
 #endif
 
@@ -76,7 +80,7 @@ typedef struct {
 	int			height;
 	int			numframes;
 	float		beamlength;
-	synctype_t	synctype;
+	int			synctype;	// QUINCE: synctype_t; see below
 } dsprite_t;
 
 #define SPR_VP_PARALLEL_UPRIGHT		0
@@ -102,7 +106,7 @@ typedef struct {
 typedef enum { SPR_SINGLE=0, SPR_GROUP } spriteframetype_t;
 
 typedef struct {
-	spriteframetype_t	type;
+	int					type;	// QUINCE: spriteframetype_t; see below
 } dspriteframetype_t;
 
 #define IDSPRITEHEADER	(('P'<<24)+('S'<<16)+('D'<<8)+'I')

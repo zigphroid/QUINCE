@@ -132,9 +132,11 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 # the GL renderer and the null sound, CD and input), QUINCE's null GL,
 # video layer and benchmark driver from lib/, and tests/sys_host.c. Built
 # 32-bit, because Quake keeps pointers in ints in places, and with id386
-# off (-U__i386__), so it takes the C paths the board takes. id's files
+# off (-U__i386__), so it takes the C paths the board takes, and with
+# enums as small as their values (-fshort-enums), as arm-none-eabi has them
+# (GCC and CANNER alike: quake/modelgen.h says what that cost). id's files
 # are old C: gnu89, common symbols, and their warnings left alone.
-QHOST_CC  := $(HOSTCC) -m32 -U__i386__ -DGLQUAKE -I lib -I quake -O2 -g
+QHOST_CC  := $(HOSTCC) -m32 -U__i386__ -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
 QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) tests/sys_host.c)
 
 $(BUILD)/qhost/quake/%.o: quake/%.c $(wildcard quake/*.h) lib/GL/gl.h Makefile

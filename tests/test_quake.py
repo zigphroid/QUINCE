@@ -31,12 +31,12 @@ def run(exe, base, *words):
 def main():
     exe, base = sys.argv[1], sys.argv[2]
     failed = 0
-    demo = run(exe, base, "timedemo", "demo1")
+    demo = run(exe, base, "timedemo", "DEMO1")
     m = re.search(r"^timedemo: (\d+) frames", demo, re.M)
     if not m or int(m.group(1)) != DEMO1_FRAMES:
         print("FAIL: demo1 ran %s frames, want %d" % (m and m.group(1), DEMO1_FRAMES))
         failed += 1
-    server = run(exe, base, "server", "e1m1", str(SERVER_FRAMES))
+    server = run(exe, base, "server", "E1M1", str(SERVER_FRAMES))
     m = re.search(r"^server: totals (\d+) tris (\d+) verts", server, re.M)
     got = (int(m.group(1)), int(m.group(2))) if m else None
     if got != SERVER_TOTALS:

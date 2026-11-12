@@ -40,4 +40,6 @@ the pixelboard is a later milestone.
   run on SIMMER (`make sim-bench`), with Quake's memory fitted to the
   board's (LOG 2026-11-12).
 - PR 3: the board run, with `id1/pak0.pak` on the card: the timings, the
-  counts and the profiles, and what they say about feasibility.
+  counts and the profiles, and what they say about feasibility. Then the
+  same timings with the code cut by THERMO's heat file (`tools/heat.py`,
+  CANNER `-cold`): the frame loop in the jar, the rest in PSRAM.

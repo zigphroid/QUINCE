@@ -82,3 +82,20 @@ it.
 type was wrong (CANNER compiles the program whole and refuses it), and
 the calls id made before declaring a function get prototypes
 (`lib/qproto.h`), since CANNER, as C99, has no implicit declarations.
+
+## 2026-11-12: Quake's file structs and short enums
+
+On SIMMER, CANNER's build misread `player.mdl`. Every skin and frame
+came out 3 bytes short, and the run failed in `Mod_LoadAliasGroup`. The
+cause is not a CANNER bug. On arm-none-eabi an enum is only as big as its
+values need. That is GCC's default there, CANNER matches it
+(`apps/canner/README.md`, "Types"), and the `type` fields Quake declares
+as enums in its model and sprite file structs became 1 byte. The files
+hold 4. The decision: those fields become `int` (`quake/modelgen.h`,
+`quake/spritegn.h`, marked `QUINCE:`), and the PC build takes
+`-fshort-enums`, so `make test-quake` sees the board's sizes and fails
+without the fix.
+
+Alternatives: build with 4-byte enums (CANNER has no such switch, and the
+SDK's ABI fixes the size), or read the fields with `LittleLong` on a
+`byte *`, which changes more of id's code than changing the types does.
