@@ -72,7 +72,7 @@ struct pbm_bind {
 
 /* What happened to the pixels: the fill budget's numbers. */
 struct pbm_counts {
-	uint32_t tris;        /* triangles set up */
+	uint32_t tris;        /* every triangle seen, culled ones too */
 	uint32_t culled;      /* dropped by their winding, or with no area */
 	uint32_t covered;     /* pixels inside a triangle and on the surface */
 	uint32_t depth_fail;

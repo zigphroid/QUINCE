@@ -57,8 +57,9 @@ call sites in `quake/gl_*.c`.
 | Frame | `glClear`, `glFinish`, `glDrawBuffer` | Clear depth, end the frame, show it |
 | Not needed | `glFog*` (commented out in `gl_rmain.c`), `glReadPixels` (screenshots), the vertex array extension, `glHint` | Nothing; a screenshot can say it isn't on PB |
 
-Our GL layer drops `gl_ztrick`, which flips the depth range each frame to
-save a depth clear: PB clears depth itself. And PB corrects perspective on
+`gl_ztrick`, which flips the depth range each frame to save a depth clear,
+is off already (`lib/qvid.c` registers it at 0, since M1): PB clears depth
+itself. And PB corrects perspective on
 every triangle, not only the world's.
 
 ## Where transforms happen
@@ -176,7 +177,8 @@ always on PB. Dynamic lights change a band of rows in a block,
   point sampled: software Quake's look, half the texel reads;
 - an update that waits for its frame. A memory packet lands as soon as it
   comes, while PB may still be drawing the frame before (PB.md,
-  "Copies"); two copies of a changed block used in turn, or an update
+  "Drawing", its flow-control paragraph: "Memory packets aren't counted,
+  though"); two copies of a changed block used in turn, or an update
   command inside the frame's own `DRAW` stream, keep it from tearing.
 
 **Memory:** about 6.5 MB of RGB565 with mips plus the lightmaps. A
@@ -311,7 +313,7 @@ Quake.
 
 1. **QUINCE: the real GL layer, still drawing nothing.** It writes the
    actual command list (compact vertices, fans and strips, state,
-   near-plane clipping, two textures a pixel, `gl_ztrick` off), counts the
+   near-plane clipping, two textures a pixel), counts the
    bytes exactly, and the board times it. This replaces the inferred
    figures above.
 2. **The C model draws Quake.** QUINCE writes the triangle engine's C

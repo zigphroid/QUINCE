@@ -326,12 +326,12 @@ QUINCE builds.
   checksum was -3593997312; with SSE it is -3592846848, which CANNER's
   and GCC's builds on SIMMER print too. glibc's math against the SDK's
   made no difference to it yet, but PR 2's `sinf` and `cosf` will
-  depend on it. `asin` (mirrors only) is still glibc's. The PC build is
-  `-fno-builtin` too, as the board's `-ffreestanding` is: without it GCC
-  had turned a `sin` and a `cos` of one angle into a call to glibc's
-  `sincos`, in `AngleVectors` and seven other functions, so the SDK's
-  `sin` and `cos` weren't the ones running there. It changed neither
-  e1m1's state nor its checksum.
+  depend on it. `asin` (mirrors only) and `ceil` (exact, so it can't
+  differ) are still glibc's. The PC build is `-fno-builtin` too, as the
+  board's `-ffreestanding` is: without it GCC had turned a `sin` and a
+  `cos` of one angle into a call to glibc's `sincos`, in `AngleVectors`
+  and seven other functions, so the SDK's `sin` and `cos` weren't the
+  ones running there. It changed neither e1m1's state nor its checksum.
 - **`/SERVER` prints the game's state**: an FNV-1a hash of each entity in
   use, its origin in eighths of a unit (as `MSG_WriteCoord` sends it),
   its angles in 256ths of a turn (finer than `MSG_WriteAngle`, which
@@ -660,14 +660,14 @@ Jacob took every recommendation. M2's board run had our own GL layer at
   four-term dot products: 36 multiplies. Every plane is one coordinate
   against w, so each test is now a compare (`x + w < 0` for the left
   edge), or a multiply and a compare for the guard band's. The sums are
-  the same ones the dot products made, since the terms dropped were
-  exact zeros, and e1m1's 300 frames come out word for word as before
-  (the commands compared, not just the checksum). The guard band's four
-  tests are made only for a vertex off the screen: with each guard
-  factor at least 1, a vertex inside the screen's planes is inside the
-  guard's too (a rounded g w is at least w). The clipper tests the one
-  plane it cuts at, where it worked out all nine for both ends of every
-  edge.
+  the same ones the dot products made for finite coordinates, since the
+  terms dropped were exact zeros, and e1m1's 300 frames come out word
+  for word as before (the commands compared, not just the checksum).
+  The guard band's four tests are made only for a vertex off the
+  screen: with each guard factor at least 1, a vertex inside the
+  screen's planes is inside the guard's too (a rounded g w is at least
+  w). The clipper tests the one plane it cuts at, where it worked out
+  all nine for both ends of every edge.
 - **`fix`** (5.1%, and `pb3d_fix_12_4` 1.7%) added a half and cut, with
   four branches. It is now `roundf`, one `VRINTA` on the M33, which
   rounds halves away from zero as the format says. The old way, adding
@@ -758,9 +758,36 @@ with it (08790a2, #30); ms a frame, demo1 then e1m1:
   allowance for the start block, the stack's start on 32, the .bss's
   end on 8) inside `PROGRAM_SPAN`, and fails one that wouldn't load,
   so this shows on the PC: the largest stack it takes now is 21,184
-  bytes. A new `STACK` makes the .JAM again, and checks it.
+  bytes with the cloud session's GCC, and about 19.1 KB with the Mac's
+  (its SRAM ends 2 KB later). A new `STACK` makes the .JAM again, and
+  checks it.
   Alternatives: a smaller stack (16 KB is the rule, CLAUDE.md), or a
   heat cut for GCC's build too (a bigger change, for when the code
   grows). CANNER's build keeps its cold code out by the heat file and
   has room (inferred from its .JAM's sizes, not measured on the board).
 - The run's logs are on Jacob's Mac, `~/src/quince-board-run/m4/`.
+
+## 2026-11-12: clearing the review issues labelled later
+
+Jacob OKed a plan to clear the 21 open `later` issues in four PRs (docs,
+tests, small code fixes, then `lib/pbgl.c`), and took every
+recommendation on the five choices in them:
+
+- **#4, the headers in `quake/` that nothing builds:** a note in
+  `quake/README.md`, not a delete, so `quake/` stays id's bytes as
+  imported. Alternative: drop them; it would save nothing that matters.
+- **#21, the C model's depth a step too far:** round to nearest and
+  tighten `depth_test` (PR 3). It changes the model's depth values, not
+  a word Quake sends.
+- **#16, values the format leaves undefined:** refuse depth test 3 and a
+  `DEPTHRANGE` with far below near, and let `PB3D_TEXF_ALPHA` alone
+  decide see-through for RGBA8888 (PR 3). Refusing keeps the contract
+  pectinos reads small; treating 3 as ALWAYS was the alternative.
+- **#24.1, flat shading's colour:** the last vertex of each triangle, as
+  GL 1.1 does (section 2.13.7), with `pb3d.h` saying so (PR 4).
+- **#24.2, the far plane:** still not clipped, now said so. GLQuake's
+  4,096 holds every shareware map, and a sixth plane would cost time in
+  `outcode_of`, M4's hot path.
+
+#6, the millisecond clock, is an SDK gap: it goes to zigphroid/pectinos
+as an issue asking for a microsecond clock.

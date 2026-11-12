@@ -775,13 +775,6 @@ static void gl_cuts(void)
     check_num("and the cut one the same way", second < 0, 1);
 }
 
-// The guard band at each of its four edges, 2,040 pixels from the
-// surface's corner whatever the viewport: a vertex 10 pixels inside is
-// sent as it is, and one 10 pixels out is cut exactly at the edge, with
-// the inside one kept. The viewport is (x, row, w, h) in PB's rows, and
-// the projection makes GL's units its pixels; the triangles' other
-// corners are near (cx, cy). Each plane's own factor,
-// in outcode_of and the cut both, is the only one that passes all four.
 // a, b, c and d one after another in out's 96 bytes (lib/ has no
 // snprintf), for a check's name.
 static const char *join(char *out, const char *a, const char *b, const char *c, const char *d)
@@ -795,6 +788,13 @@ static const char *join(char *out, const char *a, const char *b, const char *c, 
     return out;
 }
 
+// The guard band at each of its four edges, 2,040 pixels from the
+// surface's corner whatever the viewport: a vertex 10 pixels inside is
+// sent as it is, and one 10 pixels out is cut exactly at the edge, with
+// the inside one kept. The viewport is (x, row, w, h) in PB's rows, and
+// the projection makes GL's units its pixels; the triangles' other
+// corners are near (cx, cy). Each plane's own factor,
+// in outcode_of and the cut both, is the only one that passes all four.
 static void gl_guard_at(const char *where, int vx, int vrow, int vw, int vh, float cx, float cy)
 {
     static const float dir[4][2] = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } };
@@ -802,8 +802,9 @@ static void gl_guard_at(const char *where, int vx, int vrow, int vw, int vh, flo
     char what[96];
     for (int e = 0; e < 4; e++) {
         float dx = dir[e][0], dy = dir[e][1];
-        // A point d pixels from the guard's edge (inward if d < 0), level
-        // with the viewport's centre.
+        // A point 10 pixels inside the guard's edge (2,030 from the
+        // corner) and one 10 outside (2,050), level with the viewport's
+        // centre.
         float in_x = dx != 0 ? dx * 2030.0f : cx, in_y = dy != 0 ? dy * 2030.0f : cy;
         float out_x = dx != 0 ? dx * 2050.0f : cx, out_y = dy != 0 ? dy * 2050.0f : cy;
         for (int pass = 0; pass < 2; pass++) {

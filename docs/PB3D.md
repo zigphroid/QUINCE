@@ -206,9 +206,9 @@ frames: GLQuake draws every pixel of its view).
 
 ## What the model counts
 
-Triangles set up, culled or with no area, pixels covered, failing depth,
-failing the alpha test, drawn, and blended (read the picture first). These
-are the fill budget's numbers in `docs/PB-ASKS.md`, measured on Quake's
+Triangles seen (culled ones too), those culled or with no area, pixels
+covered, failing depth, failing the alpha test, drawn, and blended (read
+the picture first). These are the fill budget's numbers in `docs/PB-ASKS.md`, measured on Quake's
 frames by `tests/pbplay.c`.
 
 ## Changing the rules
