@@ -110,7 +110,11 @@ for odd values past 2^23 and is now right.
 
 - PR 1: `outcode_of` as compares, the guard band's tests only off the
   screen; `fix` through `roundf`'s one FPU instruction; the checksum two
-  words a step. Then a board run beside M2's 45.8 ms.
+  words a step. Done (#30): on the board CANNER's demo1 is 46.4 to 38.3
+  ms a frame (-17%), level with GCC's before M4, and e1m1 32.9 to 28.9.
+- PR 2: the board run's write-up, and GCC's build made to fit the
+  program area again (the selftest's 4 KB to PSRAM; `make gcc` checks
+  it now).
 
 ## Later: drawing on the pixelboard
 

@@ -279,7 +279,15 @@ static void pb3d_commands(void)
 
 // The GL layer (lib/pbgl.c): what PB is sent for GL calls, read back
 // from a sink that keeps the last frame and the last texture.
-static uint16_t gl_words[1024], gl_frame[1024];
+// In PSRAM on the board, as lib/qproto.h's QPSRAM (which needs id's
+// types, so it isn't included here): 4 KB only the selftest uses, which
+// GCC's build, all its code in SRAM, couldn't spare (LOG 2026-11-12).
+#if defined(__CANNER__) || defined(__arm__)
+#define SELFTEST_PSRAM __attribute__((section(".pbss")))
+#else
+#define SELFTEST_PSRAM
+#endif
+static SELFTEST_PSRAM uint16_t gl_words[1024], gl_frame[1024];
 static uint8_t gl_textures[16 * PBGL_TEXTURE_BYTES], gl_scratch[256], gl_tex[256];
 static uint32_t gl_seq, gl_tex_seq, gl_nsubs, gl_sub_seq;
 static uint32_t gl_nframe, gl_tex_id, gl_tex_format, gl_tex_flags, gl_tex_w, gl_tex_h;

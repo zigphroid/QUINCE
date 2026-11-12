@@ -85,6 +85,15 @@ SDKLIB :=
 # The loader's default stack is 8 KB; 16 KB is the most there is. Big
 # buffers go in static or on the heap, never on the stack.
 STACK  := 16384
+# The largest program span HEADSPACE gives on the board at the pin, with
+# nothing resident: the 384 KB program area less the shell's stack (M4's
+# board run, LOG 2026-11-12). make gcc holds GCC's build to it: code,
+# data, SRAM .bss, the stack, the loader's 1 KB guard and the start
+# block, the program's arguments and environment at the span's top
+# (about 192 bytes for the board run's commands; 512 leaves room for a
+# longer line or a bigger environment).
+PROGRAM_SPAN := 384768
+START_BLOCK  := 512
 CANNER_FLAGS ?=
 # The .JAM that sim-smoke, sim-bench and send take: CANNER's plain build,
 # or build/heat/ or build/gcc/'s (below).
@@ -338,7 +347,25 @@ $(GCC_DIR)/$(NAME).elf: $(GCC_QOBJ) $(APP_LIBSRC) $(SDK)/app.ld $(SDK)/cold.ld
 	@if grep -q 'libgcc\.a' $(GCC_DIR)/$(NAME).map; then \
 	    echo "error: $@ links libgcc (pectinos has none: its CLAUDE.md, #112)"; rm -f $@; exit 1; fi
 	$(CROSS)objdump -d -S $@ > $(GCC_DIR)/$(NAME).lst
-$(BUILD)/gcc/$(NAME).JAM: $(GCC_DIR)/$(NAME).elf $(PAGE) $(VERB) $(PRF) $(VERBUSAGE) $(PREFCHECK)
+# The stack the .JAM was made with, so a new STACK makes it (and checks
+# it) again.
+$(GCC_DIR)/stack: FORCE
+	@mkdir -p $(dir $@)
+	@echo $(STACK) | cmp -s - $@ || echo $(STACK) > $@
+# Laid out as the loader's top_down (kernel/loader/jam.c) does, from the
+# span's top: the start block (rounded to 8), the stack under it with its
+# start on 32, the 1 KB guard, and the program's own memory must end
+# below that, its .bss's end rounded to 8. Taken from the .elf: SRAM
+# starts at 0x20000000 and __bss_end ends SRAM's .bss.
+$(BUILD)/gcc/$(NAME).JAM: $(GCC_DIR)/$(NAME).elf $(GCC_DIR)/stack $(PAGE) $(VERB) $(PRF) $(VERBUSAGE) $(PREFCHECK)
+	@end=$$($(CROSS)nm $< | awk '$$3 == "__bss_end" { print $$1 }'); \
+	mem_lo=$$(( (0x$$end - 0x20000000 + 7) & ~7 )); \
+	block_lo=$$(( ($(PROGRAM_SPAN) - (($(START_BLOCK) + 7) & ~7)) & ~7 )); \
+	stack_lo=$$(( (block_lo - (($(STACK) + 7) & ~7)) & ~31 )); \
+	mem_hi=$$(( stack_lo - 1024 )); \
+	if [ $$mem_lo -gt $$mem_hi ]; then \
+	    echo "error: $< ends SRAM at $$mem_lo bytes, past $$mem_hi, what a $(STACK)-byte stack" \
+	         "leaves of the board's $(PROGRAM_SPAN) (Headspace exceeded.)"; rm -f $@; exit 1; fi
 	$(VERBUSAGE) -f $(VERB) > /dev/null
 	$(if $(PRF),$(PREFCHECK) $(PRF) > /dev/null)
 	$(PYTHON) $(PECTIN_ROOT)/tools/mkjam.py --name $(NAME) --stack $(STACK) --page $(PAGE) \
