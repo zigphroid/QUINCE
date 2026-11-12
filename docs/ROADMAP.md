@@ -61,9 +61,11 @@ the C model to draw.
   held to exact words by the shared checks.
 - PR 2: `lib/pbgl.c` in place of `lib/nullgl.c`: fans, strips and lists,
   clipping at the near plane and the guard band, state sent only when it
-  changes, wall and lightmap in one pass, and textures as 8-bit indices
-  through a `QUINCE:` change in `GL_Upload8`. `QUINCE_PBDUMP` writes the
-  stream on the PC. Checked on the PC and on SIMMER.
+  changes, wall and lightmap in one pass, lightmap updates held to one
+  band a block a frame, and textures as 8-bit indices through a
+  `QUINCE:` change in `GL_Upload8`. `QUINCE_PBDUMP` writes the stream on
+  the PC, and `tests/pbcheck.py` reads it back. Checked on the PC and on
+  SIMMER: demo1 sends PB 32 KB a frame (LOG 2026-11-12).
 - PR 3: the board run, beside M1's 30.9 ms a frame, once the boards are
   free.
 
@@ -82,7 +84,8 @@ until the Jam is free.
   rounding functions their one FPU instruction; the PC build rounds
   floats as the board does (SSE, nothing fused, the SDK's `math.c`);
   `/SERVER` prints a state hash, which the PC and CANNER's build on
-  SIMMER must agree on exactly, with the null GL's checksum.
+  SIMMER must agree on exactly, with the null GL's checksum (since M2 PR 2,
+  the checksum of PB's commands).
 - PR 2: id's hot functions to float (`QUINCE:` edits): float constants,
   `sqrtf`, `sinf`, `cosf`, and the clock taken as a float once where a
   loop compared against it. The clocks themselves stay double. `make

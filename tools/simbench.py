@@ -23,13 +23,13 @@ MAPS = ["START"] + ["E1M%d" % i for i in range(1, 9)]
 # exactly. demo1's totals follow the clock (the
 # client's interpolation), so only its frame count is checked.
 SERVER_FRAMES = 300
-SERVER_TOTALS = (330776, 650152)   # triangles, vertices
-# Where those frames leave the game, and the null GL's checksum, as the
-# PC's (tests/test_quake.py): since M3 the PC rounds floats as the M33
-# does, so these match exactly too, and a difference is a bug in one build
-# (LOG 2026-11-12).
+SERVER_TOTALS = (186776, 357952)   # triangles, vertices GLQuake asked for
+SERVER_SENT = (2836051, 330356, 162178)   # words, vertices, triangles sent PB
+SERVER_CHECKSUM = 666297688   # of every word: the same commands, word for word
+# Where those frames leave the game, as the PC's (tests/test_quake.py):
+# since M3 the PC rounds floats as the M33 does, so these match exactly
+# too, and a difference is a bug in one build (LOG 2026-11-12).
 SERVER_STATE = "c8c17318, 164 entities"
-SERVER_CHECKSUM = "-3592846848"
 
 
 def main():
@@ -87,11 +87,16 @@ def main():
                 print("FAIL: e1m1's %d frames left state %s, want %s, as the PC's"
                       % (SERVER_FRAMES, got, SERVER_STATE))
                 failed += 1
-            m = re.search(r"server: checksum (\S+)", out)
-            got = m and m.group(1)
-            if args.frames == SERVER_FRAMES and got != SERVER_CHECKSUM:
-                print("FAIL: e1m1's %d frames' checksum %s, want %s, as the PC's"
-                      % (SERVER_FRAMES, got, SERVER_CHECKSUM))
+            m = re.search(r"server: sent totals (\d+) words (\d+) verts (\d+) tris", out)
+            got = m and tuple(int(g) for g in m.groups())
+            if args.frames == SERVER_FRAMES and got != SERVER_SENT:
+                print("FAIL: e1m1's %d frames sent PB %s (words, verts, tris), want %s, as the PC's"
+                      % (SERVER_FRAMES, got, SERVER_SENT))
+                failed += 1
+            m = re.search(r"server: checksum (\d+)", out)
+            if args.frames == SERVER_FRAMES and (not m or int(m.group(1)) != SERVER_CHECKSUM):
+                print("FAIL: e1m1's commands' checksum is %s, want %d, as the PC's"
+                      % (m and m.group(1), SERVER_CHECKSUM))
                 failed += 1
             # Every shareware map fits the board's pool (LOG 2026-11-12).
             for name in MAPS:

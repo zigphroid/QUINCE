@@ -4,7 +4,7 @@
 // string compare is our own.
 #include "quince_core.h"
 #include "qbench.h"
-#include "nullgl.h"
+#include "pbgl.h"
 #include "pb3d.h"
 #include "GL/gl.h"
 
@@ -109,71 +109,6 @@ static void bench_words(void)
               parse(&r, "Q", "timedemo",
                     "a123456789b123456789c123456789d123456789e123456789f123456789g123", 0, 0, 0),
               -1);
-}
-
-// The null GL (lib/nullgl.c): a vertex's screen position, as its
-// checksum sums them (x plus y), to the nearest pixel.
-static long screen(float x, float y, float z)
-{
-    float before = nullgl_checksum();
-    glBegin(GL_LINES);   // a primitive that makes no triangles
-    glVertex3f(x, y, z);
-    glEnd();
-    float d = nullgl_checksum() - before;
-    return (long)(d + (d < 0 ? -0.5f : 0.5f));
-}
-
-static long tris(GLenum mode, int n)
-{
-    uint32_t before = nullgl_total.tris;
-    glBegin(mode);
-    for (int i = 0; i < n; i++)
-        glVertex2f(0.0f, 0.0f);
-    glEnd();
-    return (long)(nullgl_total.tris - before);
-}
-
-static void null_gl(void)
-{
-    nullgl_reset();
-    glViewport(0, 0, 640, 480);
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glOrtho(0, 640, 480, 0, -1, 1);   // GL_Set2D's: y down, as the screen
-    glMatrixMode(GL_MODELVIEW);
-    glLoadIdentity();
-    // x 10, and y 20 from the top is 460 from the bottom: 470.
-    check_num("glOrtho: (10, 20) on the screen", screen(10, 20, 0), 470);
-    glPushMatrix();
-    glTranslatef(100, 0, 0);
-    check_num("glTranslatef moves it", screen(10, 20, 0), 570);
-    glPopMatrix();
-    check_num("glPopMatrix puts it back", screen(10, 20, 0), 470);
-
-    glMatrixMode(GL_PROJECTION);
-    glLoadIdentity();
-    glFrustum(-1, 1, -1, 1, 1, 10);
-    glMatrixMode(GL_MODELVIEW);
-    // On the axis: the middle, (320, 240).
-    check_num("glFrustum: the axis at the middle", screen(0, 0, -1), 560);
-    // (0.5, -0.5) at depth 2 divides by w = 2: x 400, y 180.
-    check_num("glFrustum: the divide by w", screen(0.5f, -0.5f, -2), 580);
-
-    check_num("GL_TRIANGLES", tris(GL_TRIANGLES, 6), 2);
-    check_num("GL_QUADS", tris(GL_QUADS, 8), 4);
-    check_num("GL_TRIANGLE_FAN", tris(GL_TRIANGLE_FAN, 5), 3);
-    check_num("GL_TRIANGLE_STRIP", tris(GL_TRIANGLE_STRIP, 6), 4);
-    check_num("GL_POLYGON", tris(GL_POLYGON, 7), 5);
-    check_num("GL_POLYGON of two", tris(GL_POLYGON, 2), 0);
-    check_num("GL_LINES", tris(GL_LINES, 4), 0);
-
-    nullgl_reset();
-    glTexImage2D(GL_TEXTURE_2D, 0, 4, 16, 8, 0, GL_RGBA, GL_UNSIGNED_BYTE, 0);
-    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 4, 4, GL_LUMINANCE, GL_UNSIGNED_BYTE, 0);
-    check_num("a texture's bytes", (long)nullgl_total.tex_bytes, 16 * 8 * 4);
-    check_num("a lightmap update's bytes, apart", (long)nullgl_total.sub_bytes, 4 * 4);
-    check_num("each call counted", (long)nullgl_total.calls, 2);
-    nullgl_reset();
 }
 
 // PB's 3D commands (lib/pb3d.c): the words they are, as the C model
@@ -328,8 +263,514 @@ static void pb3d_commands(void)
     check_num("a command inside an open TRIS is dropped", (long)b.dropped, 3);
 }
 
-static void (*const checks[])(void) = { greeting, bench_words, null_gl, pb3d_fixed,
-                                         pb3d_commands };
+// The GL layer (lib/pbgl.c): what PB is sent for GL calls, read back
+// from a sink that keeps the last frame and the last texture.
+static uint16_t gl_words[1024], gl_frame[1024];
+static uint8_t gl_textures[16 * PBGL_TEXTURE_BYTES], gl_scratch[256], gl_tex[256];
+static uint32_t gl_seq, gl_tex_seq, gl_nsubs, gl_sub_seq;
+static uint32_t gl_nframe, gl_tex_id, gl_tex_format, gl_tex_flags, gl_tex_w, gl_tex_h;
+
+static void gl_keep_frame(const uint16_t *w, uint32_t n)
+{
+    gl_nframe = n;
+    for (uint32_t i = 0; i < n && i < 1024; i++)
+        gl_frame[i] = w[i];
+}
+
+static void gl_keep_tex(uint32_t id, uint32_t format, uint32_t flags, uint32_t w, uint32_t h,
+                        const void *texels)
+{
+    const uint8_t *t = texels;
+    uint32_t n = w * h * (format == PB3D_TEX_RGBA8888 ? 4u : 1u);
+    gl_tex_seq = ++gl_seq;
+    gl_tex_id = id;
+    gl_tex_format = format;
+    gl_tex_flags = flags;
+    gl_tex_w = w;
+    gl_tex_h = h;
+    for (uint32_t i = 0; i < n && i < sizeof gl_tex; i++)
+        gl_tex[i] = t[i];
+}
+
+// The texture updates sent, in order with the textures made: gl_seq
+// numbers each call, so a check can say which went first.
+static uint32_t gl_sub_id, gl_sub_y, gl_sub_h, gl_sub_first, gl_sub_last;
+
+static void gl_keep_sub(uint32_t id, uint32_t format, uint32_t x, uint32_t y, uint32_t w,
+                        uint32_t h, const void *texels)
+{
+    const uint8_t *t = texels;
+    (void)format; (void)x;
+    gl_nsubs++;
+    gl_sub_seq = ++gl_seq;
+    gl_sub_id = id;
+    gl_sub_y = y;
+    gl_sub_h = h;
+    gl_sub_first = t[0];
+    gl_sub_last = t[w * h - 1];
+}
+
+static const struct pbgl_sink gl_sink = { 0, gl_keep_tex, gl_keep_sub, gl_keep_frame };
+
+static void gl_start(uint32_t nwords)
+{
+    struct pbgl_mem m;
+    m.words = gl_words;
+    m.nwords = nwords;
+    m.textures = gl_textures;
+    m.max_textures = 16;
+    m.scratch = gl_scratch;
+    m.nscratch = sizeof gl_scratch;
+    pbgl_init(&m, 640, 480, &gl_sink);
+    gl_nframe = 0;
+    gl_nsubs = 0;
+}
+
+// The frame's words from word k, against want's n.
+static void gl_check(const char *what, uint32_t k, const uint16_t *want, uint32_t n)
+{
+    pbgl_end_frame();
+    // The n words from k, or all there are if fewer.
+    check_words(what, gl_frame + (gl_nframe >= k ? k : 0),
+                gl_nframe >= k + n ? n : gl_nframe >= k ? gl_nframe - k : 0, want, n);
+}
+
+static void ortho(void)
+{
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glOrtho(0, 640, 480, 0, -1, 1);   // GL_Set2D's: y down, as the screen
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+}
+
+static void frustum(void)
+{
+    glMatrixMode(GL_PROJECTION);
+    glLoadIdentity();
+    glFrustum(-1, 1, -1, 1, 1, 10);   // near 1: q = 1 / w
+    glMatrixMode(GL_MODELVIEW);
+    glLoadIdentity();
+}
+
+static void gl_screen(void)
+{
+    gl_start(1024);
+    ortho();
+    glBegin(GL_TRIANGLES);
+    glVertex2f(10, 20);
+    glVertex2f(30.5f, 20);
+    glPushMatrix();               // the matrix is taken as each vertex comes
+    glTranslatef(100, 0, 0);
+    glVertex2f(10, 40);
+    glPopMatrix();
+    glEnd();
+    // Untextured, white: the state is smooth shading alone, and no colour.
+    static const uint16_t flat[] = {
+        0x1000, 0x0800,               // STATE: smooth
+        0x1200, 3,                    // TRIS: a list, x and y only
+        160, 320, 488, 320, 1760, 640,
+    };
+    gl_check("glOrtho: pixels on the surface", 0, flat, sizeof flat / sizeof flat[0]);
+    check_num("a frame counted", (long)pbgl_total.frames, 1);
+
+    frustum();
+    glColor3f(0.5f, 0.5f, 0.5f);
+    glBegin(GL_TRIANGLE_FAN);
+    glVertex3f(0, 0, -2);           // on the axis: the middle, w 2, q a half
+    glVertex3f(1, -1, -2);          // x 480, y 360 (y down)
+    glVertex3f(-1, 1, -4);          // w 4: x 240, y 180, q a quarter
+    glEnd();
+    static const uint16_t persp[] = {
+        0x1000, 0x0800,
+        0x1226, 3,                    // TRIS: fan, q, grey
+        5120, 3840, 0, 0x4000, 128,
+        7680, 5760, 0, 0x4000, 128,
+        3840, 2880, 0, 0x2000, 128,
+    };
+    gl_check("glFrustum: the divide, q and a grey colour", 0, persp,
+             sizeof persp / sizeof persp[0]);
+}
+
+static void gl_prims(void)
+{
+    static const uint16_t quads[] = { 0x1202, 4 };   // TRIS: a fan of 4, x and y
+    gl_start(1024);
+    ortho();
+    glBegin(GL_QUADS);
+    for (int i = 0; i < 8; i++)
+        glVertex2f((float)(i & 1) * 10, (float)(i >> 1 & 1) * 10);
+    glEnd();
+    gl_check("GL_QUADS: each quad a fan", 2, quads, 2);
+    check_num("two TRIS for two quads", (long)pbgl_total.tris_cmds, 2);
+    check_num("and GL's count, as M1's", (long)pbgl_total.tris, 4);
+
+    glBegin(GL_POLYGON);
+    glVertex2f(0, 0);
+    glVertex2f(10, 0);
+    glEnd();
+    pbgl_end_frame();
+    check_num("a polygon of two sends nothing", (long)gl_nframe, 0);
+
+    // The same state twice: sent once.
+    glBegin(GL_TRIANGLES);
+    for (int i = 0; i < 6; i++)
+        glVertex2f((float)i, (float)(i & 1) * 10);
+    glEnd();
+    glBegin(GL_TRIANGLES);
+    for (int i = 0; i < 3; i++)
+        glVertex2f((float)i, 5);
+    glEnd();
+    pbgl_end_frame();
+    check_num("state sent only when it changes", (long)pbgl_total.state_cmds, 2);
+    check_num("and again in the next frame", (long)gl_frame[0], 0x1000);
+
+    // Culled: wholly left of the screen, or behind the eye.
+    pbgl_reset();
+    glBegin(GL_TRIANGLES);
+    glVertex2f(-50, 0); glVertex2f(-10, 0); glVertex2f(-20, 30);
+    glEnd();
+    frustum();
+    glBegin(GL_TRIANGLES);
+    glVertex3f(0, 0, 1); glVertex3f(1, 0, 2); glVertex3f(0, 1, 3);
+    glEnd();
+    pbgl_end_frame();
+    check_num("off the screen or behind the eye: culled", (long)pbgl_total.culled, 2);
+    check_num("and nothing sent", (long)gl_nframe, 0);
+
+    // A fan longer than the layer keeps: sent in pieces.
+    ortho();
+    pbgl_reset();
+    glBegin(GL_TRIANGLE_FAN);
+    for (int i = 0; i < 300; i++)
+        glVertex2f((float)(i % 50), (float)(i / 50));
+    glEnd();
+    check_num("a fan of 300 is split once", (long)pbgl_total.split, 1);
+    check_num("its triangles all sent", (long)pbgl_total.sent_tris, 298);
+    pbgl_end_frame();
+}
+
+static void gl_clip(void)
+{
+    gl_start(1024);
+    frustum();
+    // A triangle with one corner behind the near plane (z -0.5 is w 0.5,
+    // nearer than 1): cut there into a fan of four, every q at most 1.
+    glBegin(GL_TRIANGLES);
+    glVertex3f(-1, -1, -2);
+    glVertex3f(1, -1, -2);
+    glVertex3f(0, 0, -0.5f);
+    glEnd();
+    pbgl_end_frame();
+    check_num("cut at the near plane", (long)pbgl_total.clipped, 1);
+    check_num("into one fan", (long)pbgl_total.clip_tris, 1);
+    check_num("of four vertices", (long)(gl_frame[2] == 0x1206 ? gl_frame[3] : 0), 4);
+    long top = 0;
+    for (int i = 0; i < 4; i++) {
+        long q = gl_frame[4 + 4 * i + 3];
+        if (q > top)
+            top = q;
+    }
+    check_num("no q past the near plane's", top, 0x8000);
+
+    // Past the guard band: x out at 3,000 pixels is brought back in.
+    pbgl_reset();
+    ortho();
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(3000, 0); glVertex2f(0, 100);
+    glEnd();
+    pbgl_end_frame();
+    check_num("cut at the guard band", (long)pbgl_total.clipped, 1);
+    long right = 0;
+    for (uint32_t i = 4; i + 1 < gl_nframe; i += 2)
+        if ((int16_t)gl_frame[i] > right)
+            right = (int16_t)gl_frame[i];
+    check_num("no x past 2,040 pixels", right, 2040 * 16);
+}
+
+static void gl_state(void)
+{
+    gl_start(1024);
+    ortho();
+    glEnable(GL_DEPTH_TEST);
+    glEnable(GL_CULL_FACE);
+    glCullFace(GL_FRONT);
+    glShadeModel(GL_FLAT);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    pbgl_end_frame();
+    check_num("depth first: a DEPTH without a clear", (long)gl_frame[0], 0x0f00);
+    check_num("then lequal, write, front faces culled as CCW", (long)gl_frame[2],
+              PB3D_S_DEPTH_LEQUAL | PB3D_S_DEPTH_WRITE | PB3D_S_CULL_CCW);
+    glClear(GL_DEPTH_BUFFER_BIT);
+    glDepthMask(0);
+    glDepthRange(0, 0.3);
+    glDisable(GL_CULL_FACE);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    static const uint16_t weapon[] = {
+        0x0f01,                       // DEPTH, cleared
+        0x1000, 0x0001,               // STATE: lequal, no write
+        0x1300, 0x0000, 19661,        // DEPTHRANGE: 0 to 0.3 of 65,535
+    };
+    gl_check("the view weapon's depth range", 0, weapon, sizeof weapon / sizeof weapon[0]);
+}
+
+static void gl_textures_check(void)
+{
+    static const uint8_t three_by_two[] = { 1, 2, 3, 4, 5, 6 };
+    static const uint8_t four_by_two[] = { 1, 2, 2, 3, 4, 5, 5, 6 };
+    uint8_t pal[768];
+    gl_start(1024);
+    for (int i = 0; i < 768; i++)
+        pal[i] = (uint8_t)(i / 3);   // index i is grey i
+    pbgl_palette(pal);
+    glBindTexture(GL_TEXTURE_2D, 5);
+    pbgl_upload8(three_by_two, 3, 2, 1, 0, 256);
+    check_num("indices: id", (long)gl_tex_id, 5);
+    check_num("indices: as they are", (long)gl_tex_format, PB3D_TEX_INDEX8);
+    check_num("to a power of two", (long)(gl_tex_w * 100 + gl_tex_h), 402);
+    int same = 1;
+    for (int i = 0; i < 8; i++)
+        same &= gl_tex[i] == four_by_two[i];
+    check_num("its texels, point sampled as id's GL_ResampleTexture", same, 1);
+    check_num("mipmapped, no alpha", (long)gl_tex_flags, PB3D_TEXF_MIPMAP);
+    static const uint8_t see[] = { 0, 255, 7, 9 };
+    pbgl_upload8(see, 2, 2, 0, 1, 256);
+    check_num("index 255 with alpha: see-through", (long)gl_tex_flags, PB3D_TEXF_ALPHA);
+    pbgl_upload8(see + 2, 2, 1, 0, 1, 256);
+    check_num("alpha with no 255: solid", (long)gl_tex_flags, 0);
+
+    // RGBA of palette colours goes as indices; a colour that isn't one,
+    // as RGBA.
+    static const uint8_t rgba[] = { 9, 9, 9, 255, 40, 40, 40, 255, 0, 0, 0, 0, 1, 1, 1, 255 };
+    glTexImage2D(GL_TEXTURE_2D, 0, 4, 2, 2, 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba);
+    check_num("RGBA of palette colours: indices", (long)gl_tex_format, PB3D_TEX_INDEX8);
+    check_num("with alpha 0 as 255", (long)(gl_tex[0] * 1000000L + gl_tex[1] * 1000L + gl_tex[2]),
+              9 * 1000000L + 40 * 1000L + 255);
+    check_num("and see-through", (long)gl_tex_flags, PB3D_TEXF_ALPHA);
+    static const uint8_t dot[] = { 255, 255, 255, 200, 1, 2, 3, 255 };
+    glTexImage2D(GL_TEXTURE_2D, 0, 4, 2, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, dot);
+    check_num("not palette colours: RGBA", (long)gl_tex_format, PB3D_TEX_RGBA8888);
+
+    // A world polygon: s, t scaled to the texture's texels with whole
+    // textures taken off; the lightmap's by its own size.
+    pbgl_upload8(four_by_two, 4, 2, 1, 0, 256);   // texture 5: 4 x 2
+    frustum();
+    glEnable(GL_TEXTURE_2D);
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_REPLACE);
+    pbgl_end_frame();
+    glBegin(GL_POLYGON);
+    glTexCoord2f(3.0f, -1.5f); glVertex3f(0, 0, -2);
+    glTexCoord2f(3.5f, -1.0f); glVertex3f(0.1f, 0, -2);
+    glTexCoord2f(3.25f, 0.0f); glVertex3f(0, 0.1f, -2);
+    glEnd();
+    pbgl_end_frame();
+    // STATE (2 words), TEXTURE (3), TRIS (2), then the first vertex's x,
+    // y and q (4) before its s and t.
+    check_num("s from the first copy: 3.0 is 0", (long)(int16_t)gl_frame[11], 0);
+    check_num("t: -1.5 is half of 2 texels from -2", (long)(int16_t)gl_frame[12], 16);
+    check_num("s 3.5 is 2 texels", (long)(int16_t)gl_frame[11 + 6], 32);
+    check_num("mipmapped textures say so", (long)gl_frame[4], PB3D_T_MIPMAP);
+}
+
+static void gl_full(void)
+{
+    gl_start(30);
+    ortho();
+    for (int k = 0; k < 4; k++) {
+        glBegin(GL_TRIANGLES);
+        glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+        glEnd();
+    }
+    pbgl_end_frame();
+    check_num("a frame past its words drops whole commands", (long)pbgl_total.dropped, 1);
+    check_num("and keeps the rest", (long)gl_nframe, 2 + 8 * 3);
+}
+
+// Where the kept frame's TRIS number k starts, or -1: read back command
+// by command, as PB would.
+static long gl_find_tris(uint32_t k)
+{
+    uint32_t i = 0;
+    while (i < gl_nframe) {
+        uint32_t n = pb3d_cmd_words(gl_frame + i, gl_nframe - i);
+        if (n == 0)
+            return -1;
+        if (gl_frame[i] >> 8 == PB3D_TRIS && k-- == 0)
+            return (long)i;
+        i += n;
+    }
+    return -1;
+}
+
+// The kept frame's words from at, against want's m (no words if at is -1).
+static void gl_check_at(const char *what, long at, const uint16_t *want, uint32_t m)
+{
+    uint32_t left = at < 0 ? 0 : gl_nframe - (uint32_t)at;
+    check_words(what, gl_frame + (at < 0 ? 0 : at), left < m ? left : m, want, m);
+}
+
+// Twice the signed area of TRIS k's polygon on the screen (y down), from
+// its vertices' x and y, each vw words.
+static long gl_area(uint32_t k, uint32_t vw)
+{
+    long at = gl_find_tris(k), sum = 0;
+    if (at < 0)
+        return 0;
+    uint32_t n = gl_frame[at + 1];
+    for (uint32_t i = 0; i < n; i++) {
+        const uint16_t *a = gl_frame + at + 2 + i * vw;
+        const uint16_t *b = gl_frame + at + 2 + ((i + 1) % n) * vw;
+        sum += (long)(int16_t)a[0] * (int16_t)b[1] - (long)(int16_t)b[0] * (int16_t)a[1];
+    }
+    return sum / 256;   // 12.4 squared, back to pixels
+}
+
+static void gl_cuts(void)
+{
+    static const unsigned char black[3] = { 0, 0, 0 }, bright[3] = { 200, 100, 50 };
+    gl_start(1024);
+    ortho();
+    // Both units on, colour modulated: a cut vertex carries s, t, s2, t2
+    // and RGBA, each taken halfway, where the guard band cuts at 2,040
+    // pixels the edges to a corner 4,080 out.
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    glEnable(GL_TEXTURE_2D);
+    pbgl_select_texture(PBGL_TEXTURE1);
+    glEnable(GL_TEXTURE_2D);
+    pbgl_select_texture(PBGL_TEXTURE0);
+    glBegin(GL_TRIANGLES);
+    glColor3ubv(black);
+    pbgl_mtexcoord(PBGL_TEXTURE0, 0, 0); pbgl_mtexcoord(PBGL_TEXTURE1, 0, 0);
+    glVertex2f(0, 0);
+    glColor3ubv(bright);
+    pbgl_mtexcoord(PBGL_TEXTURE0, 2, 4); pbgl_mtexcoord(PBGL_TEXTURE1, 8, 1);
+    glVertex2f(4080, 0);
+    glColor3ubv(black);
+    pbgl_mtexcoord(PBGL_TEXTURE0, 0, 0); pbgl_mtexcoord(PBGL_TEXTURE1, 0, 0);
+    glVertex2f(0, 100);
+    glEnd();
+    pbgl_end_frame();
+    // The fan: the first corner, the two cuts, the last corner. Each cut
+    // is x 2,040, s 1, t 2 (12.4), s2 4, t2 a half (10.6), and colour
+    // 100, 50, 25, opaque.
+    static const uint16_t cut_vertices[] = {
+        0x125a, 4,                                       // TRIS: fan, s t, s2 t2, RGBA
+        0, 0, 0, 0, 0, 0, 0x0000, 0xff00,
+        2040 * 16, 0, 16, 32, 256, 32, 0x3264, 0xff19,
+        2040 * 16, 50 * 16, 16, 32, 256, 32, 0x3264, 0xff19,
+        0, 100 * 16, 0, 0, 0, 0, 0x0000, 0xff00,
+    };
+    long at = gl_find_tris(0);
+    gl_check_at("a guard-band cut: each cut vertex's s, t, s2, t2 and colour", at,
+                cut_vertices, sizeof cut_vertices / sizeof cut_vertices[0]);
+
+    // In y, both ways: past the bottom at 4,000 and the top at -3,000.
+    gl_start(1024);
+    ortho();
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, -3000); glVertex2f(0, 4000); glVertex2f(100, 0);
+    glEnd();
+    pbgl_end_frame();
+    check_num("cut at the guard band in y", (long)pbgl_total.clipped, 1);
+    long low = 0, high = 0;
+    at = gl_find_tris(0);
+    for (uint32_t i = 0; at >= 0 && i < gl_frame[at + 1]; i++) {
+        long y = (int16_t)gl_frame[at + 2 + 2 * i + 1];
+        if (y < low) low = y;
+        if (y > high) high = y;
+    }
+    check_num("no y past 2,040 pixels down", high, 2040 * 16);
+    check_num("nor up", low, -2040 * 16);
+
+    // A strip whose last vertex is behind the eye: its first triangle
+    // goes whole, as a list; its second, odd, is cut into a fan. Both
+    // wind as GL's strip does (the odd one as 2, 1, 3), so on the screen
+    // they face the same way.
+    gl_start(1024);
+    frustum();
+    glBegin(GL_TRIANGLE_STRIP);
+    glVertex3f(-1, -1, -2);
+    glVertex3f(1, -1, -2);
+    glVertex3f(-1, 1, -2);
+    glVertex3f(1, 1, -0.5f);
+    glEnd();
+    pbgl_end_frame();
+    at = gl_find_tris(1);
+    check_num("a strip over the near plane: a list, then a fan",
+              (long)gl_frame[gl_find_tris(0) < 0 ? 0 : gl_find_tris(0)] * 0x10000L +
+              (at < 0 ? 0 : gl_frame[at]), 0x1204L * 0x10000L + 0x1206);
+    long first = gl_area(0, 4), second = gl_area(1, 4);
+    check_num("the whole triangle winds clockwise as seen", first < 0, 1);
+    check_num("and the cut one the same way", second < 0, 1);
+}
+
+static void gl_subs(void)
+{
+    static uint8_t lightmap[4 * 8];
+    for (int i = 0; i < 32; i++)
+        lightmap[i] = (uint8_t)(i + 1);   // row r is 4r + 1 to 4r + 4
+    gl_start(1024);
+    glBindTexture(GL_TEXTURE_2D, 3);
+    glTexImage2D(GL_TEXTURE_2D, 0, 1, 4, 8, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, lightmap);
+    // Three updates to one block in a frame, as GLQuake's one pass makes
+    // them: rows 2, 5 and 6, then 1. Sent once, at the frame's end, as
+    // the band from row 1 to row 6.
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 2, 4, 1, GL_LUMINANCE, GL_UNSIGNED_BYTE, lightmap + 8);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 5, 4, 2, GL_LUMINANCE, GL_UNSIGNED_BYTE, lightmap + 20);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 1, 4, 1, GL_LUMINANCE, GL_UNSIGNED_BYTE, lightmap + 4);
+    check_num("updates held to the frame's end", (long)gl_nsubs, 0);
+    pbgl_end_frame();
+    check_num("then sent as one", (long)gl_nsubs, 1);
+    check_num("to the block", (long)gl_sub_id, 3);
+    check_num("rows 1 to 6: from row 1", (long)gl_sub_y, 1);
+    check_num("six rows", (long)gl_sub_h, 6);
+    check_num("their texels, row 1's first to row 6's last",
+              (long)(gl_sub_first * 100 + gl_sub_last), 5 * 100 + 28);
+    check_num("three calls, one update, 24 bytes",
+              (long)(pbgl_total.sub_calls * 10000 + pbgl_total.sub_uploads * 100 +
+                     pbgl_total.sub_bytes), 3 * 10000 + 100 + 24);
+    // An update held when the block is made again goes first.
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 3, 4, 1, GL_LUMINANCE, GL_UNSIGNED_BYTE, lightmap + 12);
+    glTexImage2D(GL_TEXTURE_2D, 0, 1, 4, 8, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, lightmap);
+    check_num("an update held is sent before its texture is made again",
+              (long)(gl_nsubs == 2 && gl_sub_seq < gl_tex_seq), 1);
+    pbgl_end_frame();
+    check_num("and not again at the frame's end", (long)gl_nsubs, 2);
+}
+
+static void gl_split(void)
+{
+    // A fan of 300 goes as 256, then the first vertex, the 256th, and
+    // the 44 after: 46. A strip as 256, then its 255th and 256th and the
+    // 44 after. Vertex i is at (i mod 50, i / 50).
+    static const uint16_t fan[] = { 0x1202, 46, 0, 0, 5 * 16, 5 * 16, 6 * 16, 5 * 16 };
+    static const uint16_t strip[] = { 0x1201, 46, 4 * 16, 5 * 16, 5 * 16, 5 * 16, 6 * 16, 5 * 16 };
+    GLenum modes[2] = { GL_TRIANGLE_FAN, GL_TRIANGLE_STRIP };
+    for (int m = 0; m < 2; m++) {
+        gl_start(1024);
+        ortho();
+        glBegin(modes[m]);
+        for (int i = 0; i < 300; i++)
+            glVertex2f((float)(i % 50), (float)(i / 50));
+        glEnd();
+        pbgl_end_frame();
+        long first = gl_find_tris(0), at = gl_find_tris(1);
+        check_num(m ? "a strip of 300: first piece 256" : "a fan of 300: first piece 256",
+                  first < 0 ? 0 : (long)gl_frame[first + 1], 256);
+        gl_check_at(m ? "and the strip's second piece goes on from its last two"
+                      : "and the fan's second piece from its first and last",
+                    at, m ? strip : fan, 8);
+    }
+}
+
+static void (*const checks[])(void) = { greeting, bench_words, pb3d_fixed, pb3d_commands,
+                                         gl_screen, gl_prims, gl_clip, gl_state,
+                                         gl_textures_check, gl_full, gl_cuts, gl_subs,
+                                         gl_split };
 
 int quince_selftest(void (*fail)(const char *what, const char *got, const char *want),
                     int *count)

@@ -120,7 +120,7 @@ static int selftest(void)
     return 0;
 }
 
-// M1's timings (docs/ROADMAP.md): Quake over the null GL, in
+// M1's timings (docs/ROADMAP.md): Quake over the GL layer to PB, in
 // quince/sys_quince.c and lib/qbench.c. Quake's files are in QUINCE's
 // LARDER jar, as the store's programs keep theirs: J:\LARDER\QUINCE\ID1\PAK0.PAK.
 #define QUAKE_BASEDIR "J:\\LARDER\\QUINCE"
