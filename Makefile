@@ -71,7 +71,7 @@ SDKLIB :=
 STACK  := 16384
 CANNER_FLAGS ?=
 
-.PHONY: FORCE all app test page-check sim-kernel sim-smoke sim send dist os pin clean
+.PHONY: FORCE all app test quake-host test-quake page-check sim-kernel sim-smoke sim send dist os pin clean
 all: app
 app: $(BUILD)/$(NAME).JAM
 
@@ -105,13 +105,52 @@ page-check:
 # runs on the board; host-only ones go in tests/.
 HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
             -fno-omit-frame-pointer
-test: $(BUILD)/test_quince
+test: $(BUILD)/test_quince test-quake
 	$(BUILD)/test_quince
 
 $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	@mkdir -p $(BUILD)
 	$(HOSTCC) -std=c11 -g -O1 -Wall -Wextra -Werror -I lib $(HOST_SAN) \
 	    -o $@ tests/test_quince.c $(CORE)
+
+# Quake on the PC (M1): id's files in quake/ (as GLQuake builds them, with
+# the GL renderer and the null sound, CD and input), QUINCE's null GL,
+# video layer and benchmark driver from lib/, and tests/sys_host.c. Built
+# 32-bit, because Quake keeps pointers in ints in places, and with id386
+# off (-U__i386__), so it takes the C paths the board takes. id's files
+# are old C: gnu89, common symbols, and their warnings left alone.
+QUAKE_SRC := $(addprefix quake/,cd_null.c chase.c cl_demo.c cl_input.c cl_main.c \
+    cl_parse.c cl_tent.c cmd.c common.c console.c crc.c cvar.c host.c host_cmd.c \
+    in_null.c keys.c mathlib.c menu.c net_loop.c net_main.c net_none.c pr_cmds.c \
+    pr_edict.c pr_exec.c r_part.c sbar.c snd_null.c sv_main.c sv_move.c sv_phys.c \
+    sv_user.c view.c wad.c world.c zone.c gl_draw.c gl_mesh.c gl_model.c \
+    gl_refrag.c gl_rlight.c gl_rmain.c gl_rmisc.c gl_rsurf.c gl_screen.c gl_warp.c)
+QUAKE_LIB := lib/nullgl.c lib/qvid.c lib/qbench.c
+QHOST_CC  := $(HOSTCC) -m32 -U__i386__ -DGLQUAKE -I lib -I quake -O2 -g
+QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) tests/sys_host.c)
+
+$(BUILD)/qhost/quake/%.o: quake/%.c $(wildcard quake/*.h) lib/GL/gl.h Makefile
+	@mkdir -p $(dir $@)
+	$(QHOST_CC) -std=gnu89 -fcommon -w -c -o $@ $<
+$(BUILD)/qhost/%.o: %.c $(wildcard quake/*.h lib/*.h) lib/GL/gl.h Makefile
+	@mkdir -p $(dir $@)
+	$(QHOST_CC) -std=gnu99 -fcommon -Wall -Wextra -Wno-unknown-pragmas \
+	    -Wno-unused-parameter -Wno-sign-compare -Werror -c -o $@ $<
+$(BUILD)/quake_host: $(QHOST_OBJ)
+	$(QHOST_CC) -o $@ $^ -lm
+
+# M1's two timings on the PC, against the shareware pak QUINCE_PAK names
+# (never committed: tests/README.md). Skipped, saying so, without one.
+# Checked: demo1 is 969 frames, and the server benchmark's fixed steps
+# send the same triangles and vertices every run. The times are printed,
+# not checked.
+QUINCE_PAK ?=
+quake-host: $(BUILD)/quake_host
+test-quake: $(BUILD)/quake_host
+	@if [ -z "$(QUINCE_PAK)" ] || [ ! -f "$(QUINCE_PAK)" ]; then \
+	    echo "test-quake: skipped (set QUINCE_PAK to the shareware id1/pak0.pak)"; exit 0; fi; \
+	mkdir -p $(BUILD)/qdata/id1 && ln -sf "$(abspath $(QUINCE_PAK))" $(BUILD)/qdata/id1/pak0.pak && \
+	$(PYTHON) tests/test_quake.py $(BUILD)/quake_host $(BUILD)/qdata
 
 # The SIMMER kernel, brought up to date by pectinos's own rules on every
 # SIMMER run (under a second when it is). Its QEMU is
