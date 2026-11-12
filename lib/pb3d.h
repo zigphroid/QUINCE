@@ -185,7 +185,9 @@ struct pb3d_buf {
 	uint32_t n;           /* how many are written */
 	uint32_t cap;         /* how many fit */
 	uint32_t dropped;     /* commands that didn't fit, and so weren't written */
-	uint32_t tris_at;     /* where the open TRIS's count is, if one is open */
+	uint32_t tris_at;     /* where the open TRIS's count is, if one is open;
+	                       * nothing reads it yet: the next PR's fix for a
+	                       * TRIS opened inside another will (#15) */
 	uint32_t tris_left;   /* vertices the open TRIS still takes */
 	uint8_t tris_format;
 };

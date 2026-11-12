@@ -326,13 +326,12 @@ QUINCE builds.
   checksum was -3593997312; with SSE it is -3592846848, which CANNER's
   and GCC's builds on SIMMER print too. glibc's math against the SDK's
   made no difference to it yet, but PR 2's `sinf` and `cosf` will
-  depend on it. `asin` (mirrors only) and `ceil` (exact, so it can't differ) are
-  still glibc's. The PC build is
-  `-fno-builtin` too, as the board's `-ffreestanding` is: without it GCC
-  had turned a `sin` and a `cos` of one angle into a call to glibc's
-  `sincos`, in `AngleVectors` and seven other functions, so the SDK's
-  `sin` and `cos` weren't the ones running there. It changed neither
-  e1m1's state nor its checksum.
+  depend on it. `asin` (mirrors only) and `ceil` (exact, so it can't
+  differ) are still glibc's. The PC build is `-fno-builtin` too, as the
+  board's `-ffreestanding` is: without it GCC had turned a `sin` and a
+  `cos` of one angle into a call to glibc's `sincos`, in `AngleVectors`
+  and seven other functions, so the SDK's `sin` and `cos` weren't the
+  ones running there. It changed neither e1m1's state nor its checksum.
 - **`/SERVER` prints the game's state**: an FNV-1a hash of each entity in
   use, its origin in eighths of a unit (as `MSG_WriteCoord` sends it),
   its angles in 256ths of a turn (finer than `MSG_WriteAngle`, which
@@ -662,13 +661,13 @@ Jacob took every recommendation. M2's board run had our own GL layer at
   against w, so each test is now a compare (`x + w < 0` for the left
   edge), or a multiply and a compare for the guard band's. The sums are
   the same ones the dot products made for finite coordinates, since the
-  terms dropped were exact zeros, and e1m1's 300 frames come out word for word as before
-  (the commands compared, not just the checksum). The guard band's four
-  tests are made only for a vertex off the screen: with each guard
-  factor at least 1, a vertex inside the screen's planes is inside the
-  guard's too (a rounded g w is at least w). The clipper tests the one
-  plane it cuts at, where it worked out all nine for both ends of every
-  edge.
+  terms dropped were exact zeros, and e1m1's 300 frames come out word
+  for word as before (the commands compared, not just the checksum).
+  The guard band's four tests are made only for a vertex off the
+  screen: with each guard factor at least 1, a vertex inside the
+  screen's planes is inside the guard's too (a rounded g w is at least
+  w). The clipper tests the one plane it cuts at, where it worked out
+  all nine for both ends of every edge.
 - **`fix`** (5.1%, and `pb3d_fix_12_4` 1.7%) added a half and cut, with
   four branches. It is now `roundf`, one `VRINTA` on the M33, which
   rounds halves away from zero as the format says. The old way, adding
