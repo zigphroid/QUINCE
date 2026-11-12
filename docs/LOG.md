@@ -218,3 +218,28 @@ smaller budget (32 KB, about 95% of the samples) would free more room at
 a larger cost. Leaving the cut until a renderer milestone would have left
 its cost unmeasured.
 
+## 2026-11-12: what QUINCE asks of PB for 3D
+
+Jacob took every recommendation of the PB plan (`docs/PB-ASKS.md`): a
+Voodoo-class engine on PB, fed screen-space triangles. The Jam
+transforms, clips and projects, and PB sets up and draws. Drawing is
+640x480 RGB565 with 16-bit depth, shown at x1.5 on 720p. Wall and
+lightmap are two textures a pixel, in one pass. Walls are point sampled
+and lightmaps bilinear. Textures go up as 8-bit indices, and PB expands
+them and builds the mips. It is all new `DRAW` commands on today's link.
+QUINCE writes the triangle engine's C model first, as the spec that runs.
+
+Alternatives: transforms on PB (B), or PB holding the world and walking
+it (C). Both save more of the Jam's time (the vertex transform was
+about 15% of M1's timedemo), but need a matrix unit and clipping in
+gateware, and the 60K's DSP blocks are untried; B or C is decided after
+A's board timings. A second blended lightmap pass needs no second texture
+unit, but it sends the world twice and reads the picture back. RGBA
+uploads keep PB simpler, but cost 13 MB and the Jam's load-time work
+(about 10% of the timedemo), against about 2.5 MB.
+
+Why: M1 says the link has room (4 MB/s against 37.9 MB/s) and the Jam's
+CPU doesn't, so PB takes the work that is per-pixel and load-time, and
+what is cheapest to build comes first. The plan names the one real limit
+on the link, flow control over I2C (about 4 MB/s, inferred), and asks
+pectinos for a deep queue or a faster bus.

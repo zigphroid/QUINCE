@@ -25,7 +25,8 @@ make submit     # ask for it in the store, for anyone's GROCER FETCH
 ```
 
 `GETTING-STARTED.md` has the setup from nothing; `CLAUDE.md` is how
-Claude works on it; `docs/ROADMAP.md` is where it's going.
+Claude works on it; `docs/ROADMAP.md` is where it's going, and
+`docs/PB-ASKS.md` is what it asks of the pixelboard for 3D.
 
 ## Licence
 

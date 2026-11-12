@@ -46,3 +46,15 @@ the pixelboard is a later milestone.
   heat file (`make heat`: 129 KB of the program area freed, 3% and 7%
   slower) and GCC's `-O2` build beside them (`make gcc`: 22% and 12%
   faster).
+
+## Later: drawing on the pixelboard
+
+Planned 2026-11-12 (`docs/PB-ASKS.md`; Jacob, all recommendations). PB
+draws Quake as a Voodoo-class card would: the Jam transforms and sends
+screen-space triangles, and PB rasterizes them at 640x480 RGB565 with
+depth and two textures a pixel. QUINCE's steps come first and need no new
+gateware: the real GL layer, still drawing nothing, timed on the board,
+then a C model of the triangle engine drawing demo1's frames on the PC.
+PB's side (flat triangles, then textures, then lightmaps) is pectinos's
+work, to be asked for in an issue there once Jacob hands it over. Each
+step is planned in chat first.
