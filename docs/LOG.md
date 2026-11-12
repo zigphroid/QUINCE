@@ -736,7 +736,7 @@ with it (08790a2, #30); ms a frame, demo1 then e1m1:
 | build | before | M4 |
 |---|---|---|
 | CANNER | 46.4, 32.9 | 38.3 (-17%), 28.9 (-12%) |
-| GCC -O2 | 38.4, 27.4 | did not load |
+| GCC -O2 | 38.4, 27.4 | did not load; with #35, 33.2 (-14%), 25.1 (-8%) |
 
 - Every gate held: state c8c17318 with 164 entities, checksum
   122102208 before and 3500115068 with M4, selftest 136 and 210 checks.
@@ -750,7 +750,10 @@ with it (08790a2, #30); ms a frame, demo1 then e1m1:
   past the 384,768 HEADSPACE gives with nothing resident. Review 1's
   guard-band checks were the last 2 KB. The fix: the selftest's two 2 KB
   frame buffers go in PSRAM (`.pbss`, as `lib/qproto.h`'s QPSRAM), which
-  leaves GCC's build (on main with #29) 4.7 KB spare. And `make gcc` now
+  leaves GCC's build (on main with #29) 4.7 KB spare here, and 2.7 KB
+  with the Mac's GCC, whose code is 2.9 KB bigger: it loaded and ran on
+  the Jam (#35's head 3494938, both builds 210 checks, state and
+  checksum as above; CANNER's 38.2 and 28.9 again). And `make gcc` now
   lays the .JAM out as the loader's `top_down` does (a 512-byte
   allowance for the start block, the stack's start on 32, the .bss's
   end on 8) inside `PROGRAM_SPAN`, and fails one that wouldn't load,
