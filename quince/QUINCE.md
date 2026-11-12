@@ -24,7 +24,7 @@ kind, and the bytes a second its link would carry at that rate, the
 commands and the lightmaps' updates. The primitives dropped as off the
 screen, the ones cut at the near plane or at the guard band (2,040
 pixels out, past which PB's 12.4 positions can't reach), and any commands
-that didn't fit a frame are counted too. The textures sent at load are
+too big for the GL layer's 8 KB window of words are counted too. The textures sent at load are
 counted apart, sent once, and any reloaded during the run are added to
 the rate.
 

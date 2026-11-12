@@ -2,8 +2,8 @@
  * counts, and where its commands go.
  *
  * Our own code (M2, docs/ROADMAP.md; docs/PB-ASKS.md step 1). The layer
- * takes GLQuake's GL calls and writes PB's 3D commands (lib/pb3d.h) a
- * frame at a time. PB's 3D service doesn't exist yet, so on the board the
+ * takes GLQuake's GL calls and writes PB's 3D commands (lib/pb3d.h),
+ * handed on a window at a time (M4 PR 4). PB's 3D service doesn't exist yet, so on the board the
  * commands are counted and dropped; on the PC a sink can keep them
  * (tests/pbdump.c writes them to a file for the C model).
  */
@@ -32,7 +32,7 @@ struct pbgl_counts {
 	uint32_t culled;       /* primitives wholly off the screen or behind the eye */
 	uint32_t clipped;      /* primitives cut at the near plane or the guard band */
 	uint32_t clip_tris;    /* triangles those cuts made, sent as fans */
-	uint32_t dropped;      /* commands that didn't fit the frame's buffer */
+	uint32_t dropped;      /* commands bigger than the words window */
 	uint32_t split;        /* primitives too long for one, sent as several */
 	uint32_t max_frame_words; /* the biggest frame */
 	uint32_t tex_uploads;  /* textures made: sent once, at load */
@@ -44,13 +44,14 @@ struct pbgl_counts {
 	uint32_t ignored;      /* uploads the layer drops: mips, which PB builds */
 };
 
-/* Where the layer's output goes. Any of them may be 0. A texture call
- * goes as it happens. A frame's commands go a window at a time, words
- * called each time the words buffer fills and once at the frame's end
- * (each window whole commands), then frame: so a texture made during a
- * frame comes after the words before it and before the words after it,
- * and an update GL held (glTexSubImage2D's, coalesced) before the window
- * that may use it (M4 PR 4). */
+/* Where the layer's output goes. Any of them may be 0. A frame's
+ * commands go a window at a time: words each time the words buffer
+ * fills, and once at the frame's end (each window whole commands, never
+ * empty), then frame (M4 PR 4). A texture made, or an update sent at
+ * once, goes after the words GL had before it, which go first as a
+ * window of their own, and before the words after it. An update GL held
+ * (glTexSubImage2D's full-width bands, coalesced) goes just before the
+ * next window, which may use it. */
 struct pbgl_sink {
 	void (*palette)(const uint8_t *rgb);   /* 768 bytes */
 	void (*teximage)(uint32_t id, uint32_t format, uint32_t flags, uint32_t w,

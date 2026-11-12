@@ -723,12 +723,32 @@ static void gl_full(void)
     check_num("each of whole commands", (long)gl_bad_win, 0);
     check_num("all of it", (long)gl_nframe, (long)words);
     check_num("counted as the frame's", (long)pbgl_total.words, (long)words);
+    check_num("its biggest frame the whole frame, not a window",
+              (long)pbgl_total.max_frame_words, (long)words);
     check_num("none dropped", (long)pbgl_total.dropped, 0);
     check_num("and sums as one frame", (long)(pbgl_checksum() == sum), 1);
     gl_start(30);
     gl_tris4(1);
     check_num("a command bigger than the window is dropped", (long)pbgl_total.dropped, 1);
     check_num("and the rest kept", (long)gl_nframe, (long)words);
+
+    // A texture made mid-frame goes after the words before it, which go
+    // on first as a window of their own, and before the words after it.
+    static const uint8_t texels[4] = { 1, 2, 3, 4 };
+    gl_start(1024);
+    ortho();
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    glBindTexture(GL_TEXTURE_2D, 2);
+    glTexImage2D(GL_TEXTURE_2D, 0, 1, 2, 2, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, texels);
+    check_num("a texture made mid-frame after the words before it",
+              (long)(gl_nwin == 1 && gl_win_seq < gl_tex_seq), 1);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    pbgl_end_frame();
+    check_num("and before the words after it", (long)(gl_nwin == 2 && gl_tex_seq < gl_win_seq), 1);
 }
 
 // Where the kept frame's TRIS number k starts, or -1: read back command

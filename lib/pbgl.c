@@ -382,12 +382,16 @@ static int back_find(uint32_t c)
 }
 
 static void flush_subs(void);
+static struct pb3d_buf buf;
+static void spill(struct pb3d_buf *b);
 
 static void tex_made(uint32_t id, uint32_t w, uint32_t h, uint32_t flags, uint32_t bytes,
                      uint32_t format, const void *texels)
 {
 	uint8_t *ti = tex_info(id);
-	flush_subs();   /* an update held for a texture goes before it is made again */
+	/* The window's words so far, and an update held for a texture,
+	 * go before it is made again: the stream keeps GL's order. */
+	spill(&buf);
 	if (ti) {
 		ti[0] = (uint8_t)(log2_of(w) | log2_of(h) << 4);
 		ti[1] = (uint8_t)(TI_KNOWN | ((flags & PB3D_TEXF_MIPMAP) ? TI_MIPMAP : 0) |
@@ -507,12 +511,13 @@ void glTexImage2D(GLenum target, GLint level, GLint internal, GLsizei w, GLsizei
 	tex_made(bound[unit], (uint32_t)w, (uint32_t)h, flags, n * 4u, PB3D_TEX_RGBA8888, px);
 }
 
-/* Lightmap updates, held to the frame's end. GLQuake's one-pass path
+/* Lightmap updates, held to the next window handed on, or the frame's
+ * end (M4 PR 4). GLQuake's one-pass path
  * (gl_rsurf.c's R_DrawSequentialPoly) updates a lightmap's changed rows
  * each time it draws a surface on it after a dynamic light touched it, so
  * one block can go up many times a frame. Held, the rows each block
- * changed go once, as one band, at the frame's end (before the frame's
- * commands, as every texture call is: lib/pbgl.h). The texels are read
+ * changed go once, as one band, before the window of words that may use
+ * them (lib/pbgl.h's sink). The texels are read
  * then, from GLQuake's own copy (lightmaps[], gl_rsurf.c), which by then
  * holds every change. Only full-width bands are held (all of GLQuake's
  * are); anything else goes at once. */
@@ -558,7 +563,7 @@ void glTexSubImage2D(GLenum target, GLint level, GLint x, GLint y, GLsizei w, GL
 	}
 	pbgl_total.sub_calls++;
 	if (x != 0 || !ti || !(ti[1] & TI_KNOWN) || (uint32_t)w != 1u << (ti[0] & 15u)) {
-		flush_subs();
+		spill(&buf);   /* after the words before it, as tex_made */
 		send_sub(id, format, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h, px);
 		return;
 	}
@@ -683,7 +688,6 @@ static uint32_t state_bits(void)
 
 /* --- the frame: what has been sent, so only changes are --- */
 
-static struct pb3d_buf buf;
 static uint32_t sent_state, sent_tex[UNITS], sent_how[UNITS], sent_near, sent_far;
 static uint32_t sent_clip[4];
 static int sent_depth;

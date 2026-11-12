@@ -859,7 +859,7 @@ frame, up to 128 K words, was in a 256 KB block from the PSRAM pool.
   bigger than the window is dropped. The checksum carries a window's odd
   last word to the next, so it is the whole frame's: the gate's
   3500115068 is unchanged.
-- **Ordering.** A held lightmap update (`glTexSubImage2D`'s, coalesced)
+- **Held updates.** A held lightmap update (`glTexSubImage2D`'s, coalesced)
   is sent before each window, not only before the frame, since PB will
   draw a window as it arrives and the window may use it. The shareware
   runs send the same lightmap bytes (the gate's totals).
@@ -870,6 +870,13 @@ frame, up to 128 K words, was in a 256 KB block from the PSRAM pool.
 - **The SRAM.** 8 KB more `.bss` put GCC's build 4.4 KB past the program
   area, so three statics went to PSRAM: `menuplyr_pixels` (4 KB, the
   menu's player picture), `scrap_allocated` (2 KB, used at load) and
-  qlibc's `fmt_buf` (4 KB, a printf's). GCC's build has 5.8 KB spare in
-  the cloud now (4.8 before).
+  qlibc's `fmt_buf` (4 KB, a printf's). GCC's build still fits, with
+  less margin than before: 3,752 bytes spare in the cloud against 4,800,
+  by the Makefile's own check, since its code, in SRAM too, grew about
+  3 KB (the new checks, `flush`'s split, the ordered texture calls)
+  as its `.bss` fell 2 KB (review 1). On the Mac's GCC, whose code was
+  2.9 KB bigger, about 1.7 KB (inferred).
+- **Texture calls in order.** A texture made, or an update sent at once,
+  first hands on the window's words so far, so the stream keeps GL's
+  order (review 1). Such calls come at load: none in the timed runs.
 

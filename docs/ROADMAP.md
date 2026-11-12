@@ -120,8 +120,9 @@ for odd values past 2^23 and is now right.
   struct between them, the words through a local pointer).
 - PR 4: the frame's words streamed through an 8 KB window in SRAM,
   handed to the sink each time it fills, instead of the whole frame in
-  the PSRAM pool (Jacob, option A); the room for it from three load-
-  or menu-only statics moved to PSRAM.
+  the PSRAM pool (Jacob, option A); the room for it from three statics
+  moved to PSRAM (the menu's picture, a load-time table and printf's
+  buffer).
 
 ## Later: drawing on the pixelboard
 
