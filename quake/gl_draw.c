@@ -540,9 +540,11 @@ void Draw_Character (int x, int y, int num)
 	row = num>>4;
 	col = num&15;
 
-	frow = row*0.0625;
-	fcol = col*0.0625;
-	size = 0.0625;
+	// QUINCE: float constants, not double (M3, docs/LOG.md 2026-11-12):
+	// the same bits, since 1/16 is a power of two, without softfp.
+	frow = row*0.0625f;
+	fcol = col*0.0625f;
+	size = 0.0625f;
 
 	GL_Bind (char_texture);
 
@@ -756,13 +758,15 @@ void Draw_TileClear (int x, int y, int w, int h)
 	glColor3f (1,1,1);
 	GL_Bind (*(int *)draw_backtile->data);
 	glBegin (GL_QUADS);
-	glTexCoord2f (x/64.0, y/64.0);
+	// QUINCE: float constants (M3, docs/LOG.md 2026-11-12): the same bits,
+	// since 64 is a power of two, without eight softfp divides a call.
+	glTexCoord2f (x/64.0f, y/64.0f);
 	glVertex2f (x, y);
-	glTexCoord2f ( (x+w)/64.0, y/64.0);
+	glTexCoord2f ( (x+w)/64.0f, y/64.0f);
 	glVertex2f (x+w, y);
-	glTexCoord2f ( (x+w)/64.0, (y+h)/64.0);
+	glTexCoord2f ( (x+w)/64.0f, (y+h)/64.0f);
 	glVertex2f (x+w, y+h);
-	glTexCoord2f ( x/64.0, (y+h)/64.0 );
+	glTexCoord2f ( x/64.0f, (y+h)/64.0f );
 	glVertex2f (x, y+h);
 	glEnd ();
 }

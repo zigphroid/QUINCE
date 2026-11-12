@@ -78,8 +78,12 @@ void R_RenderDlight (dlight_t *light)
 	float	a;
 	vec3_t	v;
 	float	rad;
+	float	c, s;	// QUINCE: below
 
-	rad = light->radius * 0.35;
+	// QUINCE: float, not double (M3, docs/LOG.md 2026-11-12): float
+	// constants, and each corner's cosf and sinf once, where the loop
+	// below took a double cos and sin for each of its 51 sums.
+	rad = light->radius * 0.35f;
 
 	VectorSubtract (light->origin, r_origin, v);
 	if (Length (v) < rad)
@@ -96,10 +100,12 @@ void R_RenderDlight (dlight_t *light)
 	glColor3f (0,0,0);
 	for (i=16 ; i>=0 ; i--)
 	{
-		a = i/16.0 * M_PI*2;
+		a = i/16.0f * (float)(M_PI*2);	// QUINCE: float, above
+		c = cosf(a) * rad;
+		s = sinf(a) * rad;
 		for (j=0 ; j<3 ; j++)
-			v[j] = light->origin[j] + vright[j]*cos(a)*rad
-				+ vup[j]*sin(a)*rad;
+			v[j] = light->origin[j] + vright[j]*c
+				+ vup[j]*s;
 		glVertex3fv (v);
 	}
 	glEnd ();
@@ -114,6 +120,7 @@ void R_RenderDlights (void)
 {
 	int		i;
 	dlight_t	*l;
+	float	now;	// QUINCE: below
 
 	if (!gl_flashblend.value)
 		return;
@@ -126,10 +133,13 @@ void R_RenderDlights (void)
 	glEnable (GL_BLEND);
 	glBlendFunc (GL_ONE, GL_ONE);
 
+	// QUINCE: the clock as a float once, against each light's float die
+	// (M3, docs/LOG.md 2026-11-12), where each was a softfp compare.
+	now = cl.time;
 	l = cl_dlights;
 	for (i=0 ; i<MAX_DLIGHTS ; i++, l++)
 	{
-		if (l->die < cl.time || !l->radius)
+		if (l->die < now || !l->radius)
 			continue;
 		R_RenderDlight (l);
 	}

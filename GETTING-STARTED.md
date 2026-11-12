@@ -186,6 +186,7 @@ you only for what needs a person.
 | `tests/test_pbmodel.c`, `tests/png.c` | the model held to its rules, and a scene it draws: `build/pbmodel/scene.png` |
 | `tests/sys_host.c`, `tests/test_quake.py` | `make test-quake`: Quake on the PC (32-bit, `-m32`), against `QUINCE_PAK` |
 | `tests/fpu_builtins.c` | `make test-builtins`: `math.h`'s `sqrtf` and the rest are FPU instructions under CANNER |
+| `tests/float_hot.txt`, `tools/floatcheck.py` | `make test-float`: Quake's hot functions call no double code but what the list allows |
 | `tools/simsmoke.py` | `make sim-smoke`: SIMMER, driven by pectinos's `simdrive.py` |
 | `tools/simbench.py` | `make sim-bench`: the benchmarks on SIMMER, against `QUINCE_PAK` |
 | `tools/PICKJAM.BAT` | the board's side of `make dist`, copied into `dist/` |

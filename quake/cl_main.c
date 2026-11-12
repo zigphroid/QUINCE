@@ -364,13 +364,17 @@ void CL_DecayLights (void)
 	int			i;
 	dlight_t	*dl;
 	float		time;
+	float		now;	// QUINCE: below
 	
 	time = cl.time - cl.oldtime;
+	// QUINCE: the clock as a float once, against each light's float die
+	// (M3, docs/LOG.md 2026-11-12), where each was a softfp compare.
+	now = cl.time;
 
 	dl = cl_dlights;
 	for (i=0 ; i<MAX_DLIGHTS ; i++, dl++)
 	{
-		if (dl->die < cl.time || !dl->radius)
+		if (dl->die < now || !dl->radius)
 			continue;
 		
 		dl->radius -= time*dl->decay;

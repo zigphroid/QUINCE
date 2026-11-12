@@ -206,7 +206,15 @@ void EmitWaterPolys (msurface_t *fa)
 	float		*v;
 	int			i;
 	float		s, t, os, ot;
+	float		rt;
 
+	// QUINCE: float, not double (M3, docs/LOG.md 2026-11-12). realtime is
+	// the double clock, which made every vertex's sums double. The table
+	// repeats every 2*pi seconds (TURBSCALE turns a second into 256/(2*pi)
+	// steps, & 255 wraps), so the clock is wrapped to that once here, in
+	// double, and the rest is float: a float clock would lose its
+	// fractions after hours.
+	rt = fmod (realtime, 2 * M_PI);
 
 	for (p=fa->polys ; p ; p=p->next)
 	{
@@ -216,11 +224,11 @@ void EmitWaterPolys (msurface_t *fa)
 			os = v[3];
 			ot = v[4];
 
-			s = os + turbsin[(int)((ot*0.125+realtime) * TURBSCALE) & 255];
-			s *= (1.0/64);
+			s = os + turbsin[(int)((ot*0.125f+rt) * (float)TURBSCALE) & 255];
+			s *= (1.0f/64);
 
-			t = ot + turbsin[(int)((os*0.125+realtime) * TURBSCALE) & 255];
-			t *= (1.0/64);
+			t = ot + turbsin[(int)((os*0.125f+rt) * (float)TURBSCALE) & 255];
+			t *= (1.0f/64);
 
 			glTexCoord2f (s, t);
 			glVertex3fv (v);
@@ -255,14 +263,16 @@ void EmitSkyPolys (msurface_t *fa)
 			dir[2] *= 3;	// flatten the sphere
 
 			length = dir[0]*dir[0] + dir[1]*dir[1] + dir[2]*dir[2];
-			length = sqrt (length);
+			// QUINCE: float, not double (M3): sqrtf and float constants,
+			// the same bits for the powers of two.
+			length = sqrtf (length);
 			length = 6*63/length;
 
 			dir[0] *= length;
 			dir[1] *= length;
 
-			s = (speedscale + dir[0]) * (1.0/128);
-			t = (speedscale + dir[1]) * (1.0/128);
+			s = (speedscale + dir[0]) * (1.0f/128);
+			t = (speedscale + dir[1]) * (1.0f/128);
 
 			glTexCoord2f (s, t);
 			glVertex3fv (v);

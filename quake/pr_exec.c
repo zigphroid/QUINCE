@@ -651,7 +651,10 @@ while (1)
 #ifdef FPS_20
 		ed->v.nextthink = pr_global_struct->time + 0.05;
 #else
-		ed->v.nextthink = pr_global_struct->time + 0.1;
+		// QUINCE: a float constant (M3, docs/LOG.md 2026-11-12): time and
+		// nextthink are both float, and this runs for every frame of
+		// every monster's animation.
+		ed->v.nextthink = pr_global_struct->time + 0.1f;
 #endif
 		if (a->_float != ed->v.frame)
 		{

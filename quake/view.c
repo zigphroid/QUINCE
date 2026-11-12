@@ -496,7 +496,9 @@ void V_CalcBlend (void)
 		if (!gl_cshiftpercent.value)
 			continue;
 
-		a2 = ((cl.cshifts[j].percent * gl_cshiftpercent.value) / 100.0) / 255.0;
+		// QUINCE: float constants (M3, docs/LOG.md 2026-11-12); a2 is a
+		// float, and so are r, g and b below.
+		a2 = ((cl.cshifts[j].percent * gl_cshiftpercent.value) / 100.0f) / 255.0f;
 
 //		a2 = cl.cshifts[j].percent/255.0;
 		if (!a2)
@@ -509,9 +511,9 @@ void V_CalcBlend (void)
 		b = b*(1-a2) + cl.cshifts[j].destcolor[2]*a2;
 	}
 
-	v_blend[0] = r/255.0;
-	v_blend[1] = g/255.0;
-	v_blend[2] = b/255.0;
+	v_blend[0] = r/255.0f;	// QUINCE: the same bits as in double
+	v_blend[1] = g/255.0f;
+	v_blend[2] = b/255.0f;
 	v_blend[3] = a;
 	if (v_blend[3] > 1)
 		v_blend[3] = 1;
@@ -752,6 +754,11 @@ void CalcGunAngle (void)
 	cl.viewent.angles[YAW] = r_refdef.viewangles[YAW] + yaw;
 	cl.viewent.angles[PITCH] = - (r_refdef.viewangles[PITCH] + pitch);
 
+	// QUINCE: skipped when v_idlescale is 0, as it is unless set (M3,
+	// docs/LOG.md 2026-11-12): each line was three double sins a frame,
+	// in softfp, to add nothing.
+	if (!v_idlescale.value)
+		return;
 	cl.viewent.angles[ROLL] -= v_idlescale.value * sin(cl.time*v_iroll_cycle.value) * v_iroll_level.value;
 	cl.viewent.angles[PITCH] -= v_idlescale.value * sin(cl.time*v_ipitch_cycle.value) * v_ipitch_level.value;
 	cl.viewent.angles[YAW] -= v_idlescale.value * sin(cl.time*v_iyaw_cycle.value) * v_iyaw_level.value;
@@ -794,6 +801,8 @@ Idle swaying
 */
 void V_AddIdle (void)
 {
+	if (!v_idlescale.value)	// QUINCE: as in CalcGunAngle (M3)
+		return;
 	r_refdef.viewangles[ROLL] += v_idlescale.value * sin(cl.time*v_iroll_cycle.value) * v_iroll_level.value;
 	r_refdef.viewangles[PITCH] += v_idlescale.value * sin(cl.time*v_ipitch_cycle.value) * v_ipitch_level.value;
 	r_refdef.viewangles[YAW] += v_idlescale.value * sin(cl.time*v_iyaw_cycle.value) * v_iyaw_level.value;

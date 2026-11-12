@@ -294,15 +294,18 @@ void AngleVectors (vec3_t angles, vec3_t forward, vec3_t right, vec3_t up)
 	float		angle;
 	float		sr, sp, sy, cr, cp, cy;
 	
-	angle = angles[YAW] * (M_PI*2 / 360);
-	sy = sin(angle);
-	cy = cos(angle);
-	angle = angles[PITCH] * (M_PI*2 / 360);
-	sp = sin(angle);
-	cp = cos(angle);
-	angle = angles[ROLL] * (M_PI*2 / 360);
-	sr = sin(angle);
-	cr = cos(angle);
+	// QUINCE: float, not double (M3, docs/LOG.md 2026-11-12): the
+	// angles and results are float, so sinf and cosf, and the constant
+	// made float where it's written, keep the FPU from softfp.
+	angle = angles[YAW] * (float)(M_PI*2 / 360);
+	sy = sinf(angle);
+	cy = cosf(angle);
+	angle = angles[PITCH] * (float)(M_PI*2 / 360);
+	sp = sinf(angle);
+	cp = cosf(angle);
+	angle = angles[ROLL] * (float)(M_PI*2 / 360);
+	sr = sinf(angle);
+	cr = cosf(angle);
 
 	forward[0] = cp*cy;
 	forward[1] = cp*sy;
@@ -377,7 +380,10 @@ vec_t Length(vec3_t v)
 	length = 0;
 	for (i=0 ; i< 3 ; i++)
 		length += v[i]*v[i];
-	length = sqrt (length);		// FIXME
+	// QUINCE: sqrtf, one VSQRT, where sqrt was a softfp call (M3). The
+	// same bits: a float's square root taken in double and rounded back
+	// to float is the correctly rounded float one.
+	length = sqrtf (length);		// FIXME
 
 	return length;
 }
@@ -387,7 +393,8 @@ float VectorNormalize (vec3_t v)
 	float	length, ilength;
 
 	length = v[0]*v[0] + v[1]*v[1] + v[2]*v[2];
-	length = sqrt (length);		// FIXME
+	// QUINCE: sqrtf, as in Length (M3).
+	length = sqrtf (length);		// FIXME
 
 	if (length)
 	{

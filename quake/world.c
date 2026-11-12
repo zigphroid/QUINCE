@@ -570,7 +570,9 @@ LINE TESTING IN HULLS
 */
 
 // 1/32 epsilon to keep floating point happy
-#define	DIST_EPSILON	(0.03125)
+// QUINCE: float (M3, docs/LOG.md 2026-11-12): a double 1/32 made each
+// crossing in SV_RecursiveHullCheck a softfp add and divide.
+#define	DIST_EPSILON	(0.03125f)
 
 /*
 ==================
@@ -691,7 +693,7 @@ qboolean SV_RecursiveHullCheck (hull_t *hull, int num, float p1f, float p2f, vec
 	while (SV_HullPointContents (hull, hull->firstclipnode, mid)
 	== CONTENTS_SOLID)
 	{ // shouldn't really happen, but does occasionally
-		frac -= 0.1;
+		frac -= 0.1f;	// QUINCE: float (M3)
 		if (frac < 0)
 		{
 			trace->fraction = midf;

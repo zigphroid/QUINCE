@@ -87,8 +87,13 @@ until the Jam is free.
   SIMMER must agree on exactly, with the null GL's checksum (since M2 PR 2,
   the checksum of PB's commands).
 - PR 2: id's hot functions to float (`QUINCE:` edits): float constants,
-  `sqrtf`, `fabsf`, `floorf`, `sinf`, `cosf`. The clocks stay double. A
-  test fails if a function on the hot list calls softfp again.
+  `sqrtf`, `sinf`, `cosf`, and the clock taken as a float once where a
+  loop compared against it. The clocks themselves stay double. `make
+  test-float` fails if a function on the hot list calls softfp again.
+  On SIMMER, demo1 went from 14.2 to 7.7 ms a frame in CANNER's build and
+  e1m1's server from 7.9 to 6.7; the game's state is the same as in
+  double (LOG 2026-11-12).
+- Then: the board's timing of PR 2's build, once the Jam is free.
 
 ## Later: drawing on the pixelboard
 

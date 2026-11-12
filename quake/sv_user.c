@@ -129,7 +129,9 @@ void SV_UserFriction (void)
 	
 	vel = velocity;
 	
-	speed = sqrt(vel[0]*vel[0] +vel[1]*vel[1]);
+	// QUINCE: sqrtf, the same bits as sqrt of a float (M3, docs/LOG.md
+	// 2026-11-12).
+	speed = sqrtf(vel[0]*vel[0] +vel[1]*vel[1]);
 	if (!speed)
 		return;
 
@@ -141,7 +143,7 @@ void SV_UserFriction (void)
 
 	trace = SV_Move (start, vec3_origin, vec3_origin, stop, true, sv_player);
 
-	if (trace.fraction == 1.0)
+	if (trace.fraction == 1.0f)	// QUINCE: float, the same test (M3)
 		friction = sv_friction.value*sv_edgefriction.value;
 	else
 		friction = sv_friction.value;

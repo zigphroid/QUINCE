@@ -92,7 +92,9 @@ extern	PROC glVertexPointerEXT;
 #define	SKYSIZE			(1 << SKYSHIFT)
 #define SKYMASK			(SKYSIZE - 1)
 
-#define BACKFACE_EPSILON	0.01
+// QUINCE: float (M3, docs/LOG.md 2026-11-12): a double 0.01 made every
+// plane test in R_RecursiveWorldNode a softfp compare.
+#define BACKFACE_EPSILON	0.01f
 
 
 void R_TimeRefresh_f (void);

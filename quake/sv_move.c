@@ -238,9 +238,11 @@ qboolean SV_StepDirection (edict_t *ent, float yaw, float dist)
 	ent->v.ideal_yaw = yaw;
 	PF_changeyaw();
 	
-	yaw = yaw*M_PI*2 / 360;
-	move[0] = cos(yaw)*dist;
-	move[1] = sin(yaw)*dist;
+	// QUINCE: float, not double (M3, docs/LOG.md 2026-11-12): yaw and
+	// dist are floats, so a float constant, cosf and sinf.
+	yaw = yaw*(float)(M_PI*2 / 360);
+	move[0] = cosf(yaw)*dist;
+	move[1] = sinf(yaw)*dist;
 	move[2] = 0;
 
 	VectorCopy (ent->v.origin, oldorigin);
