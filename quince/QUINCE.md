@@ -3,24 +3,48 @@
 ## Usage
 
     QUINCE [name]
+    QUINCE /TIMEDEMO demo [/MEM:kb] [/V]
+    QUINCE /SERVER map frames [/MEM:kb] [/V]
     QUINCE /SELFTEST
 
 ## What it does
 
-Fills the screen and says hello in the middle of it: to `name`, or to
-a jar when none is given. This is the starting point `make new-app`
-wrote; make it say what the program does.
+QUINCE is id Software's Quake (the GPL source, GLQuake's renderer),
+ported. Milestone 1 draws nothing: the renderer runs over a null GL that
+only counts what a 3D card would be sent, so QUINCE can time how fast the
+board runs the game itself.
+
+`/TIMEDEMO demo` plays a demo as fast as it goes and prints the frames,
+the seconds, the frames a second and the time a frame, as Quake's own
+`timedemo` works them out. Then, for each frame on average, the
+triangles, vertices, primitives and GL calls the renderer sent, and the
+bytes a second a card's link would carry at that rate.
+
+`/SERVER map frames` loads a map with a player in it and runs that many
+frames of a tenth of a second of game time each: the game's code, its
+physics and the renderer. It prints the same lines.
+
+Quake's files come from `J:\LARDER\QUINCE`: copy `PAK0.PAK` from your own
+Quake (the shareware one is enough) to `J:\LARDER\QUINCE\ID1\PAK0.PAK`.
+
+`/MEM:kb` sets the size of Quake's memory (its hunk) in KB, 5632 unless
+given; the rest of the PSRAM goes to its textures and lightmaps. `/V`
+also prints Quake's console as it runs.
+
+With no switch, QUINCE fills the screen and says hello: to `name`, or to
+a jar when none is given.
 
 `/SELFTEST` runs the checks the host test runs (`make test`), here on
 the board's code, and prints how many passed.
 
 ## Keys
 
-- `Esc` leaves.
+- `Esc` leaves the hello screen.
 
 ## Examples
 
-    J:\>QUINCE JAM
+    J:\>QUINCE /TIMEDEMO DEMO1
+    J:\>QUINCE /SERVER E1M1 300
 
 ## See also
 
