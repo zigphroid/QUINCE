@@ -151,10 +151,11 @@ test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins test-f
 	$(BUILD)/test_pbmodel $(BUILD)/pbmodel/scene.png
 
 # make heat and make gcc are only built by hand otherwise, so a source
-# left out of GCC_QSRC, a double function quince/libc/ lacks or a heat
-# file that no longer fits the functions would wait for the next board
-# comparison to show (#11). Built here, not run: sim-smoke and sim-bench
-# take QUINCE_JAM= for that. The heat cut needs only CANNER; GCC's build
+# left out of GCC_QSRC, a double function quince/libc/ lacks, or a heat
+# cut that no longer builds would wait for the next board comparison to
+# show (#11). A heat file that names functions gone from the build only
+# warns: heat.py's warnings say which, and the cut still builds. Built
+# here, not run: sim-smoke and sim-bench take QUINCE_JAM= for that. The heat cut needs only CANNER; GCC's build
 # skips, saying why, without $(CROSS)gcc.
 test-builds:
 	@$(MAKE) --no-print-directory heat
