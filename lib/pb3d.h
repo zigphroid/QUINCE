@@ -78,7 +78,9 @@ enum {
 #define PB3D_S_TEX1         0x0100u  /* unit 1 is on: the colour so far darkened by its
                                       * texel, a grey g, as colour (256 - g) / 256,
                                       * since GLQuake stores 255 - light
-                                      * (gl_rsurf.c); docs/PB3D.md has the rule */
+                                      * (gl_rsurf.c). Close to GL_BLEND's
+                                      * (255 - g) / 255 but not it: the model
+                                      * and PB match each other, not GL exactly */
 #define PB3D_S_CULL_MASK    0x0600u  /* drop triangles by their winding as seen on the
                                       * screen, y down: clockwise is a positive
                                       * (x1 - x0)(y2 - y0) - (y1 - y0)(x2 - x0) */
