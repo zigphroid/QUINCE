@@ -90,7 +90,7 @@ CANNER_FLAGS ?=
 # or build/heat/ or build/gcc/'s (below).
 QUINCE_JAM ?= $(BUILD)/$(NAME).JAM
 
-.PHONY: FORCE all app heat gcc test quake-host test-quake sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
+.PHONY: FORCE all app heat gcc test quake-host test-quake test-builtins sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
 all: app
 app: $(BUILD)/$(NAME).JAM
 
@@ -125,8 +125,22 @@ page-check:
 # runs on the board; host-only ones go in tests/.
 HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
             -fno-omit-frame-pointer
-test: $(BUILD)/test_quince test-quake
+test: $(BUILD)/test_quince test-quake test-builtins
 	$(BUILD)/test_quince
+
+# quince/libc/math.h's FPU built-ins (M3, LOG 2026-11-12): CANNER compiles
+# tests/fpu_builtins.c through it, with the SDK's math.c beside it as in
+# the real build, and any q_ function that calls sqrtf, fabsf, floorf or
+# ceilf instead of making the instruction fails it. The state and checksum
+# can't catch that: math.c's sqrtf is correctly rounded too, only slower.
+test-builtins: tests/fpu_builtins.c quince/libc/math.h $(CANNER) Makefile
+	@mkdir -p $(BUILD)
+	$(CANNER) -I quince/libc -I $(SDK) -S tests/fpu_builtins.c $(filter %/math.c %/softfp.c,$(LIB)) \
+	    > $(BUILD)/fpu_builtins.s
+	@awk '/^[A-Za-z_][A-Za-z0-9_.]*:$$/ { fn = substr($$1, 1, length($$1) - 1) } \
+	    fn ~ /^q_/ && /\tb(l|\.w)?\t/ { print "test-builtins: FAIL: " fn " calls " $$2; bad = 1 } \
+	    END { exit bad }' $(BUILD)/fpu_builtins.s
+	@echo "test-builtins: sqrtf, fabsf, floorf and ceilf are FPU instructions"
 
 $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	@mkdir -p $(BUILD)
@@ -141,8 +155,21 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 # enums as small as their values (-fshort-enums), as arm-none-eabi has them
 # (GCC and CANNER alike: quake/modelgen.h says what that cost). id's files
 # are old C: gnu89, common symbols, and their warnings left alone.
-QHOST_CC  := $(HOSTCC) -m32 -U__i386__ -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
-QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/nullgl.c lib/qbargs.c tests/sys_host.c)
+# Its floating point is the board's, bit for bit (M3, LOG 2026-11-12): SSE
+# (-msse2 -mfpmath=sse) rounds each float and double operation to its own
+# width, as the M33's FPU and softfp.c do, where -m32's default x87 keeps
+# them in 80 bits until they are stored; nothing is fused into a
+# multiply-add (-ffp-contract=off), as CANNER fuses nothing; and math.h's
+# functions are the SDK's own (sdk/lib/math.c, with softfp.c's packing),
+# linked ahead of -lm, so sinf and the rest give the board's last bit too
+# (but asin, which only mirrors call, and the board takes from qlibc.c).
+# -fno-builtin keeps GCC from swapping those calls for its own, as the
+# board's -ffreestanding does: without it a sin and a cos of one angle
+# became a call to glibc's sincos (AngleVectors and seven others).
+QHOST_CC  := $(HOSTCC) -m32 -msse2 -mfpmath=sse -ffp-contract=off -fno-builtin -U__i386__ \
+    -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
+QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/nullgl.c lib/qbargs.c tests/sys_host.c) \
+    $(BUILD)/qhost/sdk/math.o $(BUILD)/qhost/sdk/softfp.o
 
 $(BUILD)/qhost/quake/%.o: quake/%.c $(wildcard quake/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)
@@ -151,6 +178,12 @@ $(BUILD)/qhost/%.o: %.c $(wildcard quake/*.h lib/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)
 	$(QHOST_CC) -std=gnu99 -fcommon -Wall -Wextra -Wno-unknown-pragmas \
 	    -Wno-unused-parameter -Wno-sign-compare -Werror -c -o $@ $<
+$(BUILD)/qhost/sdk/math.o: $(SDK)/lib/math.c $(SDK)/math.h $(SDK)/lib/mathcoef.h Makefile
+	@mkdir -p $(dir $@)
+	$(QHOST_CC) -std=c11 -c -o $@ $<
+$(BUILD)/qhost/sdk/softfp.o: $(PECTIN_ROOT)/kernel/lib/softfp.c $(PECTIN_ROOT)/kernel/lib/softfp.h Makefile
+	@mkdir -p $(dir $@)
+	$(QHOST_CC) -std=c11 -I $(PECTIN_ROOT)/kernel -c -o $@ $<
 $(BUILD)/quake_host: $(QHOST_OBJ)
 	$(QHOST_CC) -o $@ $^ -lm
 

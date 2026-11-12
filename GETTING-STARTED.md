@@ -183,6 +183,7 @@ you only for what needs a person.
 | `lib/selftest.c` | the checks, run by `make test` and by `QUINCE /SELFTEST` |
 | `tests/` | the host test's runner, and host-only checks |
 | `tests/sys_host.c`, `tests/test_quake.py` | `make test-quake`: Quake on the PC (32-bit, `-m32`), against `QUINCE_PAK` |
+| `tests/fpu_builtins.c` | `make test-builtins`: `math.h`'s `sqrtf` and the rest are FPU instructions under CANNER |
 | `tools/simsmoke.py` | `make sim-smoke`: SIMMER, driven by pectinos's `simdrive.py` |
 | `tools/simbench.py` | `make sim-bench`: the benchmarks on SIMMER, against `QUINCE_PAK` |
 | `tools/PICKJAM.BAT` | the board's side of `make dist`, copied into `dist/` |

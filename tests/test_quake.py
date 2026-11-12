@@ -17,6 +17,12 @@ DEMO1_FRAMES = 969
 # 300 server frames of e1m1 from the start, this build's renderer:
 SERVER_FRAMES = 300
 SERVER_TOTALS = (330776, 650152)   # triangles, vertices
+# ...and where those frames leave the game (lib/qbench.c's print_state)
+# and the null GL's sum of the screen positions it was sent. Since M3 the
+# PC rounds floats as the board does (the Makefile's QHOST_CC), so CANNER's
+# build on SIMMER must print these too (tools/simbench.py).
+SERVER_STATE = "c8c17318, 164 entities"
+SERVER_CHECKSUM = "-3592846848"
 MAPS = ["START"] + ["E1M%d" % i for i in range(1, 9)]
 
 
@@ -55,6 +61,16 @@ def main():
     if got != SERVER_TOTALS:
         print("FAIL: e1m1's %d frames sent %s (tris, verts), want %s"
               % (SERVER_FRAMES, got, SERVER_TOTALS))
+        failed += 1
+    m = re.search(r"^server: state (.*)$", server, re.M)
+    if not m or m.group(1) != SERVER_STATE:
+        print("FAIL: e1m1's %d frames left state %s, want %s"
+              % (SERVER_FRAMES, m and m.group(1), SERVER_STATE))
+        failed += 1
+    m = re.search(r"^server: checksum (\S+)$", server, re.M)
+    if not m or m.group(1) != SERVER_CHECKSUM:
+        print("FAIL: e1m1's %d frames' checksum %s, want %s"
+              % (SERVER_FRAMES, m and m.group(1), SERVER_CHECKSUM))
         failed += 1
     for name in MAPS:
         run(exe, base, "server", name, "5")
