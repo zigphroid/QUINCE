@@ -143,6 +143,9 @@ static void pb3d_fixed(void)
     check_num("12.4: a half step rounds away from 0", pb3d_fix_12_4(0.03125f), 1);
     check_num("12.4: and below 0", pb3d_fix_12_4(-1.03125f), -17);
     check_num("12.4: just under a half step", pb3d_fix_12_4(0.03f), 0);
+    // The float just under a half step: adding a half rounds the sum up
+    // to a whole one, which M2's fix got wrong; roundf doesn't.
+    check_num("12.4: the float just under a half step", pb3d_fix_12_4(0.49999997f * 0.0625f), 0);
     check_num("12.4: held at the guard band's right", pb3d_fix_12_4(3000.0f), 32767);
     check_num("12.4: and its left", pb3d_fix_12_4(-3000.0f), -32768);
     check_num("12.4: NaN is 0", pb3d_fix_12_4(zero / zero), 0);
@@ -158,6 +161,10 @@ static void pb3d_fixed(void)
     q = pb3d_fix_q(3.0f);
     check_num("q: held at the top, high half", (long)(q >> 16), 0xffff);
     check_num("q: and low half", (long)(q & 0xffffu), 0xffff);
+    // q * 2^31 in [2^23, 2^24) has an ulp of 1, so M2's v + 0.5 was a tie
+    // there and rounded odd values up to even; roundf leaves them.
+    check_num("q: an odd value past 2^23 stays odd",
+              (long)pb3d_fix_q(8388609.0f / 2147483648.0f), 8388609);
 }
 
 static void pb3d_commands(void)
@@ -760,6 +767,87 @@ static void gl_cuts(void)
     check_num("and the cut one the same way", second < 0, 1);
 }
 
+// The guard band at each of its four edges, 2,040 pixels from the
+// surface's corner whatever the viewport: a vertex 10 pixels inside is
+// sent as it is, and one 10 pixels out is cut exactly at the edge, with
+// the inside one kept. The viewport is (x, row, w, h) in PB's rows, and
+// the projection makes GL's units its pixels; the triangles' other
+// corners are near (cx, cy). Each plane's own factor,
+// in outcode_of and the cut both, is the only one that passes all four.
+// a, b, c and d one after another in out's 96 bytes (lib/ has no
+// snprintf), for a check's name.
+static const char *join(char *out, const char *a, const char *b, const char *c, const char *d)
+{
+    const char *part[4] = { a, b, c, d };
+    unsigned k = 0;
+    for (int i = 0; i < 4; i++)
+        for (const char *p = part[i]; *p && k < 95; p++)
+            out[k++] = *p;
+    out[k] = 0;
+    return out;
+}
+
+static void gl_guard_at(const char *where, int vx, int vrow, int vw, int vh, float cx, float cy)
+{
+    static const float dir[4][2] = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } };
+    static const char *const edge[4] = { "left", "right", "top", "bottom" };
+    char what[96];
+    for (int e = 0; e < 4; e++) {
+        float dx = dir[e][0], dy = dir[e][1];
+        // A point d pixels from the guard's edge (inward if d < 0), level
+        // with the viewport's centre.
+        float in_x = dx != 0 ? dx * 2030.0f : cx, in_y = dy != 0 ? dy * 2030.0f : cy;
+        float out_x = dx != 0 ? dx * 2050.0f : cx, out_y = dy != 0 ? dy * 2050.0f : cy;
+        for (int pass = 0; pass < 2; pass++) {
+            gl_start(1024);
+            glViewport(vx, 480 - (vrow + vh), vw, vh);
+            glMatrixMode(GL_PROJECTION);
+            glLoadIdentity();
+            glOrtho(vx, vx + vw, vrow + vh, vrow, -1, 1);
+            glMatrixMode(GL_MODELVIEW);
+            glLoadIdentity();
+            glBegin(GL_TRIANGLES);
+            if (pass == 1)
+                glVertex2f(out_x, out_y);
+            glVertex2f(in_x + (dx != 0 ? 0 : 40), in_y + (dy != 0 ? 0 : 40));
+            glVertex2f(cx + 20 * dy, cy + 20 * dx);
+            if (pass == 0)
+                glVertex2f(cx - 20 * dy, cy - 20 * dx);
+            glEnd();
+            pbgl_end_frame();
+            long at = gl_find_tris(0), far = 0, kept = 0;
+            uint32_t n = at < 0 ? 0 : gl_frame[at + 1];
+            int axis = dx != 0 ? 0 : 1;
+            long sign = (long)(dx + dy);
+            for (uint32_t i = 0; i < n; i++) {
+                long c = (int16_t)gl_frame[at + 2 + 2 * i + axis] * sign;
+                if (c > far)
+                    far = c;
+                if (c == 2030 * 16)
+                    kept++;
+            }
+            check_num(join(what, where, pass ? ": 10 pixels outside the guard's " :
+                                               ": 10 pixels inside the guard's ",
+                           edge[e], pass ? " is cut there" : " is sent whole"),
+                      (long)pbgl_total.clipped, pass);
+            check_num(join(what, where, ": and at its ", edge[e],
+                           pass ? " the polygon ends at the edge" : " the vertex is where it was"),
+                      far, pass ? 2040 * 16 : 2030 * 16);
+            check_num(join(what, where, ": the inside vertex at the ", edge[e], " is kept"),
+                      kept, 1);
+        }
+    }
+}
+
+static void gl_guard(void)
+{
+    gl_guard_at("the whole surface", 0, 0, 640, 480, 320, 240);
+    gl_guard_at("demo1's 3D view", 0, 0, 640, 365, 320, 182.5f);  // glViewport(0, 115, 640, 365)
+    // A viewport past the guard band (none GLQuake makes): x 2,050 is on
+    // its screen and still outside the guard, so every test is made.
+    gl_guard_at("a viewport at 1,800", 1800, 0, 640, 480, 1900, 240);
+}
+
 static void gl_subs(void)
 {
     static uint8_t lightmap[4 * 8];
@@ -821,7 +909,7 @@ static void gl_split(void)
 
 static void (*const checks[])(void) = { greeting, bench_words, pb3d_fixed, pb3d_commands,
                                          gl_screen, gl_prims, gl_clip, gl_state, gl_viewport,
-                                         gl_textures_check, gl_full, gl_cuts, gl_subs,
+                                         gl_textures_check, gl_full, gl_cuts, gl_guard, gl_subs,
                                          gl_split };
 
 int quince_selftest(void (*fail)(const char *what, const char *got, const char *want),

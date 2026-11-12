@@ -25,7 +25,7 @@ DEMO1_FRAMES = 969
 SERVER_FRAMES = 300
 SERVER_TOTALS = (186776, 357952)   # triangles, vertices GLQuake asked for
 SERVER_SENT = (2837701, 330356, 162178)   # words, vertices, triangles sent PB
-SERVER_CHECKSUM = 122102208   # of every word: the same commands, word for word
+SERVER_CHECKSUM = 3500115068   # of every word: the same commands, word for word
 # ...and where those frames leave the game (lib/qbench.c's print_state).
 # Since M3 the PC rounds floats as the board does (the Makefile's QHOST_CC),
 # so CANNER's build on SIMMER must print these too (tools/simbench.py).
