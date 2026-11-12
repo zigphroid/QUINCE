@@ -356,7 +356,7 @@ void Con_DebugLog(char *file, char *fmt, ...)
     static char data[1024];
     int fd;
     
-#ifndef __CANNER__	// QUINCE: no -condebug log on the board: PectinOS's open() takes no
+#ifndef QUINCE_BOARD	// QUINCE: no -condebug log on the board: PectinOS's open() takes no
 			// O_ flags or mode (quince/libc/fcntl.h); M1 needs no log there
     va_start(argptr, fmt);
     vsprintf(data, fmt, argptr);

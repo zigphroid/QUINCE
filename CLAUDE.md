@@ -145,7 +145,11 @@ touches:
   (the .JAM and `PICKJAM.BAT` in `dist/`, committed, for a board that
   fetches it over the WiFi: GETTING-STARTED, "From a Claude project") ·
   `make os` (the pinned PectinOS onto the board) · `make pin` (move to
-  the checkout's HEAD, in a PR of its own, below).
+  the checkout's HEAD, in a PR of its own, below) · `make heat` (the
+  cold code, by `quince/QUINCE.HOT`, a board run's THERMO heat file, out
+  of the jar: `build/heat/`) · `make gcc` (GCC -O2 through the SDK's
+  flags, to compare: `build/gcc/`). `sim-smoke`, `sim-bench` and `send`
+  take either with `QUINCE_JAM=build/heat/QUINCE.JAM`.
 - `PECTIN_REV` pins the pectinos commit the program builds and passes
   against. The board must run the same commit's PectinOS: an older kernel
   refuses a newer CANNER's .JAM (`Not a jar. (needs a newer PectinOS)`).
