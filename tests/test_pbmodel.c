@@ -516,8 +516,7 @@ static void depth_test(void)
     pbm_draw(&m, PBM_LIST, nv, 3);
     check("LEQUAL: the near one over the far", colour[5 * 16 + 5], near_c);
     // Within a step: q at a pixel is good to about S16's 16 bits.
-    check("its depth written", labs((long)depth[5 * 16 + 5] -
-                                    (long)pbm_depth_of_q(0x40000000u)) <= 1, 1);
+    check("its depth written", depth[5 * 16 + 5], pbm_depth_of_q(0x40000000u));
     pbm_draw(&m, PBM_LIST, fv, 3);
     check("LEQUAL: the far one after it fails", colour[5 * 16 + 5], near_c);
     pbm_draw(&m, PBM_LIST, nv, 3);
@@ -551,7 +550,7 @@ static void depth_test(void)
     pbm_draw(&m, PBM_LIST, fv, 3);
     check("the weapon over the wall", colour[5 * 16 + 5], far_c);
     check("its depth scaled", labs((long)depth[5 * 16 + 5] -
-                                   (long)((pbm_depth_of_q(0x10000000u) * 0x4ccdu) >> 16)) <= 1, 1);
+                                   (long)((pbm_depth_of_q(0x10000000u) * 0x4ccdu) >> 16)) <= 0, 1);
 }
 
 // --- textures ---
@@ -617,17 +616,24 @@ static void palette_and_alpha(void)
     check("kept 1555: 5 bits of green", colour[1],
           pbm_565(five(p[600]), five(p[601]), five(p[602])));
 
-    // RGBA8888: alpha under 128 is see-through.
+    // RGBA8888 made with alpha: alpha under 128 is see-through. Made
+    // without, alpha is dropped and every texel drawn (#16).
     {
         static const uint8_t px[16] = { 10, 20, 30, 127, 40, 50, 60, 128,
                                         0, 0, 0, 0, 255, 255, 255, 255 };
         pbm_clear_colour(&m, 0x2222);
-        pbm_texture(&m, 9, PBM_TEX_RGBA8888, 1, 1, 0, 0);
+        pbm_texture(&m, 9, PBM_TEX_RGBA8888, 1, 1, 0, 1);
         pbm_texture_load(&m, 9, 0, 0, 2, 2, px);
         bind(0, 9, 0, 0, 0);
         rect(0, 0, 2, 2, 1, 0, 0, 2, 2);
         check("alpha 127 dropped", colour[0], 0x2222);
         check("alpha 128 kept", colour[1] != 0x2222, 1);
+        pbm_clear_colour(&m, 0x2222);
+        pbm_texture(&m, 9, PBM_TEX_RGBA8888, 1, 1, 0, 0);
+        pbm_texture_load(&m, 9, 0, 0, 2, 2, px);
+        rect(0, 0, 2, 2, 1, 0, 0, 2, 2);
+        check("without alpha, alpha 127 drawn", colour[0], pbm_565(10, 20, 30));
+        check("and alpha 0 too", colour[2], 0);
     }
 
     // The alpha test passes 170 and up (GLQuake's GREATER 0.666): an
@@ -1261,6 +1267,9 @@ static void scene(const char *png)
     // Change this only on purpose, with the picture looked at: it holds
     // the rules together (docs/PB3D.md, "Changing the rules").
     check("the scene's CRC", (long)crc, (long)0xb6fe76e8u);
+    // Every covered pixel ends one way (#21).
+    check("covered = unweighted + depth and alpha fails + drawn", (long)m.counts.covered,
+          (long)(m.counts.unweighted + m.counts.depth_fail + m.counts.alpha_fail + m.counts.drawn));
     printf("test_pbmodel: scene %08x, %u triangles, %u culled, %u pixels covered, %u drawn (%s)\n",
            crc, m.counts.tris, m.counts.culled, m.counts.covered, m.counts.drawn,
            png ? png : "no picture");

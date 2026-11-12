@@ -345,7 +345,12 @@ $(BUILD)/heat/$(NAME).JAM: $(BUILD)/heat/$(NAME).cold $(BUILD)/$(NAME).JAM
 # -fno-strict-aliasing because id's code reads floats through int
 # pointers (LittleFloat and the rest), and -std=gnu99 for id's C89.
 # The .elf, .map and disassembly are in build/gcc/QUINCE/.
+# pectin.mk sets PECTIN_ROOT to $(SDK)/.., which would overwrite ours for
+# every rule after it (#12): the same directory today, but not if SDK is
+# pointed elsewhere, and a path compared as a string sees the difference.
+QUINCE_PECTIN_ROOT := $(PECTIN_ROOT)
 include $(SDK)/pectin.mk
+PECTIN_ROOT := $(QUINCE_PECTIN_ROOT)
 GCC_DIR   := $(BUILD)/gcc/$(NAME)
 GCC_QSRC  := $(SRC) $(CORE) $(QUAKE_BOARD) $(SDKLIB)
 GCC_QOBJ  := $(patsubst %.c,$(GCC_DIR)/obj/%.o,$(GCC_QSRC))

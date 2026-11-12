@@ -84,11 +84,15 @@ uses the same R.
 
 ## Depth (Jacob: a 16-bit float of q)
 
-- **q at the pixel:** once per triangle, RA = floor(2^46 / (area >> es)).
-  At each pixel, q = floor(S16 x RA / 2^(46 - sh - qs)), held to 32 bits.
-  That is the screen-linear mean of the vertices' q, to about a 32,768th
-  (S16's 16 bits), under the 12-bit mantissa's step below. A triangle drawn
-  twice gets the same depth both times.
+- **q at the pixel:** once per triangle, RA = ceil(2^46 / (area >> es)).
+  At each pixel, Sd = S / 2^sh rounded to nearest (S16 itself where sh
+  is 0 or less), and q = Sd x RA / 2^(46 - sh - qs) rounded to nearest,
+  held to 32 bits. That is the screen-linear mean of the vertices' q, to
+  about a 65,536th (Sd's 16 bits), under the 12-bit mantissa's step
+  below, and as likely above as below: until #21 every step rounded
+  down, so a constant q came out under itself, and a q on a step's edge
+  (0.5) a whole step farther. A triangle drawn twice gets the same depth
+  both times.
 - **The format:** a 4-bit exponent and a 12-bit mantissa, as Voodoo's
   w-buffer, so every distance gets about a 4,096th of itself in precision.
   q at or above 1.0 is taken as 0x7FFFFFFF. With lz the leading zeros of q
@@ -112,7 +116,8 @@ uses the same R.
 | --- | --- | --- |
 | `INDEX8`, through the palette | RGB565 | never: index 255 is a colour |
 | `INDEX8` with `TEXF_ALPHA` | ARGB1555 | index 255 |
-| `RGBA8888` | ARGB1555 | alpha below 128 |
+| `RGBA8888` | RGB565 | never: alpha is dropped |
+| `RGBA8888` with `TEXF_ALPHA` | ARGB1555 | alpha below 128 |
 | `GREY8` (lightmaps) | 8 bits | never |
 
 A channel goes in by dropping its low bits. It comes out at 8 bits by
@@ -192,7 +197,8 @@ unit, the depth range 0 to 0xFFFF, the whole surface to draw in. Then:
   is the word's low byte; an RGBA one is r, g in the first word and b, a
   in the second, each low byte first.
 - A command `pb3d_cmd_words` doesn't know (an unknown op, an argument
-  with a stray bit, one running past the frame's words) is refused: the
+  with a stray bit, a `STATE` with depth test 3, a `DEPTHRANGE` with far
+  below near, one running past the frame's words) is refused: the
   commands before it are drawn, it and the rest of the frame are not.
 
 The texture records (`PB3D_REC_TEXIMAGE`, `TEXSUB`, `TEXFREE`) are the
@@ -207,9 +213,11 @@ frames: GLQuake draws every pixel of its view).
 ## What the model counts
 
 Triangles seen (culled ones too), those culled or with no area, pixels
-covered, failing depth, failing the alpha test, drawn, and blended (read
-the picture first). These are the fill budget's numbers in `docs/PB-ASKS.md`, measured on Quake's
-frames by `tests/pbplay.c`.
+covered, and each covered pixel's end: skipped because its weights sum
+to 0, failing depth, failing the alpha test, or drawn; and of those
+drawn, the ones blended (read the picture first). These are the fill
+budget's numbers in `docs/PB-ASKS.md`, measured on Quake's frames by
+`tests/pbplay.c`.
 
 ## Changing the rules
 

@@ -831,3 +831,25 @@ send functions cold (review 1). The next THERMO run replaces the file.
   program's samples bought 1%, so what those samples were waiting on is
   mostly not the instructions this PR took out: the stores of the
   frame's 27 KB of words into PSRAM are the likely cost (inferred).
+
+## 2026-11-12: the model's depth rounds to nearest (#21)
+
+Later issues PR 3 changes one of PB3D.md's rules. Under the old rule, q
+at a pixel rounded down at all three of its steps: S's 16 bits, RA's
+reciprocal and the last shift. So a triangle of constant q 0.5 stored
+4096, where `pbm_depth_of_q` puts q 0.5 at 4095. Now RA rounds up, and
+the 16-bit sum and the last shift round to nearest.
+
+Rounding the last shift alone, the issue's first suggestion, wasn't
+enough. RA's floor left q 0.5 at 0x3FFFFFFF, and the shift can't undo
+that. `depth_test`'s two checks are now exact, not within 1.
+
+The scene's CRC and e1m1's 300 frames drawn by the model are unchanged,
+so no picture moved. The cost to PB: one add each for the sum's and
+the shift's rounding, plus a different constant in RA's divide, which
+runs once a triangle.
+
+Alternatives:
+- Keep the floors and say "about" in PB3D.md. That leaves the bias.
+- Interpolate depth from the full S. Its product with RA still fits in
+  64 bits, but it needs a wider multiplier per pixel.

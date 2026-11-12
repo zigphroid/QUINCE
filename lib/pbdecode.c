@@ -124,7 +124,11 @@ static const uint16_t *vertex(const uint16_t *w, uint32_t f, struct pbm_vertex *
 }
 
 /* A TRIS's vertices, held while its triangles are drawn: a strip or fan
- * shares them. The most one command can carry. */
+ * shares them. The most one command can carry, which is about 2 MB of
+ * .bss: nothing on the PC, but too much for a board or a small tool.
+ * Taken there, this would draw a strip or fan through a window of its
+ * last three vertices instead (pbm_draw one triangle at a time), and a
+ * list three at a time. */
 static struct pbm_vertex verts[MAX_VERTS];
 
 static void tris(struct pbm *m, const uint16_t *w)

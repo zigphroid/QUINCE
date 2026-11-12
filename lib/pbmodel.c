@@ -157,10 +157,11 @@ int pbm_texture(struct pbm *m, uint32_t id, int format, int lw, int lh,
 		return PBM_E_ID;
 	if (lw < 0 || lh < 0 || lw > PBM_TEX_LOG_MAX || lh > PBM_TEX_LOG_MAX)
 		return PBM_E_SIZE;
-	if (format == PBM_TEX_INDEX8)
+	/* The flag alone decides whether a texture has see-through texels,
+	 * for indices and RGBA alike (#16): without it, RGBA's alpha is
+	 * dropped with its 565. */
+	if (format == PBM_TEX_INDEX8 || format == PBM_TEX_RGBA8888)
 		keep = alpha ? PBM_KEEP_1555 : PBM_KEEP_565;
-	else if (format == PBM_TEX_RGBA8888)
-		keep = PBM_KEEP_1555;
 	else if (format == PBM_TEX_GREY8)
 		keep = PBM_KEEP_GREY;
 	else
@@ -188,7 +189,7 @@ int pbm_texture(struct pbm *m, uint32_t id, int format, int lw, int lh,
 	t->levels = (uint8_t)levels;
 	t->keep = (uint8_t)keep;
 	t->format = (uint8_t)format;
-	t->alpha = (uint8_t)(alpha != 0 && format == PBM_TEX_INDEX8);
+	t->alpha = (uint8_t)(alpha != 0 && format != PBM_TEX_GREY8);
 	t->made = 1;
 	for (l = 0; l < levels; l++)
 		zero(t->level[l], tex_w(t, l) * tex_h(t, l) * 2u);
@@ -633,8 +634,14 @@ static void triangle(struct pbm *m, const struct pbm_vertex *v0,
 	for (i = 0; i < 3; i++)
 		q[i] = v[i]->q >> qs;
 	/* For depth, a reciprocal of the area, once a triangle:
-	 * floor(2^46 / (area >> es)), up to 2^46. */
-	rda = (int64_t)(((uint64_t)1 << 46) / ((uint64_t)area >> es));
+	 * ceil(2^46 / (area >> es)), up to 2^46. Rounded up, not down
+	 * (#21): with every step below rounding down, a constant q came out
+	 * under itself and a q on a depth step's edge (0.5, say) a step
+	 * farther than pbm_depth_of_q puts it. */
+	{
+		uint64_t a = (uint64_t)area >> es;
+		rda = (int64_t)((((uint64_t)1 << 46) + a - 1) / a);
+	}
 	{
 
 		/* The mip levels, from the texel and pixel areas. Unit 0's
@@ -701,8 +708,10 @@ static void triangle(struct pbm *m, const struct pbm_vertex *v0,
 					w[i] = (e[i] >> es) * (int64_t)q[i];
 					s += w[i];
 				}
-				if (s == 0)
+				if (s == 0) {
+					m->counts.unweighted++;
 					continue;
+				}
 				sh = bitlen((uint64_t)s) - 16;   /* -15 to 26 */
 				s16 = scale(s, (int)-sh);       /* 2^15 to 2^16 - 1 */
 				r = (int64_t)pbm_recip((uint32_t)s16);
@@ -712,8 +721,12 @@ static void triangle(struct pbm *m, const struct pbm_vertex *v0,
 				/* Depth: q at the pixel, from the same sum. */
 				{
 					int k = 46 - (int)sh - qs;   /* 4 to 61 */
-					uint64_t qv = (uint64_t)s16 * (uint64_t)rda;
-					qv = k >= 0 ? qv >> k : qv << -k;
+					/* The sum's 16 bits and the last shift rounded
+					 * to nearest, where the colours' floor (#21). */
+					uint64_t sd = sh > 0 ? ((uint64_t)s + ((uint64_t)1 << (sh - 1))) >> sh
+					                     : (uint64_t)s16;
+					uint64_t qv = sd * (uint64_t)rda;
+					qv = k > 0 ? (qv + ((uint64_t)1 << (k - 1))) >> k : qv << -k;
 					qf = qv > 0xffffffffu ? 0xffffffffu : (uint32_t)qv;
 				}
 				d = pbm_depth_of_q(qf);
@@ -783,6 +796,8 @@ static void triangle(struct pbm *m, const struct pbm_vertex *v0,
 						l1 = study_level(m, t1, v, x, y, e, area, 1, &f1);
 						m->study.mip_reads++;
 						m->study.level_moved += l1 != lvl[1];
+					} else if (m->unit[1].mipmap) {
+						m->study.mip_reads++;
 					}
 					l = sample(t1, &m->unit[1], l1, a_s2, a_t2, 10);
 					if (f1)

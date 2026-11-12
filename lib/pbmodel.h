@@ -74,10 +74,12 @@ struct pbm_bind {
 struct pbm_counts {
 	uint32_t tris;        /* every triangle seen, culled ones too */
 	uint32_t culled;      /* dropped by their winding, or with no area */
-	uint32_t covered;     /* pixels inside a triangle and on the surface */
+	uint32_t covered;     /* pixels inside a triangle and on the surface: */
+	uint32_t unweighted;  /*   of those, ones whose weights sum to 0, skipped */
 	uint32_t depth_fail;
 	uint32_t alpha_fail;
-	uint32_t drawn;       /* colour written */
+	uint32_t drawn;       /* colour written: covered is unweighted +
+	                       * depth_fail + alpha_fail + drawn */
 	uint32_t blended;     /* of those, read the picture first */
 };
 

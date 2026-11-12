@@ -876,10 +876,10 @@ static GLenum prim_mode;
  * sums as plane[i] . v for finite coordinates, since the terms left out
  * are exact zeros (an infinite y or z made the old 0 * inf a NaN in every
  * other plane's sum, so those planes all said inside; a compare never
- * reads a coordinate its plane doesn't use). M2's
- * board run had the dot products at 17% of the program (LOG 2026-11-12).
- * A vertex on the screen is inside the guard band too, which is wider
- * (guard_wider), so the guard's four tests are made only off it. */
+ * reads a coordinate its plane doesn't use). M2's board run had the dot
+ * products at 17% of the program (LOG 2026-11-12). A vertex on the
+ * screen is inside the guard band too, which is wider (guard_wider), so
+ * the guard's four tests are made only off it. */
 static uint16_t outcode_of(const struct vert *v)
 {
 	float x = v->x, y = v->y, w = v->w;

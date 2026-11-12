@@ -145,7 +145,8 @@ double asin(double x)
 #define QFILES 8
 
 struct quince_file {
-	int handle;      /* 0: this slot is free */
+	int used;        /* 0: this slot is free (a handle can be 0, #7) */
+	int handle;
 	int eof;
 	int writing;
 	int have;        /* bytes in buf after pos */
@@ -169,7 +170,7 @@ FILE *fopen(const char *path, const char *mode)
 	else if (mode[0] == 'a')
 		how = PECTIN_APPEND;
 	for (i = 0; i < QFILES; i++)
-		if (files[i].handle == 0)
+		if (!files[i].used)
 			break;
 	if (i == QFILES)
 		return NULL;
@@ -177,6 +178,7 @@ FILE *fopen(const char *path, const char *mode)
 	if (h < 0)
 		return NULL;
 	memset(&files[i], 0, sizeof files[i]);
+	files[i].used = 1;
 	files[i].handle = h;
 	files[i].writing = how != PECTIN_READ;
 	return &files[i];
@@ -185,7 +187,7 @@ FILE *fopen(const char *path, const char *mode)
 int fclose(FILE *f)
 {
 	int r = close(f->handle);
-	f->handle = 0;
+	f->used = 0;
 	return r < 0 ? EOF : 0;
 }
 

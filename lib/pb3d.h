@@ -67,7 +67,8 @@ enum {
 #define PB3D_S_DEPTH_MASK   0x0003u  /* the depth test: */
 #define PB3D_S_DEPTH_ALWAYS 0x0000u  /*   every pixel passes */
 #define PB3D_S_DEPTH_LEQUAL 0x0001u  /*   passes if nearer or the same */
-#define PB3D_S_DEPTH_GEQUAL 0x0002u  /*   passes if farther or the same */
+#define PB3D_S_DEPTH_GEQUAL 0x0002u  /*   passes if farther or the same;
+                                      *   3 names nothing: refused */
 #define PB3D_S_DEPTH_WRITE  0x0004u  /* a pixel that passes the depth test, and
                                       * isn't dropped by the alpha test, writes
                                       * its depth */
@@ -157,7 +158,7 @@ enum {
 	  ((f) & PB3D_F_COLOUR_MASK) == PB3D_F_RGBA ? 2u : 0u))
 
 /* DEPTHRANGE: word 1 near, word 2 far, in the stored depth's units, 0 to
- * 0xFFFF. PB turns q into a 16-bit depth d that keeps q's order and
+ * 0xFFFF, far at or above near (one below it is refused). PB turns q into a 16-bit depth d that keeps q's order and
  * stores near + (d (far - near + 1) >> 16). A frame starts at 0, 0xFFFF.
  * GLQuake's view weapon is drawn at 0 to 0.3 of the range, so it is
  * always in front of the world. */
@@ -185,9 +186,9 @@ struct pb3d_buf {
 	uint32_t n;           /* how many are written */
 	uint32_t cap;         /* how many fit */
 	uint32_t dropped;     /* commands that didn't fit, and so weren't written */
-	uint32_t tris_at;     /* where the open TRIS's count is, if one is open;
-	                       * nothing reads it yet: the next PR's fix for a
-	                       * TRIS opened inside another will (#15) */
+	uint32_t tris_at;     /* where the open TRIS's count is, if one is open:
+	                       * pb3d_tris takes a TRIS left short back out
+	                       * from here (#15) */
 	uint32_t tris_left;   /* vertices the open TRIS still takes */
 	uint8_t tris_format;
 };
@@ -213,7 +214,10 @@ void pb3d_depthrange(struct pb3d_buf *b, uint32_t near, uint32_t far);
 void pb3d_clip(struct pb3d_buf *b, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1);
 /* TRIS of n vertices (3 or more, and their words must fit), then exactly
  * n pb3d_vertex or pb3d_vertex_of calls. Returns 0, or -1 having
- * written nothing (the vertex calls after it then write nothing either). */
+ * written nothing (the vertex calls after it then write nothing either).
+ * A TRIS still open when it is called, short of its n vertices, is taken
+ * back out of the buffer and counted in dropped, whatever this call
+ * returns. */
 int pb3d_tris(struct pb3d_buf *b, uint32_t kind, uint32_t format, uint32_t n);
 void pb3d_vertex(struct pb3d_buf *b, const struct pb3d_vertex *v);
 /* The same, from the fields themselves: the GL layer's way, with no
@@ -270,7 +274,8 @@ enum {
 enum {
 	PB3D_TEX_INDEX8   = 0,  /* a byte a texel, through the palette */
 	PB3D_TEX_RGBA8888 = 1,  /* r, g, b, a: the few that aren't palette colours;
-	                         * PB stores alpha under 128 as see-through */
+	                         * with PB3D_TEXF_ALPHA, PB stores alpha under 128
+	                         * as see-through; without it, alpha is dropped */
 	PB3D_TEX_GREY8    = 2   /* a byte a texel, a grey level: lightmaps */
 };
 
