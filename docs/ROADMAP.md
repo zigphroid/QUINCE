@@ -9,7 +9,7 @@ milestone.
 Scaffolded by pectinos's `make new-app` at bafa5bf: `QUINCE.JAM` builds,
 its host test and `/SELFTEST` pass, `make sim-smoke` runs it on SIMMER.
 
-## M1: Quake with nothing drawn, timed on the board
+## M1: Quake with nothing drawn, timed on the board (done 2026-11-12)
 
 Planned 2026-11-11. Can the RP2350 run Quake's game and the CPU's share of
 its renderer, before anything is drawn? id's source (`quake/`) built by

@@ -186,10 +186,11 @@ Each passed `/SELFTEST`. The logs are on Jacob's Mac in
   samples. It moved the other 843 to PSRAM and freed 129 KB of the
   384 KB program area. Quake's code already runs from SRAM, so a cut
   can't make it faster. It only costs something, and that cost is
-  small: 3% and 7%. Like CANNER's own cut (4 to 5% for 81 to 96 KB,
+  small: 3% and 7%. Like CANNER's own cut (3.7% for 81 KB freed,
   pectinos's LOG 2026-10-31), the cost is the cold code that still runs,
-  now behind the XIP cache. The server run pays more, because it loads
-  a map, and loading was THERMO's least-sampled code. The freed room is
+  now behind the XIP cache. Why the server run pays more than the
+  timedemo isn't known: its clock starts after the map has loaded, so it
+  isn't the load. The freed room is
   for hot data, which today sits in PSRAM behind the same cache. THERMO
   samples where the code is, not what it reads, so which data goes
   there needs its own plan.
@@ -203,7 +204,8 @@ Each passed `/SELFTEST`. The logs are on Jacob's Mac in
     "Bad surface extents". `-Werror=implicit-function-declaration` now
     catches that.
   - `setjmp` and `longjmp` are GCC's built-ins (`quince/libc/setjmp.h`).
-- **Run to run.** The plain build was 2% faster than in the first run,
+- **Run to run.** The plain build was about 2% slower than in the first
+  run (30.9 against 30.3 ms on demo1, 22.1 against 21.6 on e1m1),
   and the server's totals were the same in every build and every run.
   The timedemo's totals vary, because the client interpolates by the
   clock. So their checksums vary too, and only its frame count is fixed
