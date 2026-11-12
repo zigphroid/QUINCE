@@ -9,7 +9,7 @@ milestone.
 Scaffolded by pectinos's `make new-app` at bafa5bf: `QUINCE.JAM` builds,
 its host test and `/SELFTEST` pass, `make sim-smoke` runs it on SIMMER.
 
-## M1: Quake with nothing drawn, timed on the board
+## M1: Quake with nothing drawn, timed on the board (done 2026-11-12)
 
 Planned 2026-11-11. Can the RP2350 run Quake's game and the CPU's share of
 its renderer, before anything is drawn? id's source (`quake/`) built by
@@ -40,9 +40,12 @@ the pixelboard is a later milestone.
   run on SIMMER (`make sim-bench`), with Quake's memory fitted to the
   board's (LOG 2026-11-12).
 - PR 3: the board run, with `id1/pak0.pak` on the card: the timings, the
-  counts and the profiles, and what they say about feasibility. Then the
-  same timings with the code cut by THERMO's heat file (`tools/heat.py`,
-  CANNER `-cold`): the frame loop in the jar, the rest in PSRAM.
+  counts and the profiles, and what they say about feasibility. Done
+  2026-11-12 (LOG): demo1 at 33 fps, e1m1's server at 46 fps, the link
+  at about 3.6 MB/s. Then the same timings with the code cut by THERMO's
+  heat file (`make heat`: 129 KB of the program area freed, 3% and 7%
+  slower) and GCC's `-O2` build beside them (`make gcc`: 22% and 12%
+  faster).
 
 ## Later: drawing on the pixelboard
 
@@ -53,4 +56,5 @@ depth and two textures a pixel. QUINCE's steps come first and need no new
 gateware: the real GL layer, still drawing nothing, timed on the board,
 then a C model of the triangle engine drawing demo1's frames on the PC.
 PB's side (flat triangles, then textures, then lightmaps) is pectinos's
-work, to be asked for in an issue there once Jacob hands it over. Each step is planned in chat first.
+work, to be asked for in an issue there once Jacob hands it over. Each
+step is planned in chat first.

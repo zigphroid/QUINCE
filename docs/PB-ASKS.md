@@ -1,8 +1,7 @@
 # What QUINCE asks of PB
 
 What Quake needs from the pixelboard's 3D, sized from M1's board run
-(`docs/ROADMAP.md`; LOG 2026-11-12, "M1's board run", which
-PR #8 adds). Jacob took every recommendation
+(`docs/ROADMAP.md`; LOG 2026-11-12, "M1's board run"). Jacob took every recommendation
 here on 2026-11-12 ("All recs"). How PB meets these asks is pectinos's
 work and its own plan: QUINCE asks and tests, and never patches pectinos
 (CLAUDE.md, rule 3). Figures marked *inferred* are estimates still to

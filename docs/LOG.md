@@ -121,6 +121,103 @@ Alternatives: keep 5.5 MB and say which maps fit, which would drop a
 shareware level; or shrink the upload buffers, which a 256x256 texture
 needs whole.
 
+## 2026-11-12: M1's board run: Quake is worth going on with
+
+These are the first timings on the Fruit Jam itself. The run used PectinOS
+at the pin (bafa5bf, API 63, flashed for it on Jacob's OK) and QUINCE at
+0844958, built by CANNER. The pak went to `J:\LARDER\QUINCE\ID1` and is
+not committed. The log of every command is on Jacob's Mac in
+`~/src/quince-board-run/`.
+
+| | frames | seconds | fps | ms/frame | tris/frame | verts/frame | PB link |
+|---|---|---|---|---|---|---|---|
+| `/TIMEDEMO DEMO1` | 969 | 29.35 | 33.0 | 30.3 | 2,094 | 3,953 | 3,571 KB/s |
+| `/SERVER E1M1 300` | 300 | 6.47 | 46.4 | 21.6 | 1,103 | 2,167 | 2,799 KB/s |
+
+- `/SELFTEST` passed 41 checks. The server's totals (330,776 tris, 650,152
+  verts) are the same as the PC's and SIMMER's. The timedemo's totals vary
+  a little from run to run, because the client interpolates by the clock.
+- What the link carries:
+  - Almost all of it is vertices, at 28 bytes each.
+  - Lightmap updates are 2 KB/s in demo1 and 50 KB/s in e1m1.
+  - About 12 MB of textures cross once at load (demo1 952 uploads, e1m1
+    1,119, mip levels included). None are reloaded during a run at the
+    5.75 MB hunk.
+- THERMO, at 4 kHz, on the timedemo:
+  - The null GL's vertex transform (`vertex`, `glVertex3fv`) is about 15%
+    of the program's time, and `R_RecursiveWorldNode` 5%.
+  - `softfp.c`'s double arithmetic (`__aeabi_dmul`, `unpack`, `pack64`) is
+    about 9%: Quake's double constants promote float expressions.
+  - Texture resampling and mipmaps (`GL_ResampleTexture`, `GL_MipMap`,
+    `GL_Upload8`) are about 10%. That is all at load, and it leads the
+    short server run (23%).
+  - The kernel and interrupts take 13% (timedemo) and 22% (server).
+
+What it says: the RP2350 runs Quake's game and the CPU's half of its
+renderer at about 30 fps in demo1, behind the XIP cache, with no tuning.
+The PB's half is rasterizing about 2,000 triangles a frame and taking about
+3.6 MB/s over its link. Both are inferred to be within a Glide-class
+card's reach, and the link's real capacity has yet to be measured. The
+cheapest CPU wins in view:
+- float constants where id wrote doubles;
+- mip levels made by the PB, not the CPU, which affects load time only;
+- the hot code in the jar by THERMO's heat file, still to do in PR 3.
+
+THERMO's heat files from these two runs (`J:\QTD.HOT`, `J:\QSV.HOT`)
+came off the board over the console (`TASTE`, through `jamterm.py`), and
+`heat.py sum` added them into `quince/QUINCE.HOT`, which drives the cut
+below.
+
+## 2026-11-12: the heat cut and GCC's -O2 build on the board
+
+All three builds were timed on one boot of the pinned PectinOS (bafa5bf,
+flashed on Jacob's OK), QUINCE at 06cfd17, in the order heat, GCC, plain.
+Each passed `/SELFTEST`. The logs are on Jacob's Mac in
+`~/src/quince-board-run/builds2/`.
+
+| build | jar (code and data) | `/TIMEDEMO DEMO1` | `/SERVER E1M1 300` |
+|---|---|---|---|
+| CANNER, plain (`make`) | 251 KB | 30.9 ms, 32.3 fps | 22.1 ms, 45.3 fps |
+| CANNER, heat cut (`make heat`) | 122 KB, plus 143 KB cold | 31.8 ms (+3%) | 23.6 ms (+7%) |
+| GCC -O2 (`make gcc`) | 254 KB | 24.0 ms (-22%) | 19.4 ms (-12%) |
+
+- **The heat cut (Jacob chose: time it, and report the room it frees).**
+  Its 64 KB budget kept 240 functions, which held more than 99% of the
+  samples. It moved the other 843 to PSRAM and freed 129 KB of the
+  384 KB program area. Quake's code already runs from SRAM, so a cut
+  can't make it faster. It only costs something, and that cost is
+  small: 3% and 7%. Like CANNER's own cut (3.7% for 81 KB freed,
+  pectinos's LOG 2026-10-31), the cost is the cold code that still runs,
+  now behind the XIP cache. Why the server run pays more than the
+  timedemo isn't known: its clock starts after the map has loaded, so it
+  isn't the load. The freed room is
+  for hot data, which today sits in PSRAM behind the same cache. THERMO
+  samples where the code is, not what it reads, so which data goes
+  there needs its own plan.
+- **GCC -O2** is the reference for CANNER's code: 22% less time a frame
+  on the timedemo, and 12% on the server run. Its code is 15% bigger
+  than CANNER's (228 KB against 198 KB), but it still fits. The build needed two things of its
+  own:
+  - QUINCE's `quince/libc/` comes first on the include path, as in
+    CANNER's build. The SDK's `math.h` has no `ceil`, so GCC took the
+    call as C89's implicit `int ceil()`, and map loading failed with
+    "Bad surface extents". `-Werror=implicit-function-declaration` now
+    catches that.
+  - `setjmp` and `longjmp` are GCC's built-ins (`quince/libc/setjmp.h`).
+- **Run to run.** The plain build was about 2% slower than in the first
+  run (30.9 against 30.3 ms on demo1, 22.1 against 21.6 on e1m1),
+  and the server's totals were the same in every build and every run.
+  The timedemo's totals vary, because the client interpolates by the
+  clock. So their checksums vary too, and only its frame count is fixed
+  (969).
+
+What it says: CANNER's code is within about a quarter of GCC's on Quake,
+and both are well inside the frame budget for a first renderer. The heat
+cut is cheap, and it frees room the PB work can use. Alternatives: a
+smaller budget (32 KB, about 95% of the samples) would free more room at
+a larger cost. Leaving the cut until a renderer milestone would have left
+its cost unmeasured.
+
 ## 2026-11-12: what QUINCE asks of PB for 3D
 
 Jacob took every recommendation of the PB plan (`docs/PB-ASKS.md`): a

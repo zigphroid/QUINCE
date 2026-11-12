@@ -14,6 +14,9 @@ make test-quake QUINCE_PAK=path/to/id1/pak0.pak
 make sim-smoke  # on SIMMER (PectinOS in QEMU), no window
 make sim-bench QUINCE_PAK=path/to/id1/pak0.pak
                 # Quake's two benchmarks on SIMMER, CANNER's build
+make heat       # build/heat/QUINCE.JAM: cold code cut by quince/QUINCE.HOT
+make gcc        # build/gcc/QUINCE.JAM: GCC -O2, to compare with CANNER's
+                # (sim-smoke, sim-bench and send take either: QUINCE_JAM=...)
 make sim        # on SIMMER, in a window
 make send       # onto the board's card over USB-C
 make os         # the pinned PectinOS onto the board (BOOTSEL)
