@@ -50,7 +50,7 @@ call sites in `quake/gl_*.c`.
 | Depth | `GL_DEPTH_TEST`, `glDepthFunc` LEQUAL and GEQUAL, `glDepthMask`, `glDepthRange` (the view weapon gets 0 to 0.3) | Test and write 16 bits; the depth range is a scale and offset the Jam applies |
 | Culling | `GL_CULL_FACE`, front or back | Optional: the Jam can cull, having the screen positions |
 | Blending | `GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA` (water, particles, the screen tint), `GL_ZERO, GL_ONE_MINUS_SRC_COLOR` (the lightmap pass), `GL_ONE, GL_ONE` (dynamic light flashes) | Three blend modes, each a read of the picture |
-| Alpha test | `GL_ALPHA_TEST` on the HUD, the console's text, sprites and the sky's top layer | Drop a pixel whose texel is see-through. id's `GL_Init` set `glAlphaFunc(GL_GREATER, 0.666)`; `lib/qvid.c` doesn't yet (inferred from id's `gl_vidnt.c`) |
+| Alpha test | `GL_ALPHA_TEST` on the HUD, the console's text, sprites and the sky's top layer | Drop a pixel whose texel is see-through. id's `GL_Init` sets `glAlphaFunc(GL_GREATER, 0.666)` (`gl_vidnt.c`); `lib/qvid.c` turns the test on as `GL_Init` does, and PB's fixed test stands for the reference |
 | Texture combine | `glTexEnvf` MODULATE, REPLACE, BLEND | Texture times vertex colour, or texture alone; BLEND is the lightmap on the second texture |
 | Shading | `glShadeModel` SMOOTH for models and light flashes, FLAT for the world | Gouraud colour across a triangle |
 | Textures | `glBindTexture`, `glTexImage2D`, `glTexSubImage2D`, `glTexParameterf` (filters, wrap) | Resident textures by id, partial updates, wrap and clamp, nearest and linear |
@@ -102,7 +102,7 @@ its clear, state and primitives, `SHOW`. The kernel writes `START`,
 a PB address. Textures are ids the kernel hands out, as a program's
 surfaces are (API 60).
 
-**New commands** (numbers past `POLYLINE`, 15 to 19). Their words,
+**New commands** (numbers past `POLYLINE`, 15 to 20). Their words,
 bits and the vertex layouts are `lib/pb3d.h`, the one place they are
 defined: the GL layer writes them (`lib/pb3d.c`) and the C model reads
 them. They are QUINCE's proposal, for pectinos to take over or reshape.
@@ -114,6 +114,7 @@ them. They are QUINCE's proposal, for pectinos to take over or reshape.
 | `TEXTURE` | the texture id for unit 0 or 1, its wrap and filter | about 35 binds a frame |
 | `TRIS` | kind (fan, strip, list), the vertex format, n vertices | 790 primitives a frame in demo1, about 5 vertices each |
 | `DEPTHRANGE` | near and far, in the stored depth's units | The view weapon at 0 to 0.3 of the range, in front of the world. Kept out of `STATE` so `STATE` stays one word |
+| `CLIP` | x0, y0, x1, y1, whole pixels, y down, x1 and y1 past the last | GL's viewport: GLQuake's 3D view stops above the status bar, which it draws only when it changes, so the view mustn't spill on it. A Voodoo's clip registers; cutting at the viewport on the Jam would cut far more triangles (step 2 PR 2, LOG 2026-11-12) |
 
 **The vertex**, fixed point, its fields chosen by the format bits in
 `TRIS`'s argument byte:
@@ -187,18 +188,25 @@ texture pool of 16 MB covers Quake with room to spare.
 already has (`fb_scan` mode 2). It needs the DDR3, not the SDRAM module.
 The resolution costs PB only: the Jam's work is the same at any size.
 
-**The fill budget** (all inferred; overdraw 2 is a guess, which our GL
-layer can count):
+**The fill budget**, measured by the C model drawing demo1's 1,020
+frames (`make pb-frames`, step 2 PR 2): a frame averages 1.78 screens
+of pixels covered (each a depth read), 1.40 drawn (a depth and a colour
+write) and 0.40 blended (a colour read too). That is less overdraw than
+the guess of 2 it replaced, but more blending than the 20% guessed:
+many frames blend the whole 640x365 view, 233,600 pixels, which is
+GLQuake's tint after a pickup or a hit fading (inferred: the frames
+looked at had just had pickups). e1m1's start is 1.45, 1.12 and 0.03. The texture
+refills are still a guess.
 
-| A frame | Bytes | At 30 fps | At 60 fps |
+| A frame (demo1's average) | Bytes | At 30 fps | At 60 fps |
 | --- | --- | --- | --- |
-| Pixels drawn, overdraw 2 | 614,000 pixels | 18 Mpx/s | 37 Mpx/s |
-| Depth read and write, colour write: 6 bytes a pixel | 3.7 MB | 110 MB/s | 220 MB/s |
-| Blended pixels' colour read (a guess of 20%) | 0.25 MB | 7 MB/s | 15 MB/s |
+| Pixels covered: depth read, 2 bytes | 547,000 pixels, 1.1 MB | 33 MB/s | 66 MB/s |
+| Pixels drawn: depth and colour write, 4 bytes | 430,000 pixels, 1.7 MB | 52 MB/s | 103 MB/s |
+| Blended: colour read, 2 bytes | 123,000 pixels, 0.25 MB | 7 MB/s | 15 MB/s |
 | Depth clear | 0.6 MB | 18 MB/s | 37 MB/s |
 | Scan-out (60 Hz either way) | 0.6 MB | 37 MB/s | 37 MB/s |
-| Texture cache refills (a guess of a byte a pixel) | 0.6 MB | 18 MB/s | 37 MB/s |
-| **Total** | | **about 190 MB/s** | **about 350 MB/s** |
+| Texture cache refills (a guess of a byte a pixel drawn) | 0.43 MB | 13 MB/s | 26 MB/s |
+| **Total** | | **about 160 MB/s** | **about 285 MB/s** |
 
 The DDR3-800 x16 peaks at 1.6 GB/s, the SDRAM module at 266 MB/s (16 bits
 at 133 MHz). Scattered small accesses get a fraction of peak, so 60 fps

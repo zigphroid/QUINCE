@@ -28,7 +28,7 @@ struct pbgl_counts {
 	uint32_t sent_tris;    /* triangles they make */
 	uint32_t state_cmds;   /* STATE */
 	uint32_t texture_cmds; /* TEXTURE */
-	uint32_t other_cmds;   /* DEPTH and DEPTHRANGE */
+	uint32_t other_cmds;   /* DEPTH, DEPTHRANGE and CLIP */
 	uint32_t culled;       /* primitives wholly off the screen or behind the eye */
 	uint32_t clipped;      /* primitives cut at the near plane or the guard band */
 	uint32_t clip_tris;    /* triangles those cuts made, sent as fans */

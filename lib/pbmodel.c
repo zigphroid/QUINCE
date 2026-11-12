@@ -278,6 +278,9 @@ void pbm_frame(struct pbm *m)
 	zero(m->unit, sizeof m->unit);
 	m->depth_near = 0;
 	m->depth_far = 0xffff;
+	m->clip[0] = m->clip[1] = 0;
+	m->clip[2] = m->w;
+	m->clip[3] = m->h;
 }
 
 void pbm_init(struct pbm *m, uint16_t *colour, uint16_t *depth, int w, int h,
@@ -315,6 +318,14 @@ void pbm_depth_range(struct pbm *m, uint32_t near_d, uint32_t far_d)
 {
 	m->depth_near = near_d & 0xffffu;
 	m->depth_far = far_d & 0xffffu;
+}
+
+void pbm_clip(struct pbm *m, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
+{
+	m->clip[0] = x0 < (uint32_t)m->w ? (int)x0 : m->w;
+	m->clip[1] = y0 < (uint32_t)m->h ? (int)y0 : m->h;
+	m->clip[2] = x1 < (uint32_t)m->w ? (int)x1 : m->w;
+	m->clip[3] = y1 < (uint32_t)m->h ? (int)y1 : m->h;
 }
 
 void pbm_clear_colour(struct pbm *m, uint16_t colour)
@@ -503,10 +514,12 @@ void pbm_triangle(struct pbm *m, const struct pbm_vertex *v0,
 		px1 = (int)asr(maxx - 8, 4);
 		py0 = (int)asr(miny - 8 + 15, 4);
 		py1 = (int)asr(maxy - 8, 4);
-		if (px0 < 0) px0 = 0;
-		if (py0 < 0) py0 = 0;
-		if (px1 > m->w - 1) px1 = m->w - 1;
-		if (py1 > m->h - 1) py1 = m->h - 1;
+		/* The clip rectangle, which pbm_frame and pbm_clip keep on
+		 * the surface. */
+		if (px0 < m->clip[0]) px0 = m->clip[0];
+		if (py0 < m->clip[1]) py0 = m->clip[1];
+		if (px1 > m->clip[2] - 1) px1 = m->clip[2] - 1;
+		if (py1 > m->clip[3] - 1) py1 = m->clip[3] - 1;
 
 		for (py = py0; py <= py1; py++)
 			for (px = px0; px <= px1; px++) {

@@ -90,17 +90,20 @@ CANNER_FLAGS ?=
 # or build/heat/ or build/gcc/'s (below).
 QUINCE_JAM ?= $(BUILD)/$(NAME).JAM
 
-.PHONY: FORCE all app heat gcc test quake-host test-quake test-builtins test-float sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
-all: app $(BUILD)/pbmodel.jo
+.PHONY: FORCE all app heat gcc test quake-host test-quake test-builtins test-float pb-frames sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
+all: app $(BUILD)/pbmodel.jo $(BUILD)/pbdecode.jo
 app: $(BUILD)/$(NAME).JAM
 
 # The triangle engine's C model isn't in the .JAM (PB draws, not the
 # Jam), but it keeps to CANNER's subset like all of lib/, so pectinos can
-# take it into its own tools: CANNER compiles it alone, an object no one
-# links.
+# take it into its own tools: CANNER compiles it and its decoder alone,
+# objects no one links.
 $(BUILD)/pbmodel.jo: lib/pbmodel.c lib/pbmodel.h $(CANNER) Makefile
 	@mkdir -p $(BUILD)
 	$(CANNER) -I lib -I $(SDK) -c -o $@ lib/pbmodel.c
+$(BUILD)/pbdecode.jo: lib/pbdecode.c lib/pbdecode.h lib/pbmodel.h lib/pb3d.h $(CANNER) Makefile
+	@mkdir -p $(BUILD)
+	$(CANNER) -I lib -I $(SDK) -c -o $@ lib/pbdecode.c
 
 # pectinos's own rules decide whether its tools are current, so a checkout
 # moved to a new pin rebuilds them before they build QUINCE. FORCE only
@@ -169,11 +172,21 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	    -o $@ tests/test_quince.c $(CORE) -lm
 
 # The triangle engine's C model (lib/pbmodel.c, docs/PB3D.md) held to its
-# rules, and a scene drawn with all of them: build/pbmodel/scene.png.
-$(BUILD)/test_pbmodel: tests/test_pbmodel.c tests/png.c tests/png.h lib/pbmodel.c lib/pbmodel.h Makefile
+# rules, and its decoder of lib/pb3d.h's words (lib/pbdecode.c), and a
+# scene drawn with all of them: build/pbmodel/scene.png.
+PBMODEL := lib/pbmodel.c lib/pbdecode.c lib/pb3d.c
+PBMODEL_H := lib/pbmodel.h lib/pbdecode.h lib/pb3d.h
+$(BUILD)/test_pbmodel: tests/test_pbmodel.c tests/png.c tests/png.h $(PBMODEL) $(PBMODEL_H) Makefile
 	@mkdir -p $(BUILD)
 	$(HOSTCC) -std=c11 -g -O1 -Wall -Wextra -Werror -I lib $(HOST_SAN) \
-	    -o $@ tests/test_pbmodel.c tests/png.c lib/pbmodel.c -lm
+	    -o $@ tests/test_pbmodel.c tests/png.c $(PBMODEL) -lm
+
+# A QUINCE_PBDUMP file drawn by the model, the way PB would draw it
+# (tests/pbplay.c). Optimised and without the sanitizers, since demo1 is
+# a thousand frames: test_pbmodel runs the same code under them.
+$(BUILD)/pbplay: tests/pbplay.c tests/png.c tests/png.h $(PBMODEL) $(PBMODEL_H) Makefile
+	@mkdir -p $(BUILD)
+	$(HOSTCC) -std=c11 -O2 -g -Wall -Wextra -Werror -I lib -o $@ tests/pbplay.c tests/png.c $(PBMODEL) -lm
 
 # Quake on the PC (M1): id's files in quake/ (as GLQuake builds them, with
 # the GL renderer and the null sound, CD and input), QUINCE's GL layer,
@@ -201,9 +214,11 @@ QHOST_CC  := $(HOSTCC) -m32 -msse2 -mfpmath=sse -ffp-contract=off -fno-builtin -
 QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/pbgl.c lib/pb3d.c lib/qbargs.c tests/sys_host.c tests/pbdump.c) \
     $(BUILD)/qhost/sdk/math.o $(BUILD)/qhost/sdk/softfp.o
 
+# SOURCE_DATE_EPOCH fixes __DATE__ and __TIME__, which host.c prints on
+# the console, so the frames tests/pbplay.c draws are the same every build.
 $(BUILD)/qhost/quake/%.o: quake/%.c $(wildcard quake/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)
-	$(QHOST_CC) -std=gnu89 -fcommon -w -c -o $@ $<
+	SOURCE_DATE_EPOCH=0 $(QHOST_CC) -std=gnu89 -fcommon -w -c -o $@ $<
 $(BUILD)/qhost/%.o: %.c $(wildcard quake/*.h lib/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)
 	$(QHOST_CC) -std=gnu99 -fcommon -Wall -Wextra -Wno-unknown-pragmas \
@@ -225,7 +240,9 @@ $(BUILD)/quake_host: $(QHOST_OBJ)
 # has none), so `make test` passes on a fresh machine either way.
 # Checked: demo1 is 969 frames, the server benchmark's fixed steps send
 # the same triangles and vertices every run, and every shareware map
-# loads. The times are printed, not checked.
+# loads, and e1m1's dumped frames, drawn by the triangle engine's C model
+# (tests/pbplay.c), keep their pictures' CRCs. The times are printed, not
+# checked.
 QUINCE_PAK ?=
 quake-host: $(BUILD)/quake_host
 test-quake:
@@ -234,9 +251,22 @@ test-quake:
 	if ! printf '#include <stdio.h>\nint main(void) { return 0; }\n' | \
 	    $(HOSTCC) -m32 -x c -o /dev/null - 2>/dev/null; then \
 	    echo "test-quake: skipped ($(HOSTCC) -m32 can't build: no 32-bit C library; gcc-multilib on Debian and Ubuntu)"; exit 0; fi; \
-	$(MAKE) --no-print-directory $(BUILD)/quake_host && \
+	$(MAKE) --no-print-directory $(BUILD)/quake_host $(BUILD)/pbplay && \
 	mkdir -p $(BUILD)/qdata/id1 && ln -sf "$(abspath $(QUINCE_PAK))" $(BUILD)/qdata/id1/pak0.pak && \
-	$(PYTHON) tests/test_quake.py $(BUILD)/quake_host $(BUILD)/qdata
+	$(PYTHON) tests/test_quake.py $(BUILD)/quake_host $(BUILD)/qdata $(BUILD)/pbplay
+
+# demo1 drawn by the triangle engine's C model: the dump written on a fixed
+# clock (tests/sys_host.c), so the same every run, then every frame drawn
+# in turn and a few written out, build/pbframes/demo1/frameNNNN.png, with
+# their CRCs and the fill numbers. Not in make test: about 40 seconds.
+PB_FRAMES ?= 100 300 500 700 900
+pb-frames:
+	@test -f "$(QUINCE_PAK)" || { echo "pb-frames: set QUINCE_PAK to the shareware id1/pak0.pak"; exit 1; }
+	$(MAKE) --no-print-directory $(BUILD)/quake_host $(BUILD)/pbplay
+	mkdir -p $(BUILD)/qdata/id1 $(BUILD)/pbframes/demo1 && \
+	    ln -sf "$(abspath $(QUINCE_PAK))" $(BUILD)/qdata/id1/pak0.pak
+	QUINCE_PBDUMP=$(BUILD)/demo1.pb $(BUILD)/quake_host $(BUILD)/qdata timedemo DEMO1 > /dev/null
+	$(BUILD)/pbplay $(BUILD)/demo1.pb -o $(BUILD)/pbframes/demo1 $(PB_FRAMES)
 
 # The SIMMER kernel, brought up to date by pectinos's own rules on every
 # SIMMER run (under a second when it is). Its QEMU is

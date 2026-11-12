@@ -35,7 +35,8 @@ enum {
 	PB3D_STATE      = 16,   /* the drawing state: one word of PB3D_S_* bits */
 	PB3D_TEXTURE    = 17,   /* bind a texture to a unit (arg) */
 	PB3D_TRIS       = 18,   /* triangles: arg is kind and vertex format */
-	PB3D_DEPTHRANGE = 19    /* near and far, in the stored depth's units */
+	PB3D_DEPTHRANGE = 19,   /* near and far, in the stored depth's units */
+	PB3D_CLIP       = 20    /* the rectangle drawn in, in pixels */
 };
 
 #define PB3D_WORD(op, arg)  ((uint16_t)((uint32_t)(op) << 8 | ((uint32_t)(arg) & 0xffu)))
@@ -48,6 +49,7 @@ enum {
 #define PB3D_TEXTURE_WORDS    3u
 #define PB3D_TRIS_WORDS       2u    /* and the vertices' words */
 #define PB3D_DEPTHRANGE_WORDS 3u
+#define PB3D_CLIP_WORDS       5u
 
 /* DEPTH: the depth surface is the kernel's, one for the program's drawn
  * mode, so the command names none. Every frame that tests or writes depth
@@ -157,6 +159,16 @@ enum {
 #define PB3D_DEPTH_NEAR     0x0000u
 #define PB3D_DEPTH_FAR      0xffffu
 
+/* CLIP: words 1 to 4 x0, y0, x1, y1, in whole pixels (not 12.4), y down,
+ * x0 <= x1 <= the surface's width and y0 <= y1 <= its height: PB draws
+ * only the pixels with x0 <= x < x1 and y0 <= y < y1, so none when
+ * x0 == x1 or y0 == y1 (a viewport wholly off the surface, held to it).
+ * A frame starts with the whole surface. The Jam still cuts at the near
+ * plane and the guard band: CLIP only narrows which pixels are written.
+ * GL's viewport is a 3D view smaller than the screen, GLQuake's above
+ * its status bar, which GLQuake draws only when it changes: real GL clips
+ * to the viewport, and so must PB, as a Voodoo's clip registers did. */
+
 /* The words the command at w takes, out of left words: 0 if it isn't one
  * of these, its argument has a bit no command has, or it runs past left. */
 uint32_t pb3d_cmd_words(const uint16_t *w, uint32_t left);
@@ -190,6 +202,7 @@ void pb3d_depth(struct pb3d_buf *b, int clear);
 void pb3d_state(struct pb3d_buf *b, uint32_t bits);
 void pb3d_texture(struct pb3d_buf *b, uint32_t unit, uint32_t id, uint32_t how);
 void pb3d_depthrange(struct pb3d_buf *b, uint32_t near, uint32_t far);
+void pb3d_clip(struct pb3d_buf *b, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1);
 /* TRIS of n vertices (3 or more, and their words must fit), then exactly
  * n pb3d_vertex calls. Returns 0, or -1 having written nothing (the
  * vertex calls after it then write nothing either). */
@@ -211,7 +224,7 @@ uint32_t pb3d_fix_q(float q);   /* 1.31, 0 to 0xFFFFFFFF */
  * a 16-bit type, a 16-bit 0 and a 32-bit length in bytes, then that many
  * bytes and, if the length is odd, one byte of 0 to keep words aligned. */
 #define PB3D_DUMP_MAGIC   0x33425051u   /* "QPB3" */
-#define PB3D_DUMP_VERSION 1u
+#define PB3D_DUMP_VERSION 2u   /* 2: CLIP */
 
 enum {
 	/* 768 bytes: the palette 8-bit textures are read through, r, g, b

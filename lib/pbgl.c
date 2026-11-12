@@ -20,7 +20,7 @@
  *   (Sutherland and Hodgman's polygon clipping, 1974, in clip space before
  *   the divide, where it is linear: Blinn and Newell, "Clipping using
  *   homogeneous coordinates", SIGGRAPH 1978). The rest is sent whole: PB
- *   cuts each span to the surface itself.
+ *   cuts each span to the viewport itself (lib/pb3d.h's CLIP).
  * - GL's state calls only change copies here. At each glEnd the state the
  *   primitive needs (lib/pb3d.h's STATE word, the two textures, the depth
  *   range) is compared with what PB was last sent, and only a change is
@@ -219,6 +219,14 @@ void glGetFloatv(GLenum what, GLfloat *out)
  * window's bottom). */
 static int surf_w = 640, surf_h = 480;
 static float ax = 320, bx = 320, ay = 240, by = 240;
+/* The viewport as PB's CLIP takes it: pixels, y down, x1 and y1 past the
+ * last, held to the surface (lib/pb3d.h). */
+static uint32_t clip[4] = {0, 0, 640, 480};
+
+static int32_t held(int32_t v, int32_t hi)
+{
+	return v < 0 ? 0 : v > hi ? hi : v;
+}
 
 /* Each plane a x + b y + c z + d w, 0 or more inside. The first five
  * only drop primitives wholly outside one: the near plane (also cut at)
@@ -255,6 +263,11 @@ static void remake_planes(void)
 void glViewport(GLint x, GLint y, GLsizei w, GLsizei h)
 {
 	count_call();
+	/* GL's y counts up from the bottom, PB's down from the top. */
+	clip[0] = (uint32_t)held(x, surf_w);
+	clip[1] = (uint32_t)held(surf_h - (y + h), surf_h);
+	clip[2] = (uint32_t)held(x + w, surf_w);
+	clip[3] = (uint32_t)held(surf_h - y, surf_h);
 	ax = (float)w * 0.5f;
 	bx = (float)x + ax;
 	ay = (float)h * 0.5f;
@@ -665,6 +678,7 @@ static uint32_t state_bits(void)
 
 static struct pb3d_buf buf;
 static uint32_t sent_state, sent_tex[UNITS], sent_how[UNITS], sent_near, sent_far;
+static uint32_t sent_clip[4];
 static int sent_depth;
 static uint32_t checksum;
 
@@ -676,6 +690,9 @@ static void frame_start(void)
 	sent_how[0] = sent_how[1] = 0;
 	sent_near = PB3D_DEPTH_NEAR;
 	sent_far = PB3D_DEPTH_FAR;
+	sent_clip[0] = sent_clip[1] = 0;
+	sent_clip[2] = (uint32_t)surf_w;
+	sent_clip[3] = (uint32_t)surf_h;
 	sent_depth = 0;
 }
 
@@ -716,6 +733,14 @@ static void sync_state(uint32_t s)
 			sent_how[u] = how;
 			pbgl_total.texture_cmds++;
 		}
+	}
+	/* PB draws to the whole surface until told otherwise; GL to the
+	 * viewport. GLQuake's 3D view stops above the status bar, which it
+	 * draws only when it changes, so the view mustn't spill on it. */
+	if (memcmp(clip, sent_clip, sizeof clip) != 0) {
+		pb3d_clip(&buf, clip[0], clip[1], clip[2], clip[3]);
+		memcpy(sent_clip, clip, sizeof clip);
+		pbgl_total.other_cmds++;
 	}
 	if (s & PB3D_S_DEPTH_MASK) {
 		uint32_t n = range16(range_near), f = range16(range_far);

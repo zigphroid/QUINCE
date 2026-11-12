@@ -116,6 +116,10 @@ Step 2, the C model, planned 2026-11-12 (Jacob, all recommendations):
 - PR 1: the model alone (`lib/pbmodel.c`, its rules in `docs/PB3D.md`),
   held to them by `tests/test_pbmodel.c`, with a scene it draws in
   `build/pbmodel/scene.png`.
-- PR 2: the model reads the GL layer's commands (`lib/pb3d.h`, step 1),
-  and `make test-quake` draws demo1's frames to pictures, each held to its
-  CRC.
+- PR 2: the model reads the GL layer's commands (`lib/pbdecode.c`), and
+  `tests/pbplay.c` draws a `QUINCE_PBDUMP` file with it. `make test-quake`
+  draws e1m1's dump and holds the pictures to their CRCs; `make
+  pb-frames` draws demo1's, dumped on a fixed clock, to pictures with
+  the fill numbers (about 40 seconds, so not in `make test`). Drawing them found two
+  gaps on the GL side, fixed here: id's `GL_Init` state, and `CLIP`, PB's
+  clip rectangle, a sixth command.
