@@ -1,0 +1,73 @@
+--- a/d_edge.c	2026-11-12 19:04:43.316083684 +0000
++++ b/d_edge.c	2026-11-12 19:04:43.344388793 +0000
+@@ -21,6 +21,7 @@
+ 
+ #include "quakedef.h"
+ #include "d_local.h"
++#include "spandump.h"	// span dump for pectinos's memory bench
+ 
+ static int	miplevel;
+ 
+@@ -196,7 +197,9 @@
+ 			d_ziorigin = s->d_ziorigin;
+ 
+ 			D_DrawSolidSurface (s, (int)s->data & 0xFF);
++			spandump (SD_SOLID, s - surfaces, s->spans, NULL, 0, 0);
+ 			D_DrawZSpans (s->spans);
++				spandump (SD_Z, s - surfaces, s->spans, NULL, 0, 0);
+ 		}
+ 	}
+ 	else
+@@ -220,7 +223,9 @@
+ 				}
+ 
+ 				D_DrawSkyScans8 (s->spans);
++				spandump (SD_SKY, s - surfaces, s->spans, NULL, 0, 0);
+ 				D_DrawZSpans (s->spans);
++				spandump (SD_Z, s - surfaces, s->spans, NULL, 0, 0);
+ 			}
+ 			else if (s->flags & SURF_DRAWBACKGROUND)
+ 			{
+@@ -231,7 +236,9 @@
+ 				d_ziorigin = -0.9;
+ 
+ 				D_DrawSolidSurface (s, (int)r_clearcolor.value & 0xFF);
++				spandump (SD_SOLID, s - surfaces, s->spans, NULL, 0, 0);
+ 				D_DrawZSpans (s->spans);
++				spandump (SD_Z, s - surfaces, s->spans, NULL, 0, 0);
+ 			}
+ 			else if (s->flags & SURF_DRAWTURB)
+ 			{
+@@ -258,7 +265,9 @@
+ 
+ 				D_CalcGradients (pface);
+ 				Turbulent8 (s->spans);
++				spandump (SD_TURB, s - surfaces, s->spans, cacheblock, 64, 64);
+ 				D_DrawZSpans (s->spans);
++				spandump (SD_Z, s - surfaces, s->spans, NULL, 0, 0);
+ 
+ 				if (s->insubmodel)
+ 				{
+@@ -305,8 +314,10 @@
+ 				D_CalcGradients (pface);
+ 
+ 				(*d_drawspans) (s->spans);
++				spandump (SD_TEX, s - surfaces, s->spans, cacheblock, cachewidth, pcurrentcache->height);
+ 
+ 				D_DrawZSpans (s->spans);
++				spandump (SD_Z, s - surfaces, s->spans, NULL, 0, 0);
+ 
+ 				if (s->insubmodel)
+ 				{
+--- a/r_main.c	2026-11-12 19:04:43.316986420 +0000
++++ b/r_main.c	2026-11-12 19:08:37.803815725 +0000
+@@ -1014,7 +1014,8 @@
+ 		dp_time1 = Sys_FloatTime ();
+ 	}
+ 
+-	R_DrawParticles ();
++	if (!getenv("SPANS_NOMODELS"))	// span dump: SPANS_CHECK wants the spans alone
++		R_DrawParticles ();
+ 
+ 	if (r_dspeeds.value)
+ 		dp_time2 = Sys_FloatTime ();
