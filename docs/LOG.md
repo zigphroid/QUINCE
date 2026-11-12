@@ -824,5 +824,10 @@ send functions cold (review 1). The next THERMO run replaces the file.
 - On SIMMER (CANNER, against main 705e4ae, one at a time): demo1 21.9 to
   21.2 ms (-3%), e1m1 9.9 to 9.7 (-2%). Smaller than THERMO's share
   suggests, which hints that on the board the cost is in memory: the
-  frame's words are on the PSRAM heap (inferred, not measured). The
-  board's timing says.
+  frame's words are on the PSRAM heap (inferred, not measured).
+- **On the board** (bafa5bf, one boot, against main 705e4ae): CANNER's
+  demo1 38.3 to 37.9 ms (-1%), e1m1 28.9 to 28.6 (-1%); GCC's build of
+  this PR 32.6 and 24.7. Gate held in all three. A sixth of the
+  program's samples bought 1%, so what those samples were waiting on is
+  mostly not the instructions this PR took out: the stores of the
+  frame's 27 KB of words into PSRAM are the likely cost (inferred).
