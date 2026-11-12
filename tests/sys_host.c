@@ -10,7 +10,8 @@
  *
  * BASEDIR holds id1/pak0.pak. Prints the results (qbench.c). With
  * QUINCE_PBDUMP=FILE set, also writes what the GL layer sends PB to FILE
- * (tests/pbdump.c), for the C model.
+ * (tests/pbdump.c), for the C model, and a timedemo runs on a fixed
+ * clock (dump_clock) so the file is the same every run.
  */
 #define _POSIX_C_SOURCE 200809L
 #include "quakedef.h"
@@ -121,6 +122,16 @@ void Sys_MakeCodeWriteable(unsigned long start, unsigned long len) { (void)start
  * size as the board's, so the two runs send the same frames. */
 #define HOST_MEM MINIMUM_MEMORY
 
+/* A dump's clock: 1/72 s a call, Quake's top frame rate (host.c's
+ * host_maxfps), so a timedemo written with QUINCE_PBDUMP sends the same
+ * frames every run, wherever its console has slid to and however far
+ * its models have moved between messages. Its times say nothing then. */
+static double dump_clock(void)
+{
+	static long calls;
+	return (double)calls++ / 72.0;
+}
+
 int main(int argc, char **argv)
 {
 	static quakeparms_t parms;
@@ -129,13 +140,16 @@ int main(int argc, char **argv)
 		fprintf(stderr, "usage: quake_host BASEDIR timedemo DEMO | BASEDIR server MAP FRAMES [-v]\n");
 		return 2;
 	}
-	if (getenv("QUINCE_PBDUMP") && *getenv("QUINCE_PBDUMP"))
+	double (*clock)(void) = Sys_FloatTime;
+	if (getenv("QUINCE_PBDUMP") && *getenv("QUINCE_PBDUMP")) {
 		qvid_sink = pbdump_open(getenv("QUINCE_PBDUMP"));
+		clock = dump_clock;
+	}
 	parms.basedir = run.basedir;
 	parms.memsize = run.memsize ? run.memsize : HOST_MEM;
 	parms.membase = malloc((size_t)parms.memsize);
 	if (!parms.membase)
 		Sys_Error("no memory for the hunk");
-	qbench_main(&parms, &run, Sys_FloatTime);
+	qbench_main(&parms, &run, clock);
 	return 0;
 }

@@ -78,6 +78,11 @@ uint32_t pb3d_cmd_words(const uint16_t *w, uint32_t left)
 			return 0;
 		need = PB3D_DEPTHRANGE_WORDS;
 		break;
+	case PB3D_CLIP:
+		if (arg)
+			return 0;
+		need = PB3D_CLIP_WORDS;
+		break;
 	case PB3D_TRIS:
 		if ((arg & ~PB3D_ARG_ALL) || (arg & PB3D_KIND_MASK) == 3u ||
 		    (arg & PB3D_F_COLOUR_MASK) == PB3D_F_COLOUR_MASK)
@@ -161,6 +166,17 @@ void pb3d_depthrange(struct pb3d_buf *b, uint32_t near, uint32_t far)
 		put(b, PB3D_WORD(PB3D_DEPTHRANGE, 0));
 		put(b, near & 0xffffu);
 		put(b, far & 0xffffu);
+	}
+}
+
+void pb3d_clip(struct pb3d_buf *b, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
+{
+	if (room(b, PB3D_CLIP_WORDS)) {
+		put(b, PB3D_WORD(PB3D_CLIP, 0));
+		put(b, x0 & 0xffffu);
+		put(b, y0 & 0xffffu);
+		put(b, x1 & 0xffffu);
+		put(b, y1 & 0xffffu);
 	}
 }
 

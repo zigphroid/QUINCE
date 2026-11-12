@@ -9,6 +9,8 @@
 #include <stdlib.h>
 #include <string.h>
 
+#include "pb3d.h"
+#include "pbdecode.h"
 #include "pbmodel.h"
 #include "png.h"
 
@@ -221,6 +223,253 @@ static void guard_band(void)
     pbm_set_state(&m, &s);
     rect(-2000, -2000, 2000, 2000, 1, 0, 0, 0, 0);
     check("covered", (long)m.counts.covered, 37 * 29);
+}
+
+// CLIP's rectangle: only its pixels are drawn, held to the surface, and
+// a frame starts with the whole surface again.
+static void clip_rect(void)
+{
+    struct pbm_state s = state();
+    model(40, 30);
+    pbm_set_state(&m, &s);
+    pbm_clip(&m, 5, 7, 25, 20);
+    rect(-100, -100, 100, 100, 1, 0, 0, 0, 0);
+    check("CLIP 5, 7 to 25, 20 covers its 20x13", (long)m.counts.covered, 20 * 13);
+    check("a pixel on x1 isn't drawn", colour[10 * 40 + 25], 0);
+    check("one on x1 - 1 is", colour[19 * 40 + 24], 0xffff);
+    check("one above y0 isn't", colour[6 * 40 + 10], 0);
+    m.counts.covered = 0;
+    pbm_clip(&m, 30, 20, 0xffff, 0xffff);
+    rect(-100, -100, 100, 100, 1, 0, 0, 0, 0);
+    check("a CLIP past the surface is held to it", (long)m.counts.covered, 10 * 10);
+    m.counts.covered = 0;
+    pbm_frame(&m);
+    pbm_set_state(&m, &s);
+    rect(-100, -100, 100, 100, 1, 0, 0, 0, 0);
+    check("a frame starts with the whole surface", (long)m.counts.covered, 40 * 30);
+}
+
+static const uint8_t *grey_palette(void);
+
+// --- the decoder (lib/pbdecode.c): lib/pb3d.h's words into the model ---
+
+static uint16_t words[512];
+static uint32_t nw;
+
+static void put(uint32_t w) { words[nw++] = (uint16_t)w; }
+
+// Every STATE bit to its own field.
+static void decode_state(void)
+{
+    static const struct { uint32_t bits; int field, want; } t[] = {
+        { PB3D_S_DEPTH_LEQUAL, 0, PBM_DEPTH_LEQUAL }, { PB3D_S_DEPTH_GEQUAL, 0, PBM_DEPTH_GEQUAL },
+        { PB3D_S_DEPTH_ALWAYS, 0, PBM_DEPTH_ALWAYS }, { PB3D_S_DEPTH_WRITE, 1, 1 },
+        { PB3D_S_BLEND_ALPHA, 2, PBM_BLEND_ALPHA }, { PB3D_S_BLEND_MULINV, 2, PBM_BLEND_MULINV },
+        { PB3D_S_BLEND_ADD, 2, PBM_BLEND_ADD }, { PB3D_S_ALPHA_TEST, 3, 1 },
+        { PB3D_S_MODULATE, 4, 1 }, { PB3D_S_TEX0, 5, 1 }, { PB3D_S_TEX1, 6, 1 },
+        { PB3D_S_CULL_CW, 7, PBM_CULL_CW }, { PB3D_S_CULL_CCW, 7, PBM_CULL_CCW },
+        { PB3D_S_SMOOTH, 8, 1 },
+    };
+    unsigned i, f;
+    model(4, 4);
+    for (i = 0; i < sizeof t / sizeof t[0]; i++) {
+        int got[9];
+        nw = 0;
+        put(PB3D_WORD(PB3D_STATE, 0));
+        put(t[i].bits);
+        check("a STATE is one command", pbd_frame(&m, words, nw), 1);
+        got[0] = m.state.depth_func; got[1] = m.state.depth_write; got[2] = m.state.blend;
+        got[3] = m.state.alpha_test; got[4] = m.state.modulate; got[5] = m.state.tex0;
+        got[6] = m.state.tex1; got[7] = m.state.cull; got[8] = m.state.smooth;
+        for (f = 0; f < 9; f++)
+            check("STATE: its bit sets its field, and no other", got[f],
+                  f == (unsigned)t[i].field ? t[i].want : 0);
+    }
+}
+
+// TEXTURE, DEPTHRANGE, CLIP and DEPTH, and a frame's start undoing them.
+static void decode_commands(void)
+{
+    unsigned i;
+    model(8, 8);
+    nw = 0;
+    put(PB3D_WORD(PB3D_TEXTURE, 1)); put(300); put(PB3D_T_CLAMP_T | PB3D_T_LINEAR);
+    put(PB3D_WORD(PB3D_TEXTURE, 0)); put(7); put(PB3D_T_CLAMP_S | PB3D_T_MIPMAP);
+    put(PB3D_WORD(PB3D_DEPTHRANGE, 0)); put(0x100); put(0xfe00);
+    put(PB3D_WORD(PB3D_CLIP, 0)); put(1); put(2); put(6); put(0xffff);
+    check("four commands", pbd_frame(&m, words, nw), 4);
+    check("unit 1's id", (long)m.unit[1].id, 300);
+    check("unit 1 clamps t alone, bilinear", m.unit[1].clamp_s * 1000 + m.unit[1].clamp_t * 100 +
+          m.unit[1].linear * 10 + m.unit[1].mipmap, 110);
+    check("unit 0 clamps s alone, mipmapped", m.unit[0].clamp_s * 1000 + m.unit[0].clamp_t * 100 +
+          m.unit[0].linear * 10 + m.unit[0].mipmap, 1001);
+    check("unit 0's id", (long)m.unit[0].id, 7);
+    check("DEPTHRANGE near", (long)m.depth_near, 0x100);
+    check("DEPTHRANGE far", (long)m.depth_far, 0xfe00);
+    check("CLIP, y1 held to the surface",
+          m.clip[0] * 1000 + m.clip[1] * 100 + m.clip[2] * 10 + m.clip[3], 1268);
+    nw = 0;
+    check("an empty frame is no commands", pbd_frame(&m, words, nw), 0);
+    check("and starts again: no texture, the whole range, the whole surface",
+          (long)(m.unit[0].id + m.unit[1].id + m.depth_near + (m.depth_far != 0xffff) +
+                 m.clip[0] + m.clip[1] + (m.clip[2] != 8) + (m.clip[3] != 8)), 0);
+    for (i = 0; i < 64; i++)
+        depth[i] = 0x1234;
+    nw = 0;
+    put(PB3D_WORD(PB3D_DEPTH, 0));
+    pbd_frame(&m, words, nw);
+    check("DEPTH alone keeps the depth", depth[63], 0x1234);
+    nw = 0;
+    put(PB3D_WORD(PB3D_DEPTH, PB3D_DEPTH_CLEAR));
+    pbd_frame(&m, words, nw);
+    check("DEPTH, clear, clears it to the farthest", depth[63], 0xffff);
+}
+
+// TRIS: each format's fields, each kind, drawn from words against the
+// same triangles given the model straight.
+static void decode_tris(void)
+{
+    static uint16_t direct[16 * 16], direct_depth[16 * 16];
+    static const uint8_t grey[4] = { 40, 200, 90, 250 };
+    static const uint32_t formats[] = {
+        PB3D_F_NOCOLOUR, PB3D_F_GREY, PB3D_F_RGBA, PB3D_F_Q | PB3D_F_GREY,
+        PB3D_F_ST | PB3D_F_RGBA, PB3D_F_Q | PB3D_F_ST | PB3D_F_ST2,
+        PB3D_F_Q | PB3D_F_ST | PB3D_F_ST2 | PB3D_F_RGBA,
+    };
+    struct pbm_vertex v[5];
+    struct pbm_state s = state();
+    struct pbm_bind b;
+    unsigned fi, k, kind, i;
+    s.depth_func = PBM_DEPTH_LEQUAL;
+    s.depth_write = 1;
+    s.tex0 = s.tex1 = s.modulate = s.smooth = 1;
+    s.blend = PBM_BLEND_ALPHA;   // so a vertex's alpha counts
+    memset(&b, 0, sizeof b);
+    for (fi = 0; fi < sizeof formats / sizeof formats[0]; fi++)
+        for (kind = 0; kind < 3; kind++) {
+            uint32_t f = formats[fi], st = PB3D_S_DEPTH_LEQUAL | PB3D_S_DEPTH_WRITE |
+                         PB3D_S_TEX0 | PB3D_S_TEX1 | PB3D_S_MODULATE | PB3D_S_SMOOTH |
+                         PB3D_S_BLEND_ALPHA;
+            int same = 1;
+            for (k = 0; k < 5; k++) {
+                v[k] = vtx(rnd(16 * 16) / 16.0, rnd(16 * 16) / 16.0, (1 + rnd(255)) / 256.0,
+                           rnd(64 * 16) / 16.0 - 32, rnd(64 * 16) / 16.0 - 32);
+                v[k] = st2(rgba(v[k], rnd(256), rnd(256), rnd(256), rnd(256)),
+                           rnd(64 * 64) / 64.0 - 32, rnd(64 * 64) / 64.0 - 32);
+                if (!(f & PB3D_F_Q)) v[k].q = 0x80000000u;
+                if (!(f & PB3D_F_ST)) v[k].s = v[k].t = 0;
+                if (!(f & PB3D_F_ST2)) v[k].s2 = v[k].t2 = 0;
+                if ((f & PB3D_F_COLOUR_MASK) == PB3D_F_NOCOLOUR)
+                    v[k].r = v[k].g = v[k].b = v[k].a = 255;
+                else if ((f & PB3D_F_COLOUR_MASK) == PB3D_F_GREY) {
+                    v[k].r = v[k].g = v[k].b = grey[k & 3];
+                    v[k].a = 255;
+                }
+            }
+            // The model straight, textures 1 and 2 on the units.
+            model(16, 16);
+            pbm_palette(&m, grey_palette());
+            {
+                static uint8_t tex[16 * 16];
+                for (i = 0; i < sizeof tex; i++)
+                    tex[i] = (uint8_t)(i * 37 + 11);
+                pbm_texture(&m, 1, PBM_TEX_INDEX8, 4, 4, 0, 0);
+                pbm_texture_load(&m, 1, 0, 0, 16, 16, tex);
+                pbm_texture(&m, 2, PBM_TEX_GREY8, 4, 4, 0, 0);
+                pbm_texture_load(&m, 2, 0, 0, 16, 16, tex);
+            }
+            pbm_frame(&m);
+            pbm_set_state(&m, &s);
+            b.id = 1;
+            pbm_bind_texture(&m, 0, &b);
+            b.id = 2;
+            pbm_bind_texture(&m, 1, &b);
+            pbm_draw(&m, kind == 0 ? PBM_LIST : kind == 1 ? PBM_STRIP : PBM_FAN, v,
+                     kind == 0 ? 3 : 5);
+            memcpy(direct, colour, sizeof direct);
+            memcpy(direct_depth, depth, sizeof direct_depth);
+            check_true("the triangles drew", m.counts.drawn > 0);
+            // The same as words, on a cleared surface.
+            pbm_clear_colour(&m, 0);
+            pbm_clear_depth(&m, 0xffff);
+            nw = 0;
+            put(PB3D_WORD(PB3D_STATE, 0)); put(st);
+            put(PB3D_WORD(PB3D_TEXTURE, 0)); put(1); put(0);
+            put(PB3D_WORD(PB3D_TEXTURE, 1)); put(2); put(0);
+            put(PB3D_WORD(PB3D_TRIS, kind | f)); put(kind == 0 ? 3 : 5);
+            for (k = 0; k < (kind == 0 ? 3u : 5u); k++) {
+                put((uint16_t)v[k].x); put((uint16_t)v[k].y);
+                if (f & PB3D_F_Q) { put(v[k].q & 0xffff); put(v[k].q >> 16); }
+                if (f & PB3D_F_ST) { put((uint16_t)v[k].s); put((uint16_t)v[k].t); }
+                if (f & PB3D_F_ST2) { put((uint16_t)v[k].s2); put((uint16_t)v[k].t2); }
+                if ((f & PB3D_F_COLOUR_MASK) == PB3D_F_GREY)
+                    put(v[k].r | 0xab00u);   // the high byte isn't read
+                else if ((f & PB3D_F_COLOUR_MASK) == PB3D_F_RGBA) {
+                    put(v[k].r | v[k].g << 8);
+                    put(v[k].b | v[k].a << 8);
+                }
+            }
+            check("the vertices' words are the format's",
+                  (long)nw, (long)(8 + PB3D_TRIS_WORDS + (kind == 0 ? 3 : 5) * PB3D_VERTEX_WORDS(f)));
+            check("four commands", pbd_frame(&m, words, nw), 4);
+            for (i = 0; i < 16 * 16; i++)
+                same &= colour[i] == direct[i] && depth[i] == direct_depth[i];
+            check_true("TRIS from words draws what the model draws straight", same);
+        }
+}
+
+// A command PB refuses: the ones before it drawn, it and the rest not.
+static void decode_refused(void)
+{
+    struct pbm_state s = state();
+    model(8, 8);
+    nw = 0;
+    put(PB3D_WORD(PB3D_TRIS, PB3D_KIND_FAN | PB3D_F_RGBA)); put(4);
+    put(0); put(0); put(0x00ff); put(0xff00);           // red, opaque
+    put(8 * 16); put(0); put(0x00ff); put(0xff00);
+    put(8 * 16); put(4 * 16); put(0x00ff); put(0xff00);
+    put(0); put(4 * 16); put(0x00ff); put(0xff00);
+    put(PB3D_WORD(PB3D_CLIP, 1)); put(0); put(0); put(8); put(8);   // an argument: refused
+    put(PB3D_WORD(PB3D_TRIS, PB3D_KIND_FAN)); put(4);
+    put(0); put(4 * 16); put(8 * 16); put(4 * 16); put(8 * 16); put(8 * 16); put(0); put(8 * 16);
+    check("refused", pbd_frame(&m, words, nw), -1);
+    check("the TRIS before it drawn: red", colour[2 * 8 + 3], 0xf800);
+    check("the TRIS after it not", colour[6 * 8 + 3], 0);
+    nw -= 15;    // the refused CLIP and the second TRIS
+    put(PB3D_WORD(PB3D_TRIS, PB3D_KIND_FAN)); put(4);
+    put(0); put(4 * 16); put(8 * 16); put(4 * 16); put(8 * 16); put(8 * 16); put(0);
+    check("a TRIS cut short is refused too", pbd_frame(&m, words, nw), -1);
+    (void)s;
+}
+
+// The texture records: sizes, formats and flags.
+static void decode_textures(void)
+{
+    static uint8_t texels[4 * 8 * 4];
+    memset(texels, 255, sizeof texels);
+    model(4, 4);
+    pbm_palette(&m, grey_palette());
+    check("a side of 3 refused", pbd_teximage(&m, 5, PB3D_TEX_INDEX8, 0, 3, 4, texels), PBM_E_SIZE);
+    check("a side past PB3D_TEX_MAX refused",
+          pbd_teximage(&m, 5, PB3D_TEX_INDEX8, 0, 2048, 1, texels), PBM_E_SIZE);
+    check("format 3 refused", pbd_teximage(&m, 5, 3, 0, 4, 8, texels), PBM_E_FORMAT);
+    check("4x8 INDEX8 made", pbd_teximage(&m, 5, PB3D_TEX_INDEX8, PB3D_TEXF_MIPMAP, 4, 8, texels),
+          PBM_OK);
+    check("as INDEX8, sides 2^2 by 2^3", m.tex[5].format * 100 + m.tex[5].lw * 10 + m.tex[5].lh,
+          PBM_TEX_INDEX8 * 100 + 23);
+    check("MIPMAP: down to 1x1", m.tex[5].levels, 4);
+    check("no ALPHA: index 255 kept opaque", m.tex[5].alpha, 0);
+    check("ALPHA flag", pbd_teximage(&m, 6, PB3D_TEX_INDEX8, PB3D_TEXF_ALPHA, 4, 4, texels), PBM_OK);
+    check("ALPHA: see-through kept, one level", m.tex[6].alpha * 10 + m.tex[6].levels, 11);
+    check("RGBA8888", pbd_teximage(&m, 7, PB3D_TEX_RGBA8888, 0, 4, 4, texels), PBM_OK);
+    check("GREY8", pbd_teximage(&m, 8, PB3D_TEX_GREY8, 0, 4, 4, texels), PBM_OK);
+    check("their formats", m.tex[7].format * 10 + m.tex[8].format,
+          PBM_TEX_RGBA8888 * 10 + PBM_TEX_GREY8);
+    check("a TEXSUB inside", pbd_texsub(&m, 5, 0, 4, 4, 4, texels), PBM_OK);
+    check("one past its edge refused", pbd_texsub(&m, 5, 1, 4, 4, 4, texels) != PBM_OK, 1);
+    pbd_texfree(&m, 5);
+    check("TEXFREE: not made", m.tex[5].made, 0);
+    check("a TEXSUB on it refused", pbd_texsub(&m, 5, 0, 0, 4, 4, texels) != PBM_OK, 1);
 }
 
 // --- depth ---
@@ -1001,6 +1250,7 @@ int main(int argc, char **argv)
     top_left();
     culling();
     guard_band();
+    clip_rect();
     depth_format();
     depth_test();
     palette_and_alpha();
@@ -1011,6 +1261,11 @@ int main(int argc, char **argv)
     corners();
     combine();
     blends();
+    decode_state();
+    decode_commands();
+    decode_tris();
+    decode_refused();
+    decode_textures();
     scene(argc > 1 ? argv[1] : 0);
     free(colour);
     free(depth);

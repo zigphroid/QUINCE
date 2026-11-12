@@ -10,7 +10,10 @@ pectinos checkout at the commit `PECTIN_REV` names.
 make            # build/QUINCE.JAM (CANNER)
 make test       # the host suite, under the sanitizers
 make test-quake QUINCE_PAK=path/to/id1/pak0.pak
-                # Quake on the PC (32-bit: gcc-multilib), in make test too
+                # Quake on the PC (32-bit: gcc-multilib), in make test too,
+                # its e1m1 frames drawn by PB's C model and held to CRCs
+make pb-frames QUINCE_PAK=path/to/id1/pak0.pak
+                # demo1 drawn by PB's C model: build/pbframes/demo1/*.png
 make sim-smoke  # on SIMMER (PectinOS in QEMU), no window
 make sim-bench QUINCE_PAK=path/to/id1/pak0.pak
                 # Quake's two benchmarks on SIMMER, CANNER's build
