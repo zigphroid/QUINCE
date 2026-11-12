@@ -143,6 +143,9 @@ static void pb3d_fixed(void)
     check_num("12.4: a half step rounds away from 0", pb3d_fix_12_4(0.03125f), 1);
     check_num("12.4: and below 0", pb3d_fix_12_4(-1.03125f), -17);
     check_num("12.4: just under a half step", pb3d_fix_12_4(0.03f), 0);
+    // The float just under a half step: adding a half rounds the sum up
+    // to a whole one, which M2's fix got wrong; roundf doesn't.
+    check_num("12.4: the float just under a half step", pb3d_fix_12_4(0.49999997f * 0.0625f), 0);
     check_num("12.4: held at the guard band's right", pb3d_fix_12_4(3000.0f), 32767);
     check_num("12.4: and its left", pb3d_fix_12_4(-3000.0f), -32768);
     check_num("12.4: NaN is 0", pb3d_fix_12_4(zero / zero), 0);

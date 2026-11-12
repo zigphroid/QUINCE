@@ -10,28 +10,32 @@
 /* --- the conversions --- */
 
 /* v times scale to the nearest whole step, halves away from zero, held
- * at lo and hi. The tests come before the cast, since casting a float
- * out of the integer's range is undefined in C (C11 6.3.1.4). */
-static int32_t fix(float v, float scale, int32_t lo, int32_t hi)
+ * to a 16-bit field. The tests come before the cast, since casting a
+ * float out of the integer's range is undefined in C (C11 6.3.1.4).
+ * roundf is the M33's one VRINTA, which rounds halves away from zero
+ * (M3's built-ins); adding a half and cutting, as M2 first did, took
+ * four branches and got 0.49999997 wrong (it rounds the sum up to 1).
+ * M2's board run had this at 7% of the program (LOG 2026-11-12). */
+static uint16_t fix16(float v, float scale)
 {
 	if (!(v == v))
 		return 0;            /* NaN */
 	v *= scale;
-	if (v <= (float)lo)
-		return lo;
-	if (v >= (float)hi)
-		return hi;
-	return (int32_t)(v < 0.0f ? v - 0.5f : v + 0.5f);
+	if (v <= -32768.0f)
+		return 0x8000u;
+	if (v >= 32767.0f)
+		return 0x7fffu;
+	return (uint16_t)(int32_t)__builtin_roundf(v);
 }
 
 int16_t pb3d_fix_12_4(float v)
 {
-	return (int16_t)fix(v, 16.0f, -32768, 32767);
+	return (int16_t)fix16(v, 16.0f);
 }
 
 int16_t pb3d_fix_10_6(float v)
 {
-	return (int16_t)fix(v, 64.0f, -32768, 32767);
+	return (int16_t)fix16(v, 64.0f);
 }
 
 /* q is 0 or more (behind the near plane the GL layer has clipped), so
@@ -45,7 +49,7 @@ uint32_t pb3d_fix_q(float q)
 	v = q * 2147483648.0f;
 	if (v >= 4294967040.0f)  /* the largest float under 2^32 */
 		return 0xffffffffu;
-	return (uint32_t)(v + 0.5f);
+	return (uint32_t)__builtin_roundf(v);
 }
 
 /* --- the length of a command --- */
@@ -205,17 +209,17 @@ void pb3d_vertex(struct pb3d_buf *b, const struct pb3d_vertex *v)
 	uint32_t f = b->tris_format;
 	if (b->tris_left == 0)
 		return;   /* no TRIS open: its pb3d_tris failed, or n are done */
-	put(b, (uint16_t)pb3d_fix_12_4(v->x));
-	put(b, (uint16_t)pb3d_fix_12_4(v->y));
+	put(b, fix16(v->x, 16.0f));
+	put(b, fix16(v->y, 16.0f));
 	if (f & PB3D_F_Q)
 		put32(b, pb3d_fix_q(v->q));
 	if (f & PB3D_F_ST) {
-		put(b, (uint16_t)pb3d_fix_12_4(v->s));
-		put(b, (uint16_t)pb3d_fix_12_4(v->t));
+		put(b, fix16(v->s, 16.0f));
+		put(b, fix16(v->t, 16.0f));
 	}
 	if (f & PB3D_F_ST2) {
-		put(b, (uint16_t)pb3d_fix_10_6(v->s2));
-		put(b, (uint16_t)pb3d_fix_10_6(v->t2));
+		put(b, fix16(v->s2, 64.0f));
+		put(b, fix16(v->t2, 64.0f));
 	}
 	if ((f & PB3D_F_COLOUR_MASK) == PB3D_F_GREY)
 		put(b, v->r);
