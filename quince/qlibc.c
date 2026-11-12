@@ -175,7 +175,13 @@ static struct quince_file files[QFILES];
 
 FILE *fopen(const char *path, const char *mode)
 {
+	/* Quake builds its paths with '/' (COM_FOpenFile, for a demo in the
+	 * pak); PectinOS's are '\\', as quince/sys_quince.c's board_path. */
+	char p[128];
 	int i, h, how = PECTIN_READ;
+	for (i = 0; path[i] && i < (int)sizeof p - 1; i++)
+		p[i] = path[i] == '/' ? '\\' : path[i];
+	p[i] = 0;
 	if (mode[0] == 'w')
 		how = PECTIN_CREATE;
 	else if (mode[0] == 'a')
@@ -185,7 +191,7 @@ FILE *fopen(const char *path, const char *mode)
 			break;
 	if (i == QFILES)
 		return NULL;
-	h = open(path, how);
+	h = open(p, how);
 	if (h < 0)
 		return NULL;
 	memset(&files[i], 0, sizeof files[i]);

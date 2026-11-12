@@ -106,7 +106,7 @@ static void print_counts(const char *what, int frames, double seconds)
 
 static void run_timedemo(struct qbench_run *run, double (*clock)(void))
 {
-	double old = clock(), now;
+	double first = clock(), old = first, now;
 	int started = 0, frames;
 	for (;;) {
 		now = clock();
@@ -117,7 +117,9 @@ static void run_timedemo(struct qbench_run *run, double (*clock)(void))
 			nullgl_reset();
 		} else if (started && !cls.timedemo)
 			break;
-		if (!started && host_framecount > 1000)
+		/* By the clock, not by host_framecount, which a demo that never
+		 * opened leaves where it was: five minutes is past any load. */
+		if (!started && now - first > 300)
 			Sys_Error("timedemo %s never started", run->name);
 	}
 	/* CL_FinishTimeDemo's own sums, from what it leaves behind. */

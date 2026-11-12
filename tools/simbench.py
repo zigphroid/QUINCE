@@ -16,6 +16,12 @@ import shutil
 import sys
 
 DEMO1_FRAMES = 969
+# e1m1's 300 server frames send what the PC's do (tests/test_quake.py's
+# SERVER_TOTALS): the server is deterministic, so CANNER's build has to
+# match GCC's on the PC exactly. demo1's totals follow the clock (the
+# client's interpolation), so only its frame count is checked.
+SERVER_FRAMES = 300
+SERVER_TOTALS = (331290, 651180)   # triangles, vertices
 
 
 def main():
@@ -24,7 +30,7 @@ def main():
     ap.add_argument("--app", required=True, help="QUINCE.JAM")
     ap.add_argument("--pak", required=True, help="the shareware id1/pak0.pak")
     ap.add_argument("--work", required=True, help="a directory for the card and the log")
-    ap.add_argument("--frames", type=int, default=300, help="server frames")
+    ap.add_argument("--frames", type=int, default=SERVER_FRAMES, help="server frames")
     args = ap.parse_args()
 
     sys.path.insert(0, os.path.join(args.root, "tools"))
@@ -58,6 +64,12 @@ def main():
             out = sim.run("QUINCE /SERVER E1M1 %d" % args.frames,
                           want=[re.compile(r"server: checksum")], wait=1800)
             print("\n".join(l for l in out.splitlines() if l.startswith("server:")))
+            m = re.search(r"server: totals (\d+) tris (\d+) verts", out)
+            got = m and (int(m.group(1)), int(m.group(2)))
+            if args.frames == SERVER_FRAMES and got != SERVER_TOTALS:
+                print("FAIL: e1m1's %d frames sent %s (tris, verts), want %s, as the PC's"
+                      % (SERVER_FRAMES, got, SERVER_TOTALS))
+                failed += 1
         except simdrive.SimError as e:
             print("sim-bench: FAILED: %s" % e, file=sys.stderr)
             print(e.out[-3000:] if e.out else sim.tail(), file=sys.stderr)
