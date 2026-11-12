@@ -22,6 +22,7 @@ MSG_ReadAngle
 SV_RecursiveHullCheck
 SV_StepDirection
 ClipVelocity
+SV_UserFriction         f2d f2d f2d dmul dmul dsub d2f  # host_frametime is double: the new speed, once a player a frame
 SV_WriteEntitiesToClient
 PR_ExecuteProgram
 Draw_TileClear

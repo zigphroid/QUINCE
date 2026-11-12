@@ -351,6 +351,61 @@ QUINCE builds.
   since `math.c`'s `sqrtf` is correctly rounded too, only slower.
   Checked: with the built-ins taken out of the header, all four fail.
 
+## 2026-11-12: the triangle engine's rules (PB-ASKS step 2, PR 1)
+
+QUINCE's C model of PB's triangle engine (`lib/pbmodel.c`) is the spec PB
+draws to. Its rules are in `docs/PB3D.md`. Jacob took all five
+recommendations of the plan:
+- **Perspective:** a divide every pixel, rather than every 8 with straight
+  steps between. Each vertex weighs its edge function times its q, and one
+  reciprocal of the weights' sum serves every attribute, with no divides
+  at setup. A divide every 8 pixels saves PB the reciprocal unit, but adds
+  a second way of stepping and can swim.
+- **Depth:** a 16-bit float of q (4 bits of exponent, 12 of mantissa), as
+  Voodoo's w-buffer, rather than linear z, which spends nearly all its
+  precision near the eye over Quake's 4 to 4,096 units.
+- **The mip level:** one per triangle, from its texel and pixel areas,
+  rather than per pixel, which costs more multipliers. The scene shows the
+  cost: a long wall gets one level end to end, and its far end shimmers.
+  If Quake's frames show it too, per pixel is the change to make.
+- **Colour:** 8 bits a channel inside and RGB565 out, with no dithering
+  yet.
+- **The lightmap:** GLQuake's 1x, with software Quake's 2x left as a later
+  STATE bit.
+
+The model's own choices, each one a rule PB has to keep:
+- **The top-left rule** for pixels on an edge, so a shared edge is drawn
+  once.
+- **Colour is perspective-correct** like the texture coordinates, since
+  the same reciprocal makes it free. Gouraud in screen space would need a
+  second divide.
+- **Textures with see-through texels are kept as ARGB1555,** and the rest
+  as RGB565. 565 has no bit to spare, and a colour key breaks under mip
+  averaging. Only HUD pictures, sprites and the sky's top layer lose a bit
+  of green.
+- **Mips are made from the level above as stored,** not from the palette's
+  8 bits, so PB can build them in place. A mip texel is see-through if two
+  or more of its four are (GLQuake's alpha test passes three of four).
+- **Weights are 1/256** (w(x) = x + x/128), so alpha 0 and 255 give exactly
+  the picture and exactly the source.
+- **Exact integer rules,** with the widths said: 64-bit edge functions
+  (35 bits in the guard band), weights cut to 40 bits, reciprocals as
+  floors. Floats would leave the gateware no way to match bit for bit.
+
+The model isn't in QUINCE.JAM, since PB draws, not the Jam. Its checks are
+a host test (`tests/test_pbmodel.c`), and `make` compiles it with CANNER
+so it stays inside the subset pectinos can take. The checks were tried
+against rules broken on purpose in the model: a dozen at first, and the
+review's eight more that had slipped through (depth written by a pixel the
+alpha test drops, a mip with a side of 1, negative repeats, s and t
+clamped apart, the lightmap and alpha, unit 1's mip level, the depth
+range's +1, MULINV's weight). Each break now fails at least one check.
+
+The review also found the per-pixel reciprocal held at 32 bits when the
+weights' sum was 256 or less, which happens on slivers far away. The sum
+is now always brought to 16 bits, moved up when it is short as well as cut
+when it is long, so the reciprocal is always 25 bits and needs no clamp.
+
 ## 2026-11-12: M3 PR 2, Quake's hot functions in float
 
 - **Finding them.** THERMO's profile counts softfp's own functions, not
@@ -382,8 +437,12 @@ QUINCE builds.
   rounded back is the correctly rounded float one, so `sqrtf` gives the
   same bits; so do multiplying or dividing by a power of two (`1/8`,
   `1/16`, `1/64`), `MSG_ReadAngle`'s `45/32` on a char, and a compare
-  with a constant whose float lies on the safe side of it (`0.01`,
-  `0.1`). The rest can differ in the last bits.
+  with a constant whose float lies on the safe side of it (`0.01`; `0.1`
+  in `ClipVelocity`'s inside test; `1.0`). Where it lies on the wrong
+  side the compare is turned round: `0.1f` is the first float above
+  `0.1`, so `SV_WriteEntitiesToClient`'s `miss > 0.1` is `miss >= 0.1f`
+  for every float (the review found the `>` first written there). The
+  rest can differ in the last bits.
 - **Result on SIMMER** (instructions, `-icount`), against PR 1:
 
   | build | demo1 ms/frame | e1m1 server ms/frame |

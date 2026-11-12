@@ -103,3 +103,11 @@ then a C model of the triangle engine drawing demo1's frames on the PC.
 PB's side (flat triangles, then textures, then lightmaps) is pectinos's
 work, to be asked for in an issue there once Jacob hands it over. Each
 step is planned in chat first.
+
+Step 2, the C model, planned 2026-11-12 (Jacob, all recommendations):
+- PR 1: the model alone (`lib/pbmodel.c`, its rules in `docs/PB3D.md`),
+  held to them by `tests/test_pbmodel.c`, with a scene it draws in
+  `build/pbmodel/scene.png`.
+- PR 2: the model reads the GL layer's commands (`lib/pb3d.h`, step 1),
+  and `make test-quake` draws demo1's frames to pictures, each held to its
+  CRC.

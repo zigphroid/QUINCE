@@ -143,7 +143,7 @@ void SV_UserFriction (void)
 
 	trace = SV_Move (start, vec3_origin, vec3_origin, stop, true, sv_player);
 
-	if (trace.fraction == 1.0)
+	if (trace.fraction == 1.0f)	// QUINCE: float, the same test (M3)
 		friction = sv_friction.value*sv_edgefriction.value;
 	else
 		friction = sv_friction.value;
