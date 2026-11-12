@@ -88,6 +88,45 @@ static void run_timedemo(struct qbench_run *run, double (*clock)(void))
 	print_counts("timedemo", frames, realtime - cls.td_starttime);
 }
 
+/* The server's state, as a hash: each entity in use, by its number, its
+ * origin in eighths of a unit (as MSG_WriteCoord sends it, common.c), its
+ * angles in 256ths of a turn (finer than MSG_WriteAngle, which drops the
+ * fraction of a degree first), its frame and its health. After a fixed
+ * run it says whether two builds
+ * played the same game, which the triangle counts only roughly do: the PC
+ * and CANNER's build on SIMMER must agree exactly (M3, LOG 2026-11-12;
+ * tools/simbench.py), since the PC rounds floats as the board does. FNV-1a
+ * over 32-bit words (Fowler, Noll and Vo's hash, from its description). */
+static uint32_t hash_word(uint32_t h, int32_t w)
+{
+	int i;
+	for (i = 0; i < 4; i++) {
+		h ^= (uint32_t)w >> (8 * i) & 0xff;
+		h *= 16777619u;
+	}
+	return h;
+}
+
+static void print_state(const char *what)
+{
+	uint32_t h = 2166136261u;
+	int i, j, live = 0;
+	for (i = 0; i < sv.num_edicts; i++) {
+		edict_t *e = EDICT_NUM(i);
+		if (e->free)
+			continue;
+		live++;
+		h = hash_word(h, i);
+		for (j = 0; j < 3; j++) {
+			h = hash_word(h, (int32_t)(e->v.origin[j] * 8));
+			h = hash_word(h, (int32_t)(e->v.angles[j] * 256 / 360) & 255);
+		}
+		h = hash_word(h, (int32_t)e->v.frame);
+		h = hash_word(h, (int32_t)e->v.health);
+	}
+	printf("%s: state %08x, %d entities\n", what, (unsigned)h, live);
+}
+
 static void run_server(struct qbench_run *run, double (*clock)(void))
 {
 	double start, end;
@@ -103,6 +142,7 @@ static void run_server(struct qbench_run *run, double (*clock)(void))
 		Host_Frame(0.1f);
 	end = clock();
 	print_counts("server", run->frames, end - start);
+	print_state("server");
 }
 
 void qbench_main(void *vparms, struct qbench_run *run, double (*clock)(void))

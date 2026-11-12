@@ -244,6 +244,113 @@ what is cheapest to build comes first. The plan names the one real limit
 on the link, flow control over I2C (about 4 MB/s, inferred), and asks
 pectinos for a deep queue or a faster bus.
 
+## 2026-11-12: PB's wire format (M2 PR 1)
+
+Jacob took every recommendation of the M2 plan (the GL layer to PB, still
+drawing nothing): `GL_Upload8` hands Quake's 8-bit textures to our layer
+through one `QUINCE:` change, unit 0's texel coordinates are 12.4, and
+`lib/nullgl.c` is replaced, not kept beside the new layer. PR 1 writes
+the format down as `lib/pb3d.h`, with an encoder and exact-word checks,
+before the GL layer, so the C model's thread can read the stream
+through the header while the GL layer is still being built.
+
+Changed from `docs/PB-ASKS.md`'s first cut, agreed with the C model's
+thread:
+- s, t are 12.4, not 10.6. GLQuake allows surfaces 512 texels across
+  (`gl_model.c`), and after the Jam takes whole texture sizes off, a
+  coordinate can reach about 768, past 10.6's 512. 12.4 holds 2,048, and
+  a sixteenth of a texel is plenty for point-sampled walls (the model
+  interpolates s q and t q). Lightmaps stay 10.6: 128 wide, and bilinear
+  wants the fraction.
+- The depth range is its own command, `DEPTHRANGE` (near and far in the
+  stored depth's units), not bits of `STATE`. Scaling q on the Jam would
+  move the weapon in front but bend its perspective; PB maps the depth
+  it makes from q instead. It changes about twice a frame, so it stays
+  out of `STATE`'s one word.
+- A model's grey colour takes a word, so its vertex is 14 bytes, not 13:
+  the commands are 16-bit words.
+- Textures have a format byte: 8-bit indices, a grey byte (lightmaps),
+  or 32-bit RGBA for the few that aren't palette colours (the particle
+  dot). PB or the model turns RGBA into its own texels.
+
+Alternatives: 10.6 with the Jam splitting wide polygons (Jam time, more
+vertices); the weapon's depth by a scale on q alone (no offset, so it
+can't put the weapon in front of a wall it is inside). The numbers 15 to
+19 are QUINCE's proposal; pectinos owns PB's command numbers and may
+change them when it builds the 3D service.
+
+## 2026-11-12: M3, Quake's hot math in float (the plan)
+
+Jacob took every recommendation. M1's profile (SIMMER, `-icount`,
+THERMO, project files `quince/canner-vs-gcc/`) had doubles in 27% of
+GCC's demo1 instructions and 40% of CANNER's. Quake's vectors are
+`float`, but C promotes: `v * 0.5` is a double multiply, and
+`sqrt(x*x + y*y)` a double square root, each a call into `softfp.c`
+because the M33's FPU is single precision only (RP2350 datasheet
+§3.6.4). GCC's `-Wdouble-promotion` finds 289 such places in the files
+QUINCE builds.
+
+- **Scope: the hot functions only**, chosen by the profile, file by file,
+  each step measured. Alternatives: all 289 places, mechanical but
+  touching cold load code where precision matters (gl_model.c's
+  `floor(mins/16)` surface extents) for no speed; or no edits to id's
+  files, with `#define sqrt sqrtf` and GCC's
+  `-fsingle-precision-constant`, which CANNER hasn't got, and which
+  would quietly make the clocks float too.
+- **The clocks stay double** (`realtime`, `cl.time`, `sv.time`,
+  `host_frametime`): a float clock loses its fractions after hours.
+- **Correctness**: the PC rounds floats as the board does, and e1m1's
+  state after 300 frames is a gate between the PC and SIMMER, not only
+  printed. Float against double on the PC is reported, not gated:
+  physics after collisions is chaotic, so small differences may grow.
+- **Two PRs**: ours first (below), then id's files.
+
+## 2026-11-12: M3 PR 1, our side of the float work
+
+- **`quince/libc/math.h` was missing the SDK's built-ins.** The SDK's
+  `math.h` spells `sqrtf`, `fabsf`, `floorf` and `ceilf` as
+  `__builtin_sqrtf` and so on (on `__arm__`), because `-ffreestanding`
+  stops GCC knowing the names and CANNER only makes the instruction for
+  the built-in. Ours declared them as plain functions, so `glRotatef`'s
+  `sqrtf` was a call to `sdk/lib/math.c`'s integer square root. Now each
+  is one instruction. On SIMMER (instructions, deterministic), demo1 went
+  from 14.5 to 14.2 ms a frame in CANNER's build (THERMO samples 71,860
+  to 70,596, -1.8%) and 10.3 to 10.1 in GCC's (-1.8%); the server run
+  moved under 0.5%. softfp is untouched: that is PR 2.
+- **The PC rounds floats as the board does.** `-m32`'s default is the
+  x87, which keeps values in 80 bits until they are stored, so the PC's
+  float and double results can differ from the M33's FPU and
+  `softfp.c` in the last bits. The PC build is now `-msse2 -mfpmath=sse
+  -ffp-contract=off` and links the SDK's own `math.c` (and softfp.c's
+  packing) ahead of `-lm`. Checked: with the x87, e1m1's null-GL
+  checksum was -3593997312; with SSE it is -3592846848, which CANNER's
+  and GCC's builds on SIMMER print too. glibc's math against the SDK's
+  made no difference to it yet, but PR 2's `sinf` and `cosf` will
+  depend on it. `asin` (mirrors only) is still glibc's. The PC build is
+  `-fno-builtin` too, as the board's `-ffreestanding` is: without it GCC
+  had turned a `sin` and a `cos` of one angle into a call to glibc's
+  `sincos`, in `AngleVectors` and seven other functions, so the SDK's
+  `sin` and `cos` weren't the ones running there. It changed neither
+  e1m1's state nor its checksum.
+- **`/SERVER` prints the game's state**: an FNV-1a hash of each entity in
+  use, its origin in eighths of a unit (as `MSG_WriteCoord` sends it),
+  its angles in 256ths of a turn (finer than `MSG_WriteAngle`, which
+  drops the fraction of a degree first), its frame and its health.
+  `make test-quake` and `make sim-bench` both hold
+  e1m1's 300 frames to `c8c17318, 164 entities` and checksum
+  -3592846848, beside the triangle totals; the PC, CANNER's build and
+  GCC's all print them. Alternatives: the triangle totals alone, which
+  are what a float change is likely to leave the same while the game
+  differs; a dump of every entity, compared by a script, which says more
+  about where two runs part, but which a hash and the PC's own dump can
+  do when that's needed.
+- **`make test-builtins`** keeps the `math.h` fix: CANNER compiles
+  `tests/fpu_builtins.c` through `quince/libc/math.h`, with the SDK's
+  `math.c` beside it as in the real build, and fails if `sqrtf`,
+  `fabsf`, `floorf` or `ceilf` is a call. The state can't catch it,
+  since `math.c`'s `sqrtf` is correctly rounded too, only slower.
+  Checked: with the built-ins taken out of the header, all four fail.
+
 ## 2026-11-12: the triangle engine's rules (PB-ASKS step 2, PR 1)
 
 QUINCE's C model of PB's triangle engine (`lib/pbmodel.c`) is the spec PB
