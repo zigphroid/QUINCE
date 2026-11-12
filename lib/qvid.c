@@ -67,8 +67,8 @@ static void init_gl(void)
 	pbgl_init(&mem, QVID_WIDTH, QVID_HEIGHT, qvid_sink);
 	/* The state id's GL_Init (gl_vidnt.c, gl_vidlinux.c) sets once, which
 	 * the renderer counts on and never sets itself: textures on, the
-	 * alpha test on, flat shading, the front faces culled (Quake winds
-	 * them the other way), and textures replacing the colour. Without it
+	 * alpha test on, flat shading, the front face the one culled where
+	 * culling is on (Quake winds them the other way), and textures replacing the colour. Without it
 	 * the 2D overlay's first frames (the console, the loading plaque) go
 	 * to PB as white untextured quads, which the triangle engine's model
 	 * showed (docs/PB-ASKS.md step 2, PR 2). GL_Init's glAlphaFunc,

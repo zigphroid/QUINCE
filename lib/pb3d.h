@@ -159,15 +159,15 @@ enum {
 #define PB3D_DEPTH_NEAR     0x0000u
 #define PB3D_DEPTH_FAR      0xffffu
 
-/* CLIP: words 1 to 4 x0, y0, x1, y1, in whole pixels (not 12.4), y down:
- * PB draws only the pixels with x0 <= x < x1 and y0 <= y < y1, and on
- * the surface. A frame starts with the whole surface (0, 0, 0xFFFF,
- * 0xFFFF does the same). The Jam still cuts at the near plane and the
+/* CLIP: words 1 to 4 x0, y0, x1, y1, in whole pixels (not 12.4), y down,
+ * x0 <= x1 <= the surface's width and y0 <= y1 <= its height: PB draws
+ * only the pixels with x0 <= x < x1 and y0 <= y < y1, so none when
+ * x0 == x1 or y0 == y1 (a viewport wholly off the surface, held to it).
+ * A frame starts with the whole surface. The Jam still cuts at the near plane and the
  * guard band: CLIP only narrows which pixels are written. GL's
  * viewport is a 3D view smaller than the screen, GLQuake's above its
  * status bar, which GLQuake draws only when it changes: real GL clips to
  * the viewport, and so must PB, as a Voodoo's clip registers did. */
-#define PB3D_CLIP_ALL       0xffffu
 
 /* The words the command at w takes, out of left words: 0 if it isn't one
  * of these, its argument has a bit no command has, or it runs past left. */

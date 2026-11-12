@@ -11,8 +11,8 @@ palette before any texture, each texture's size (powers of two up to
 1,024) and its texels' bytes, each update inside a texture already made,
 and each frame's words as whole commands: a known command, an argument
 with no stray bits, a TRIS cut short by nothing, a texture bound that was
-made, a CLIP on the 640x480 surface. Prints a line of totals, and the biggest frame; exits 1 on the first
-thing wrong, saying what and where.
+made, a CLIP on the 640x480 surface. Prints a line of totals, and the
+biggest frame; exits 1 on the first thing wrong, saying what and where.
 """
 import struct
 import sys
@@ -72,7 +72,7 @@ def check_frame(words, made, where):
             if arg or i + 4 >= len(words):
                 raise Bad("%s word %d: a bad CLIP" % (where, i))
             x0, y0, x1, y1 = words[i + 1:i + 5]
-            if not (x0 < x1 <= WIDTH and y0 < y1 <= HEIGHT):
+            if not (x0 <= x1 <= WIDTH and y0 <= y1 <= HEIGHT):
                 raise Bad("%s word %d: CLIP %d, %d to %d, %d isn't on the %dx%d surface"
                           % (where, i, x0, y0, x1, y1, WIDTH, HEIGHT))
             n = 5

@@ -556,6 +556,14 @@ static void gl_viewport(void)
     tri();
     pbgl_end_frame();
     check_num("the next frame starts whole: no CLIP", (long)gl_nframe, 2 + 2 + 6);
+    // A frame that ends with the 3D view's viewport: PB starts the next
+    // one whole, so its first TRIS needs the CLIP again.
+    glViewport(0, 115, 640, 365);
+    tri();
+    pbgl_end_frame();
+    tri();
+    static const uint16_t again[] = { 0x1000, 0x0800, 0x1400, 0, 0, 640, 365 };
+    gl_check("each frame sends its CLIP afresh", 0, again, sizeof again / sizeof again[0]);
     glViewport(-20, -10, 700, 100); // past the edges: rows 390 to 489, held to 479
     tri();
     static const uint16_t held[] = { 0x1000, 0x0800, 0x1400, 0, 390, 640, 480 };
