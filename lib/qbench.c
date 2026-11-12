@@ -108,7 +108,11 @@ static void run_timedemo(struct qbench_run *run, double (*clock)(void))
  * played the same game, which the triangle counts only roughly do: the PC
  * and CANNER's build on SIMMER must agree exactly (M3, LOG 2026-11-12;
  * tools/simbench.py), since the PC rounds floats as the board does. FNV-1a
- * over 32-bit words (Fowler, Noll and Vo's hash, from its description). */
+ * over 32-bit words (Fowler, Noll and Vo's hash, from its description).
+ * The rounding makes it blind to a last-bit float difference until it
+ * grows to an eighth of a unit, so a second hash, "bits", takes origin,
+ * angles and velocity as their raw float bits: the PC and SIMMER must
+ * agree on that too, bit for bit (#17). */
 static uint32_t hash_word(uint32_t h, int32_t w)
 {
 	int i;
@@ -119,9 +123,16 @@ static uint32_t hash_word(uint32_t h, int32_t w)
 	return h;
 }
 
+static int32_t float_bits(float f)
+{
+	union { float f; int32_t i; } u;
+	u.f = f;
+	return u.i;
+}
+
 static void print_state(const char *what)
 {
-	uint32_t h = 2166136261u;
+	uint32_t h = 2166136261u, b = 2166136261u;
 	int i, j, live = 0;
 	for (i = 0; i < sv.num_edicts; i++) {
 		edict_t *e = EDICT_NUM(i);
@@ -135,8 +146,14 @@ static void print_state(const char *what)
 		}
 		h = hash_word(h, (int32_t)e->v.frame);
 		h = hash_word(h, (int32_t)e->v.health);
+		b = hash_word(b, i);
+		for (j = 0; j < 3; j++) {
+			b = hash_word(b, float_bits(e->v.origin[j]));
+			b = hash_word(b, float_bits(e->v.angles[j]));
+			b = hash_word(b, float_bits(e->v.velocity[j]));
+		}
 	}
-	printf("%s: state %08x, %d entities\n", what, (unsigned)h, live);
+	printf("%s: state %08x, bits %08x, %d entities\n", what, (unsigned)h, (unsigned)b, live);
 }
 
 static void run_server(struct qbench_run *run, double (*clock)(void))

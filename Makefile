@@ -99,7 +99,7 @@ CANNER_FLAGS ?=
 # or build/heat/ or build/gcc/'s (below).
 QUINCE_JAM ?= $(BUILD)/$(NAME).JAM
 
-.PHONY: FORCE all app heat gcc test quake-host test-quake test-builtins test-float pb-frames sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
+.PHONY: FORCE all app heat gcc test test-builds quake-host test-quake test-builtins test-float pb-frames sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
 all: app $(BUILD)/pbmodel.jo $(BUILD)/pbdecode.jo
 app: $(BUILD)/$(NAME).JAM
 
@@ -145,10 +145,23 @@ page-check:
 # runs on the board; host-only ones go in tests/.
 HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
             -fno-omit-frame-pointer
-test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins test-float
+test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins test-float test-builds
 	$(BUILD)/test_quince
 	@mkdir -p $(BUILD)/pbmodel
 	$(BUILD)/test_pbmodel $(BUILD)/pbmodel/scene.png
+
+# make heat and make gcc are only built by hand otherwise, so a source
+# left out of GCC_QSRC, a double function quince/libc/ lacks, or a heat
+# cut that no longer builds would wait for the next board comparison to
+# show (#11). A heat file that names functions gone from the build only
+# warns: heat.py's warnings say which, and the cut still builds. Built
+# here, not run: sim-smoke and sim-bench take QUINCE_JAM= for that. The heat cut needs only CANNER; GCC's build
+# skips, saying why, without $(CROSS)gcc.
+test-builds:
+	@$(MAKE) --no-print-directory heat
+	@if command -v $(CROSS)gcc > /dev/null 2>&1; then $(MAKE) --no-print-directory gcc; \
+	else echo "test-builds: make gcc skipped: no $(CROSS)gcc"; fi
+	@echo "test-builds: make heat$(if $(shell command -v $(CROSS)gcc 2>/dev/null), and make gcc,) built"
 
 # Quake's hot functions stay float (M3 PR 2, LOG 2026-11-12): CANNER writes
 # the whole program as assembly, and tools/floatcheck.py fails if a
@@ -163,8 +176,9 @@ test-float: $(SRC) $(CORE) $(QUAKE_BOARD) $(wildcard lib/*.h quake/*.h quince/li
 
 # quince/libc/math.h's FPU built-ins (M3, LOG 2026-11-12): CANNER compiles
 # tests/fpu_builtins.c through it, with the SDK's math.c beside it as in
-# the real build, and any q_ function that calls sqrtf, fabsf, floorf or
-# ceilf instead of making the instruction fails it. The state and checksum
+# the real build, and any q_ function that calls sqrtf, fabsf, floorf,
+# ceilf or __builtin_roundf (lib/pb3d.c's) instead of making the
+# instruction fails it. The state and checksum
 # can't catch that: math.c's sqrtf is correctly rounded too, only slower.
 test-builtins: tests/fpu_builtins.c quince/libc/math.h $(CANNER) Makefile
 	@mkdir -p $(BUILD)
@@ -173,7 +187,7 @@ test-builtins: tests/fpu_builtins.c quince/libc/math.h $(CANNER) Makefile
 	@awk '/^[A-Za-z_][A-Za-z0-9_.]*:$$/ { fn = substr($$1, 1, length($$1) - 1) } \
 	    fn ~ /^q_/ && /\tb(l|\.w)?\t/ { print "test-builtins: FAIL: " fn " calls " $$2; bad = 1 } \
 	    END { exit bad }' $(BUILD)/fpu_builtins.s
-	@echo "test-builtins: sqrtf, fabsf, floorf and ceilf are FPU instructions"
+	@echo "test-builtins: sqrtf, fabsf, floorf, ceilf and roundf are FPU instructions"
 
 $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	@mkdir -p $(BUILD)

@@ -32,9 +32,11 @@ the rate.
 frames of a tenth of a second of game time each: the game's code, its
 physics and the renderer. It prints the same lines, and then `state`:
 a hash of where every entity ended up (its origin in eighths of a unit,
-its angles in 256ths of a turn, its frame and its health) and how many
-there are.
-Two builds that print the same state played the same game.
+its angles in 256ths of a turn, its frame and its health); `bits`, a
+second hash of each entity's origin, angles and velocity as their raw
+float bits, so it sees a difference in the last bit that the first
+rounds away; and how many entities there are. Two builds that print the
+same state and bits played the same game, bit for bit.
 
 Quake's files come from `J:\LARDER\QUINCE`: copy `PAK0.PAK` from your own
 Quake (the shareware one is enough) to `J:\LARDER\QUINCE\ID1\PAK0.PAK`.

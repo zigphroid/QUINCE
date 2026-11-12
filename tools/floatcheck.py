@@ -11,8 +11,24 @@ import collections
 import re
 import sys
 
-DOUBLE = re.compile(r"\tb(?:l|\.w)?\t(__aeabi_(?:d\w+|[fil]2d|ul2d)|sqrt|sin|cos|tan|floor|ceil|"
+DOUBLE = re.compile(r"\tb(?:l|\.w)?\t(__aeabi_(?:d\w+|u?[fil]2d|ul2d)|sqrt|sin|cos|tan|floor|ceil|"
                     r"fabs|fmod|atan2?|asin|pow)$")
+
+# Calls the pattern must see, and ones it mustn't, checked on every run so
+# a narrowed pattern fails test-float itself. ui2d was missed until #25:
+# CANNER's QUINCE makes 12 such calls, none from a listed function.
+MUST = ["__aeabi_dadd", "__aeabi_dmul", "__aeabi_ddiv", "__aeabi_dcmplt", "__aeabi_d2f",
+        "__aeabi_f2d", "__aeabi_i2d", "__aeabi_l2d", "__aeabi_ui2d", "__aeabi_ul2d",
+        "sqrt", "floor", "atan2", "pow"]
+MUST_NOT = ["__aeabi_fadd", "__aeabi_fmul", "__aeabi_f2iz", "sqrtf", "floorf", "memcpy"]
+
+
+def pattern_ok():
+    bad = [n for n in MUST if not DOUBLE.search("\tbl\t" + n)]
+    bad += [n for n in MUST_NOT if DOUBLE.search("\tbl\t" + n)]
+    for n in bad:
+        print("test-float: FAIL: floatcheck.py's pattern is wrong about %s" % n)
+    return not bad
 
 
 def calls(asm):
@@ -31,6 +47,8 @@ def calls(asm):
 
 def main():
     asm, listing = sys.argv[1:3]
+    if not pattern_ok():
+        return 1
     got = calls(asm)
     failed = n = 0
     for line in open(listing):

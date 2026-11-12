@@ -29,7 +29,7 @@ SERVER_CHECKSUM = 3500115068   # of every word: the same commands, word for word
 # ...and where those frames leave the game (lib/qbench.c's print_state).
 # Since M3 the PC rounds floats as the board does (the Makefile's QHOST_CC),
 # so CANNER's build on SIMMER must print these too (tools/simbench.py).
-SERVER_STATE = "c8c17318, 164 entities"
+SERVER_STATE = "c8c17318, bits 1de00068, 164 entities"
 DUMP_FRAMES = 30   # e1m1's frames written by QUINCE_PBDUMP and read back
 # ...drawn by the model: the CRC of every frame's picture's CRC in turn
 # (the load's frames, then the 30), and the last one's. A change to the
