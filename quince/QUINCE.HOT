@@ -1,13 +1,13 @@
 # PectinOS heat 1
 program QUINCE
 samples 253066 rate 4000 ms 67259 kernel 47858
-pb3d.c:pb3d_vertex 25209
+pb3d.c:pb3d_vertex_of 25209
 pbgl.c:vertex 20707
 pbgl.c:words_sum 9710
 gl_rsurf.c:R_RecursiveWorldNode 9617
 gl_rsurf.c:R_DrawSequentialPoly 8890
 pbgl.c:outcode_of 7539
-pbgl.c:project 6382
+pbgl.c:send_vertex 6382
 gl_rsurf.c:AllocBlock 6253
 gl_rmain.c:GL_DrawAliasFrame 6199
 mathlib.c:BoxOnPlaneSide 5165

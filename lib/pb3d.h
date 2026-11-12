@@ -192,8 +192,9 @@ struct pb3d_buf {
 	uint8_t tris_format;
 };
 
-/* A vertex as the GL layer has it, after the divide: x, y in pixels from
- * the surface's top left, q as near / w, s, t and s2, t2 in texels, the
+/* A vertex after the divide, for pb3d_vertex (the checks'; the GL layer
+ * calls pb3d_vertex_of with the same fields): x, y in pixels from the
+ * surface's top left, q as near / w, s, t and s2, t2 in texels, the
  * colour as bytes. Fields the format leaves out aren't read. */
 struct pb3d_vertex {
 	float x, y, q;
@@ -211,8 +212,8 @@ void pb3d_texture(struct pb3d_buf *b, uint32_t unit, uint32_t id, uint32_t how);
 void pb3d_depthrange(struct pb3d_buf *b, uint32_t near, uint32_t far);
 void pb3d_clip(struct pb3d_buf *b, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1);
 /* TRIS of n vertices (3 or more, and their words must fit), then exactly
- * n pb3d_vertex calls. Returns 0, or -1 having written nothing (the
- * vertex calls after it then write nothing either). */
+ * n pb3d_vertex or pb3d_vertex_of calls. Returns 0, or -1 having
+ * written nothing (the vertex calls after it then write nothing either). */
 int pb3d_tris(struct pb3d_buf *b, uint32_t kind, uint32_t format, uint32_t n);
 void pb3d_vertex(struct pb3d_buf *b, const struct pb3d_vertex *v);
 /* The same, from the fields themselves: the GL layer's way, with no

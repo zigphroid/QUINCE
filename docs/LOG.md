@@ -802,6 +802,10 @@ shares of the program's own samples in demo1 (the kernel and interrupts
 server run has `pb3d_vertex` first too (9.3%). Plain timing the same
 boot: 38.2 and 28.9 ms a frame. The two runs' heat files, summed, are
 the new `quince/QUINCE.HOT` (477 functions; the 64 KB budget keeps 249).
+The run was before the change below, so its counts for `pb3d_vertex`
+and `project` are carried by hand to `pb3d_vertex_of` and `send_vertex`,
+which do that work now; without that, `make heat` cut the two hottest
+send functions cold (review 1). The next THERMO run replaces the file.
 
 - **The heat build is slower than the plain one** on this run: 39.5
   against 38.2 ms (demo1) and 30.7 against 28.9 (e1m1), as M1's was by
