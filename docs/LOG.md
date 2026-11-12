@@ -19,10 +19,13 @@ from `github.com/id-Software/Quake` at `bf4ac42`, every later change marked
 `QUINCE:` in the file. The repo is relicensed from MIT to GPL-2.0-or-later
 (id's terms), which settles #2. Alternatives: Quakespasm or another later
 port (OpenGL only and much more code), or a Quake of our own (not a port).
-WinQuake's software renderer is the least code and the one later
-milestones would port to the pixelboard. Only the portable files came in;
-the GL renderer, the DOS, Windows, Linux and Solaris layers and the x86
-assembly stayed out (`quake/README.md`).
+Only the portable files came in; the DOS, Windows, Linux and Solaris
+layers and the x86 assembly stayed out (`quake/README.md`). GLQuake's
+renderer (`gl_*`) came in beside the software one: the pixelboard is to
+give Glide-style 3D acceleration (Jacob, in chat), and a card like that
+takes the triangles but leaves the BSP walk, the visibility and the model
+vertices to the CPU, so GLQuake's renderer is the one whose CPU share
+QUINCE has to afford.
 
 M1 times two things, not one: `timedemo demo1` alone flatters a build
 that draws nothing (playback is mostly message parsing), so a server
