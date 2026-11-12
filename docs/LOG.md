@@ -297,13 +297,11 @@ QUINCE builds.
   `sincos`, in `AngleVectors` and seven other functions, so the SDK's
   `sin` and `cos` weren't the ones running there. It changed neither
   e1m1's state nor its checksum.
-
 - **`/SERVER` prints the game's state**: an FNV-1a hash of each entity in
   use, its origin in eighths of a unit (as `MSG_WriteCoord` sends it),
   its angles in 256ths of a turn (finer than `MSG_WriteAngle`, which
   drops the fraction of a degree first), its frame and its health.
   `make test-quake` and `make sim-bench` both hold
-
   e1m1's 300 frames to `c8c17318, 164 entities` and checksum
   -3592846848, beside the triangle totals; the PC, CANNER's build and
   GCC's all print them. Alternatives: the triangle totals alone, which
@@ -317,5 +315,3 @@ QUINCE builds.
   `fabsf`, `floorf` or `ceilf` is a call. The state can't catch it,
   since `math.c`'s `sqrtf` is correctly rounded too, only slower.
   Checked: with the built-ins taken out of the header, all four fail.
-
-

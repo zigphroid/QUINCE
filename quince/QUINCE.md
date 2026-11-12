@@ -28,7 +28,6 @@ physics and the renderer. It prints the same lines, and then `state`:
 a hash of where every entity ended up (its origin in eighths of a unit,
 its angles in 256ths of a turn, its frame and its health) and how many
 there are.
-
 Two builds that print the same state played the same game.
 
 Quake's files come from `J:\LARDER\QUINCE`: copy `PAK0.PAK` from your own

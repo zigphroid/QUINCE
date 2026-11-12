@@ -142,7 +142,6 @@ test-builtins: tests/fpu_builtins.c quince/libc/math.h $(CANNER) Makefile
 	    END { exit bad }' $(BUILD)/fpu_builtins.s
 	@echo "test-builtins: sqrtf, fabsf, floorf and ceilf are FPU instructions"
 
-
 $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	@mkdir -p $(BUILD)
 	$(HOSTCC) -std=c11 -g -O1 -Wall -Wextra -Werror -I lib $(HOST_SAN) \
@@ -169,7 +168,6 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 # became a call to glibc's sincos (AngleVectors and seven others).
 QHOST_CC  := $(HOSTCC) -m32 -msse2 -mfpmath=sse -ffp-contract=off -fno-builtin -U__i386__ \
     -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
-
 QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/nullgl.c lib/qbargs.c tests/sys_host.c) \
     $(BUILD)/qhost/sdk/math.o $(BUILD)/qhost/sdk/softfp.o
 

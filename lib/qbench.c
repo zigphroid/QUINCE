@@ -93,7 +93,6 @@ static void run_timedemo(struct qbench_run *run, double (*clock)(void))
  * angles in 256ths of a turn (finer than MSG_WriteAngle, which drops the
  * fraction of a degree first), its frame and its health. After a fixed
  * run it says whether two builds
-
  * played the same game, which the triangle counts only roughly do: the PC
  * and CANNER's build on SIMMER must agree exactly (M2, LOG 2026-11-12;
  * tools/simbench.py), since the PC rounds floats as the board does. FNV-1a

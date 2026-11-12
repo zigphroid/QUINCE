@@ -124,7 +124,6 @@ touches:
    `math.c`), so e1m1's state and checksum are the board's, bit for bit.
    `make test-builtins` checks with CANNER that `math.h`'s `sqrtf` and
    the rounding functions are FPU instructions, not calls.
-
 2. **`make sim-smoke`**: SIMMER, PectinOS in QEMU, with no window. It runs
    `/SELFTEST` on CANNER's code, then the program, then reads its screen
    back as text. The `simmer` skill has the recipes. `make sim-bench
