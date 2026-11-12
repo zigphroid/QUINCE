@@ -13,8 +13,9 @@
  *   (QuakeC, physics), the client, and the renderer over the null GL.
  *
  * Beside each timing, lib/nullgl.c's counts per frame, and the bytes per
- * second a PB link would carry at that rate (NULLGL_VERTEX_BYTES a vertex,
- * plus the textures uploaded during the run).
+ * second a PB link would carry at that rate (NULLGL_VERTEX_BYTES a vertex).
+ * Textures are counted apart: the PB holds them all in its own memory, so
+ * each crosses the link once (Jacob, 2026-11-12).
  */
 #include "quakedef.h"
 #include "nullgl.h"
@@ -71,15 +72,17 @@ static void print_counts(const char *what, int frames, double seconds)
 	double fps = seconds > 0 ? frames / seconds : 0;
 	double per = frames > 0 ? 1.0 / frames : 0;
 	double vbytes = (double)nullgl_total.verts * NULLGL_VERTEX_BYTES;
-	double link = seconds > 0 ? (vbytes + nullgl_total.tex_bytes) / seconds : 0;
+	/* Vertices only: the PB keeps every texture in its own 512 MB, so
+	 * a texture crosses the link once, at load, not every frame. */
+	double link = seconds > 0 ? vbytes / seconds : 0;
 	printf("%s: %d frames %.2f seconds %.2f fps %.1f ms/frame\n",
 	       what, frames, seconds, fps, frames > 0 ? seconds * 1000.0 / frames : 0.0);
 	printf("%s: per frame %.0f tris %.0f verts %.0f prims %.0f gl calls %.0f binds\n",
 	       what, nullgl_total.tris * per, nullgl_total.verts * per,
 	       nullgl_total.prims * per, nullgl_total.calls * per, nullgl_total.binds * per);
-	printf("%s: textures %u uploads %u bytes; PB link %.0f KB/s at this rate\n",
-	       what, (unsigned)nullgl_total.tex_uploads, (unsigned)nullgl_total.tex_bytes,
-	       link / 1024.0);
+	printf("%s: PB link %.0f KB/s of vertices at this rate; textures %u uploads %u bytes, sent once\n",
+	       what, link / 1024.0, (unsigned)nullgl_total.tex_uploads,
+	       (unsigned)nullgl_total.tex_bytes);
 	printf("%s: totals %u tris %u verts %u texture bytes\n", what,
 	       (unsigned)nullgl_total.tris, (unsigned)nullgl_total.verts,
 	       (unsigned)nullgl_total.tex_bytes);

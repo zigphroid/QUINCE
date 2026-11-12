@@ -27,7 +27,9 @@ THERMO's profile:
    which times QuakeC and the physics that a demo skips.
 
 Beside the timings, M1 reports the triangles and vertices per frame and
-the bytes per second the PB link would have to carry at that frame rate.
+the bytes per second the PB link would have to carry at that frame rate:
+the vertices, with the textures apart, sent once (the PB keeps them all
+in its 512 MB).
 A GCC `-O2` build is timed beside CANNER's, for measuring only. Drawing on
 the pixelboard is a later milestone.
 
