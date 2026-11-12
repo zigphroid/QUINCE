@@ -164,8 +164,12 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 # functions are the SDK's own (sdk/lib/math.c, with softfp.c's packing),
 # linked ahead of -lm, so sinf and the rest give the board's last bit too
 # (but asin, which only mirrors call, and the board takes from qlibc.c).
-QHOST_CC  := $(HOSTCC) -m32 -msse2 -mfpmath=sse -ffp-contract=off -U__i386__ -fshort-enums \
-    -DGLQUAKE -I lib -I quake -O2 -g
+# -fno-builtin keeps GCC from swapping those calls for its own, as the
+# board's -ffreestanding does: without it a sin and a cos of one angle
+# became a call to glibc's sincos (AngleVectors and seven others).
+QHOST_CC  := $(HOSTCC) -m32 -msse2 -mfpmath=sse -ffp-contract=off -fno-builtin -U__i386__ \
+    -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
+
 QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/nullgl.c lib/qbargs.c tests/sys_host.c) \
     $(BUILD)/qhost/sdk/math.o $(BUILD)/qhost/sdk/softfp.o
 

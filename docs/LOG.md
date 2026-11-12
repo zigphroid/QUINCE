@@ -291,7 +291,13 @@ QUINCE builds.
   checksum was -3593997312; with SSE it is -3592846848, which CANNER's
   and GCC's builds on SIMMER print too. glibc's math against the SDK's
   made no difference to it yet, but PR 2's `sinf` and `cosf` will
-  depend on it. `asin` (mirrors only) is still glibc's.
+  depend on it. `asin` (mirrors only) is still glibc's. The PC build is
+  `-fno-builtin` too, as the board's `-ffreestanding` is: without it GCC
+  had turned a `sin` and a `cos` of one angle into a call to glibc's
+  `sincos`, in `AngleVectors` and seven other functions, so the SDK's
+  `sin` and `cos` weren't the ones running there. It changed neither
+  e1m1's state nor its checksum.
+
 - **`/SERVER` prints the game's state**: an FNV-1a hash of each entity in
   use, its origin in eighths of a unit (as `MSG_WriteCoord` sends it),
   its angles in 256ths of a turn (finer than `MSG_WriteAngle`, which
