@@ -15,8 +15,10 @@
  * include pectin.h; quince/qsys.h says why). Those come from the kernel's
  * 1 MB heap, so only the middling arrays use it (QUINCE: in each file);
  * the biggest come from the PSRAM pool through malloc instead. Nothing on
- * the PC. */
-#ifdef __CANNER__
+ * the PC. QUINCE_BOARD says the build is for the board, by CANNER or by
+ * arm-none-eabi-gcc (make gcc). */
+#if defined(__CANNER__) || defined(__arm__)
+#define QUINCE_BOARD 1
 #define QPSRAM __attribute__((section(".pbss")))
 #else
 #define QPSRAM

@@ -86,8 +86,11 @@ SDKLIB :=
 # buffers go in static or on the heap, never on the stack.
 STACK  := 16384
 CANNER_FLAGS ?=
+# The .JAM that sim-smoke, sim-bench and send take: CANNER's plain build,
+# or build/heat/ or build/gcc/'s (below).
+QUINCE_JAM ?= $(BUILD)/$(NAME).JAM
 
-.PHONY: FORCE all app test quake-host test-quake sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
+.PHONY: FORCE all app heat gcc test quake-host test-quake sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
 all: app
 app: $(BUILD)/$(NAME).JAM
 
@@ -182,14 +185,72 @@ sim-kernel:
 # /SELFTEST under CANNER's code, then the program itself, Esc, and the
 # prompt back (tools/simsmoke.py, on pectinos's tools/simdrive.py). Run it
 # after any change that reaches the board.
-sim-smoke: $(BUILD)/$(NAME).JAM $(JARCARD) sim-kernel
+sim-smoke: $(QUINCE_JAM) $(JARCARD) sim-kernel
 	$(PYTHON) tools/simsmoke.py --root $(PECTIN_ROOT) --app $< --work $(BUILD)/simsmoke
 
 # M1's two timings on SIMMER, CANNER's build, against QUINCE_PAK
 # (tools/simbench.py). Not in make test: it takes minutes, and the pak.
-sim-bench: $(BUILD)/$(NAME).JAM $(JARCARD) sim-kernel
+sim-bench: $(QUINCE_JAM) $(JARCARD) sim-kernel
 	@test -f "$(QUINCE_PAK)" || { echo "sim-bench: set QUINCE_PAK to the shareware id1/pak0.pak"; exit 1; }
 	$(PYTHON) tools/simbench.py --root $(PECTIN_ROOT) --app $< --pak "$(QUINCE_PAK)" --work $(BUILD)/simbench
+
+# M1 PR 3's two other builds, timed on the board beside the plain one.
+# Each is still QUINCE.JAM, in a directory of its own, so sim-smoke,
+# sim-bench and send take one by QUINCE_JAM:
+#   make heat && make sim-bench QUINCE_JAM=build/heat/QUINCE.JAM QUINCE_PAK=...
+#
+# heat: CANNER's build with the functions THERMO never saw busy moved to
+# the cold segment (.JAM v4), which runs from PSRAM behind the XIP cache,
+# so the jar keeps only QUINCE_HOT_BUDGET bytes of the hottest code
+# ($(PECTIN_ROOT)/apps/canner/README.md, "Cold code"). The heat file is a
+# board run of the plain build (quince/QUINCE.HOT: THERMO /HEAT on demo1
+# and e1m1, added by heat.py sum), and the cut is heat.py's, against that
+# build: same sources, so the same functions.
+QUINCE_HOT_BUDGET ?= 64K
+heat: $(BUILD)/heat/$(NAME).JAM
+$(BUILD)/heat/$(NAME).cold: $(BUILD)/$(NAME).JAM quince/$(NAME).HOT $(PECTIN_ROOT)/tools/heat.py
+	@mkdir -p $(BUILD)/heat
+	$(PYTHON) $(PECTIN_ROOT)/tools/heat.py cold --jam $< --budget $(QUINCE_HOT_BUDGET) quince/$(NAME).HOT -o $@
+$(BUILD)/heat/$(NAME).JAM: $(BUILD)/heat/$(NAME).cold $(BUILD)/$(NAME).JAM
+	$(CANNER) $(QUAKE_INC) -I $(SDK) -I lib $(CANNER_FLAGS) -cold $< -stack $(STACK) -page $(PAGE) -verb $(VERB) \
+	    $(if $(PRF),-pref $(PRF)) -o $@ $(SRC) $(CORE) $(QUAKE_BOARD) $(LIB) $(SDKLIB)
+
+# gcc: the same program built by arm-none-eabi-gcc -O2, the SDK's GCC
+# route ($(SDK)/pectin.mk: its flags, its library and its link), to see
+# what CANNER's code costs. Not pectin.mk's pectin_app itself, which
+# builds every source with one set of flags, the SDK's -I first: QUINCE's
+# files need quince/libc/ first, as CANNER's build has it, or <math.h> is
+# the SDK's, which hasn't got ceil or asin, and an undeclared double
+# function is a call returning int (C89's implicit declaration; the
+# -Werror below makes that an error). GCC's other warnings are off (-w):
+# id's 1996 C sets off hundreds, and CANNER's build is the checked one.
+# -fno-strict-aliasing because id's code reads floats through int
+# pointers (LittleFloat and the rest), and -std=gnu99 for id's C89.
+# The .elf, .map and disassembly are in build/gcc/QUINCE/.
+include $(SDK)/pectin.mk
+GCC_DIR   := $(BUILD)/gcc/$(NAME)
+GCC_QSRC  := $(SRC) $(CORE) $(QUAKE_BOARD) $(SDKLIB)
+GCC_QOBJ  := $(patsubst %.c,$(GCC_DIR)/obj/%.o,$(GCC_QSRC))
+GCC_CFLAGS := $(APP_ARCH) -std=gnu99 -ffreestanding -nostdlib -O2 -g -w \
+              -Werror=implicit-function-declaration -fno-strict-aliasing -fcommon \
+              -ffunction-sections -fdata-sections -ffp-contract=off -fno-math-errno \
+              -fno-tree-loop-distribute-patterns $(QUAKE_INC) -I lib -I $(SDK)
+gcc: $(BUILD)/gcc/$(NAME).JAM
+$(GCC_DIR)/obj/%.o: %.c $(wildcard lib/*.h quake/*.h quince/libc/*.h) $(SDK)/pectin.h Makefile
+	@mkdir -p $(dir $@)
+	$(CROSS)gcc $(GCC_CFLAGS) -c -o $@ $<
+$(GCC_DIR)/$(NAME).elf: $(GCC_QOBJ) $(APP_LIBSRC) $(SDK)/app.ld $(SDK)/cold.ld
+	$(CROSS)gcc $(APP_CFLAGS) -O2 -fno-tree-loop-distribute-patterns $(APP_LDFLAGS) \
+	    -Wl,-Map=$(GCC_DIR)/$(NAME).map -o $@ $(GCC_QOBJ) $(APP_LIBSRC)
+	@if grep -q 'libgcc\.a' $(GCC_DIR)/$(NAME).map; then \
+	    echo "error: $@ links libgcc (pectinos has none: its CLAUDE.md, #112)"; rm -f $@; exit 1; fi
+	$(CROSS)objdump -d -S $@ > $(GCC_DIR)/$(NAME).lst
+$(BUILD)/gcc/$(NAME).JAM: $(GCC_DIR)/$(NAME).elf $(PAGE) $(VERB) $(PRF) $(VERBUSAGE) $(PREFCHECK)
+	$(VERBUSAGE) -f $(VERB) > /dev/null
+	$(if $(PRF),$(PREFCHECK) $(PRF) > /dev/null)
+	$(PYTHON) $(PECTIN_ROOT)/tools/mkjam.py --name $(NAME) --stack $(STACK) --page $(PAGE) \
+	    --verb $(VERB) $(if $(PRF),--pref $(PRF)) $< $@
+
 
 # The same, with the screen in a window and the serial console in this
 # terminal (Ctrl+A X quits). The card is build/sim/card.img, with the
@@ -202,7 +263,7 @@ sim: $(BUILD)/$(NAME).JAM $(JARCARD) sim-kernel
 
 # To the board's card over its USB-C console (HARVEST, YMODEM), as
 # pectinos's `make send` does. Close tio first: it steals the reads.
-send: $(BUILD)/$(NAME).JAM
+send: $(QUINCE_JAM)
 	$(PYTHON) $(PECTIN_ROOT)/tools/jamterm.py --put $<
 
 # For a board that fetches QUINCE over the WiFi instead (a cloud session
