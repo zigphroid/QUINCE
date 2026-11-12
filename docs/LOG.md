@@ -650,3 +650,41 @@ next plan, for Jacob's OK. Alternatives considered for this run: timing
 the heat build too (left for a run that tests it on the new file), and
 timing on SIMMER only, whose instruction counts don't weigh the XIP
 cache, PSRAM or the FPU's latencies.
+
+## 2026-11-12: M4 PR 1, the GL layer's hot spots made cheap
+
+Jacob took every recommendation. M2's board run had our own GL layer at
+47% of the program, most of it in four small functions. Three of them:
+
+- **`outcode_of`** (17.4%) tested every vertex against nine planes as
+  four-term dot products: 36 multiplies. Every plane is one coordinate
+  against w, so each test is now a compare (`x + w < 0` for the left
+  edge), or a multiply and a compare for the guard band's. The sums are
+  the same ones the dot products made, since the terms dropped were
+  exact zeros, and e1m1's 300 frames come out word for word as before
+  (the commands compared, not just the checksum). The guard band's four
+  tests are made only for a vertex off the screen: with each guard
+  factor at least 1, a vertex inside the screen's planes is inside the
+  guard's too (a rounded g w is at least w). The clipper tests the one
+  plane it cuts at, where it worked out all nine for both ends of every
+  edge.
+- **`fix`** (5.1%, and `pb3d_fix_12_4` 1.7%) added a half and cut, with
+  four branches. It is now `roundf`, one `VRINTA` on the M33, which
+  rounds halves away from zero as the format says. The old way was
+  wrong just under a half step: 0.49999997 + 0.5 is 1.0 in float, so it
+  rounded up. That moves 1.7% of e1m1's words by one step (none by
+  more), so the checksum moved; a selftest holds the case.
+- **The checksum** (`pbgl_end_frame`, 4.8%) hashes two words a step,
+  half the multiplies. Jacob's choice of three: two words a step, a
+  switch that turns it off for timed runs, or leaving it. Only the
+  tests read it, but the PC-to-SIMMER check needs it in every build.
+  The gate is now 3500115068 (with #26's CLIP).
+
+On SIMMER (wall clock, CANNER's build, against main at 698d71e on the
+same machine): demo1 24.9 to 22.2 ms a frame (-11%), e1m1 10.8 to 9.7
+(-10%), the state and the commands' counts unchanged. The board's
+timing is this PR's next step.
+
+Left as they were: `vertex` (9.7%), the 4x4 transform of each vertex,
+which a cheaper form would need GLQuake's matrices to be affine, and
+`pb3d_vertex`'s writes, which are a store each.
