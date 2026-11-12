@@ -574,9 +574,11 @@ Mac in `~/src/quince-board-run/m2m3/`.
   21%.
 - **M3's floats** took demo1 from 53.9 to 45.8 ms in CANNER's build
   (-15%) and from 41.3 to 38.1 in GCC's (-8%); e1m1 -5% and -3%. SIMMER
-  had -46% and -15% against the null GL; on the board the same saving
-  is a smaller share of a frame the GL layer has made longer, and the
-  XIP cache and PSRAM weigh more there (inferred). softfp is out of the
+  had -46% and -15% against the null GL. On the board the saving is 8.1
+  ms on demo1 and 1.7 ms on e1m1, about half what SIMMER's counts
+  predict at M1's board-to-SIMMER ratios (2.1 and 2.8), and a smaller
+  share of a frame the GL layer has made longer. Why it's half isn't
+  measured: the XIP cache and PSRAM weigh more on the board (inferred). softfp is out of the
   timedemo's top 25; `__aeabi_ddiv` is 1.1% of the server run.
 - **CANNER against GCC** is 17% slower on demo1 and 16% on e1m1, against
   22% and 12% in M1.
