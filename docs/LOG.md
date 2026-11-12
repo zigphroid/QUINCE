@@ -584,3 +584,69 @@ primitive, more SRAM), and sending each lightmap update as it comes
   0.40 blended, against PB-ASKS's guess of overdraw 2 and 20% blended.
   The budget there is redone with them: about 160 MB/s at 30 fps and 285
   at 60, from 190 and 350.
+
+## 2026-11-12: M2's and M3's board run: the GL layer costs the Jam 23 ms a frame
+
+One boot of PectinOS at the pin (bafa5bf, flashed for the run on Jacob's
+OK, Fruitfly put back after), four builds in turn: main at 51ae703 (the
+GL layer and M3's floats) and 227d465 (the GL layer alone), each by
+CANNER and by GCC -O2. Every one passed `/SELFTEST`'s 127 checks, and
+every server run gave the PC's e1m1 exactly: state `c8c17318, 164
+entities`, 2,836,051 words, checksum 666297688. The logs are on Jacob's
+Mac in `~/src/quince-board-run/m2m3/`.
+
+| build | `/TIMEDEMO DEMO1` | `/SERVER E1M1 300` |
+|---|---|---|
+| M1, null GL, CANNER (LOG above) | 30.9 ms | 22.1 ms |
+| M1, null GL, GCC -O2 | 24.0 ms | 19.4 ms |
+| GL layer, CANNER (227d465) | 53.9 ms, 18.5 fps | 34.1 ms |
+| GL layer, GCC -O2 (227d465) | 41.3 ms | 28.0 ms |
+| GL layer and floats, CANNER (51ae703) | **45.8 ms, 21.8 fps** | **32.4 ms** |
+| GL layer and floats, GCC -O2 (51ae703) | **38.1 ms, 26.2 fps** | **27.1 ms** |
+
+- **The GL layer** costs about 23 ms a frame on demo1 in CANNER's build
+  (53.9 against 30.9) and 17 in GCC's. THERMO at 4 kHz on 51ae703's
+  CANNER build puts it in a few small functions, as shares of the
+  program's own samples (the kernel and interrupts were 14%):
+  `outcode_of` 17.4% (every vertex against nine planes, and again for
+  each vertex a cut makes), `vertex` 9.7% (the transform), `pb3d_vertex`
+  7.2% and `fix` 5.1% (float to fixed point, with its clamps and
+  rounding), `pbgl_end_frame` 4.8% (the checksum of every word), and
+  `project` 2.8%. Those six are 47% of the program; id's renderer in
+  the top 25 (BSP walk, surfaces, models, lights, particles) is about
+  21%.
+- **M3's floats** took demo1 from 53.9 to 45.8 ms in CANNER's build
+  (-15%) and from 41.3 to 38.1 in GCC's (-8%); e1m1 -5% and -3%. SIMMER
+  had -46% and -15% against the null GL. On the board the saving is 8.1
+  ms on demo1 and 1.7 ms on e1m1, about half what SIMMER's counts
+  predict at M1's board-to-SIMMER ratios (2.1 and 2.8), and a smaller
+  share of a frame the GL layer has made longer. Why it's half isn't
+  measured: the XIP cache and PSRAM weigh more on the board (inferred). softfp is out of the
+  timedemo's top 25; `__aeabi_ddiv` is 1.1% of the server run.
+- **GCC against CANNER**: GCC's build takes 17% less time a frame on
+  demo1 and 16% less on e1m1, against 22% and 12% in M1 (CANNER's is 20%
+  slower on both).
+- **What PB is sent**, at the board's own frame rate: demo1 27 KB a
+  frame, 590 KB/s at 21.8 fps (vertices 554 KB/s), e1m1 602 KB/s; PB-ASKS
+  has the row. Textures at load are 151 and 2.6 MB, none reloaded.
+- **The heat file.** THERMO's `/HEAT` on both runs, pulled off the card
+  with pectinos main's `jamterm.py --get` (a host tool; it uses only
+  `TASTE` and `CRC` on the board, so it works with the pin's kernel),
+  summed by `heat.py sum` into `quince/QUINCE.HOT`: 460 functions with
+  samples. `make heat`'s 64 KB budget keeps 257 functions (64.7 KB),
+  which hold more than 99% of the samples, and moves 881 (142.5 KB) to
+  PSRAM. M1's file named blocks (`nullgl.c:glVertex3fv+10`, 5,187 of
+  them); this one names whole functions, because the kernel had no room
+  for the count by offset (THERMO.md: it takes a halfword a halfword of
+  code; inferred: Quake's hunk had the PSRAM). `make heat` cuts by
+  function, so it takes either. The heat build wasn't timed this run.
+
+What it says: the CPU's half of a real renderer runs at 22 fps in
+CANNER's build and 26 in GCC's, short of the 30 fps target, and the
+largest single cost is now our own GL layer, not Quake. Its hot
+functions are small and new, which makes them the cheapest place to win
+time back (`outcode_of`'s nine plane tests a vertex first). That is the
+next plan, for Jacob's OK. Alternatives considered for this run: timing
+the heat build too (left for a run that tests it on the new file), and
+timing on SIMMER only, whose instruction counts don't weigh the XIP
+cache, PSRAM or the FPU's latencies.

@@ -47,7 +47,7 @@ the pixelboard is a later milestone.
   slower) and GCC's `-O2` build beside them (`make gcc`: 22% and 12%
   faster).
 
-## M2: the GL layer to PB, still drawing nothing
+## M2: the GL layer to PB, still drawing nothing (done 2026-11-12)
 
 Planned 2026-11-12 (`docs/PB-ASKS.md`, step 1; Jacob, all
 recommendations). M1's null GL grows into the real layer: it writes the
@@ -66,10 +66,13 @@ the C model to draw.
   `QUINCE:` change in `GL_Upload8`. `QUINCE_PBDUMP` writes the stream on
   the PC, and `tests/pbcheck.py` reads it back. Checked on the PC and on
   SIMMER: demo1 sends PB 32 KB a frame (LOG 2026-11-12).
-- PR 3: the board run, beside M1's 30.9 ms a frame, once the boards are
-  free.
+- PR 3: the board run: demo1 at 45.8 ms a frame in CANNER's build
+  (with M3's floats), against M1's 30.9 with the null GL. Making the
+  commands costs the Jam about 23 ms a frame, most of it in a few small
+  functions (`outcode_of` alone is 17%), and a new `quince/QUINCE.HOT`
+  (LOG 2026-11-12).
 
-## M3: Quake's hot math in float
+## M3: Quake's hot math in float (done 2026-11-12)
 
 Planned 2026-11-12 (LOG; Jacob, all recommendations). M1's profile
 found doubles in 27% of GCC's timedemo instructions and 40% of CANNER's:
@@ -93,7 +96,9 @@ until the Jam is free.
   On SIMMER, demo1 went from 14.2 to 7.7 ms a frame in CANNER's build and
   e1m1's server from 7.9 to 6.7; the game's state is the same as in
   double (LOG 2026-11-12).
-- Then: the board's timing of PR 2's build, once the Jam is free.
+- Then the board's timing, in M2 PR 3's run: with the GL layer, demo1
+  went from 53.9 to 45.8 ms a frame in CANNER's build (-15%) and from
+  41.3 to 38.1 in GCC's (-8%) (LOG 2026-11-12).
 
 ## Later: drawing on the pixelboard
 
