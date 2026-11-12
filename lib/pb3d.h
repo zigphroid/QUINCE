@@ -163,11 +163,11 @@ enum {
  * x0 <= x1 <= the surface's width and y0 <= y1 <= its height: PB draws
  * only the pixels with x0 <= x < x1 and y0 <= y < y1, so none when
  * x0 == x1 or y0 == y1 (a viewport wholly off the surface, held to it).
- * A frame starts with the whole surface. The Jam still cuts at the near plane and the
- * guard band: CLIP only narrows which pixels are written. GL's
- * viewport is a 3D view smaller than the screen, GLQuake's above its
- * status bar, which GLQuake draws only when it changes: real GL clips to
- * the viewport, and so must PB, as a Voodoo's clip registers did. */
+ * A frame starts with the whole surface. The Jam still cuts at the near
+ * plane and the guard band: CLIP only narrows which pixels are written.
+ * GL's viewport is a 3D view smaller than the screen, GLQuake's above
+ * its status bar, which GLQuake draws only when it changes: real GL clips
+ * to the viewport, and so must PB, as a Voodoo's clip registers did. */
 
 /* The words the command at w takes, out of left words: 0 if it isn't one
  * of these, its argument has a bit no command has, or it runs past left. */
