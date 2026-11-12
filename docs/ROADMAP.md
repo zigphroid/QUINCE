@@ -47,6 +47,26 @@ the pixelboard is a later milestone.
   slower) and GCC's `-O2` build beside them (`make gcc`: 22% and 12%
   faster).
 
+## M2: Quake's hot math in float
+
+Planned 2026-11-12 (LOG; Jacob, all recommendations). M1's profile
+found doubles in 27% of GCC's timedemo instructions and 40% of CANNER's:
+Quake's vectors are float, but its double constants and its calls to
+`sqrt`, `sin` and the rest turn float sums into softfp calls, since the
+M33's FPU is single precision only. M2 makes the hot code float, and
+checks that the game still plays the same way on the PC and on SIMMER.
+Measured with SIMMER's instruction counts; the board's timing waits
+until the Jam is free.
+
+- PR 1: our code only. `quince/libc/math.h` makes `sqrtf` and the
+  rounding functions their one FPU instruction; the PC build rounds
+  floats as the board does (SSE, nothing fused, the SDK's `math.c`);
+  `/SERVER` prints a state hash, which the PC and CANNER's build on
+  SIMMER must agree on exactly, with the null GL's checksum.
+- PR 2: id's hot functions to float (`QUINCE:` edits): float constants,
+  `sqrtf`, `fabsf`, `floorf`, `sinf`, `cosf`. The clocks stay double. A
+  test fails if a function on the hot list calls softfp again.
+
 ## Later: drawing on the pixelboard
 
 Planned 2026-11-12 (`docs/PB-ASKS.md`; Jacob, all recommendations). PB

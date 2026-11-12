@@ -243,3 +243,64 @@ CPU doesn't, so PB takes the work that is per-pixel and load-time, and
 what is cheapest to build comes first. The plan names the one real limit
 on the link, flow control over I2C (about 4 MB/s, inferred), and asks
 pectinos for a deep queue or a faster bus.
+
+## 2026-11-12: M2, Quake's hot math in float (the plan)
+
+Jacob took every recommendation. M1's profile (SIMMER, `-icount`,
+THERMO, project files `quince/canner-vs-gcc/`) had doubles in 27% of
+GCC's demo1 instructions and 40% of CANNER's. Quake's vectors are
+`float`, but C promotes: `v * 0.5` is a double multiply, and
+`sqrt(x*x + y*y)` a double square root, each a call into `softfp.c`
+because the M33's FPU is single precision only (RP2350 datasheet
+§3.6.4). GCC's `-Wdouble-promotion` finds 289 such places in the files
+QUINCE builds.
+
+- **Scope: the hot functions only**, chosen by the profile, file by file,
+  each step measured. Alternatives: all 289 places, mechanical but
+  touching cold load code where precision matters (gl_model.c's
+  `floor(mins/16)` surface extents) for no speed; or no edits to id's
+  files, with `#define sqrt sqrtf` and GCC's
+  `-fsingle-precision-constant`, which CANNER hasn't got, and which
+  would quietly make the clocks float too.
+- **The clocks stay double** (`realtime`, `cl.time`, `sv.time`,
+  `host_frametime`): a float clock loses its fractions after hours.
+- **Correctness**: the PC rounds floats as the board does, and e1m1's
+  state after 300 frames is a gate between the PC and SIMMER, not only
+  printed. Float against double on the PC is reported, not gated:
+  physics after collisions is chaotic, so small differences may grow.
+- **Two PRs**: ours first (below), then id's files.
+
+## 2026-11-12: M2 PR 1, our side of the float work
+
+- **`quince/libc/math.h` was missing the SDK's built-ins.** The SDK's
+  `math.h` spells `sqrtf`, `fabsf`, `floorf` and `ceilf` as
+  `__builtin_sqrtf` and so on (on `__arm__`), because `-ffreestanding`
+  stops GCC knowing the names and CANNER only makes the instruction for
+  the built-in. Ours declared them as plain functions, so `glRotatef`'s
+  `sqrtf` was a call to `sdk/lib/math.c`'s integer square root. Now each
+  is one instruction. On SIMMER (instructions, deterministic), demo1 went
+  from 14.5 to 14.2 ms a frame in CANNER's build (THERMO samples 71,860
+  to 70,596, -1.8%) and 10.3 to 10.1 in GCC's (-1.8%); the server run
+  moved under 0.5%. softfp is untouched: that is PR 2.
+- **The PC rounds floats as the board does.** `-m32`'s default is the
+  x87, which keeps values in 80 bits until they are stored, so the PC's
+  float and double results can differ from the M33's FPU and
+  `softfp.c` in the last bits. The PC build is now `-msse2 -mfpmath=sse
+  -ffp-contract=off` and links the SDK's own `math.c` (and softfp.c's
+  packing) ahead of `-lm`. Checked: with the x87, e1m1's null-GL
+  checksum was -3593997312; with SSE it is -3592846848, which CANNER's
+  and GCC's builds on SIMMER print too. glibc's math against the SDK's
+  made no difference to it yet, but PR 2's `sinf` and `cosf` will
+  depend on it. `asin` (mirrors only) is still glibc's.
+- **`/SERVER` prints the game's state**: an FNV-1a hash of each entity in
+  use, its origin and angles as the network quantizes them (eighths of
+  a unit, 256ths of a turn: `MSG_WriteCoord`, `MSG_WriteAngle`), its
+  frame and its health. `make test-quake` and `make sim-bench` both hold
+  e1m1's 300 frames to `c8c17318, 164 entities` and checksum
+  -3592846848, beside the triangle totals; the PC, CANNER's build and
+  GCC's all print them. Alternatives: the triangle totals alone, which
+  are what a float change is likely to leave the same while the game
+  differs; a dump of every entity, compared by a script, which says more
+  about where two runs part, but which a hash and the PC's own dump can
+  do when that's needed.
+

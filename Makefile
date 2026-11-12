@@ -141,8 +141,18 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 # enums as small as their values (-fshort-enums), as arm-none-eabi has them
 # (GCC and CANNER alike: quake/modelgen.h says what that cost). id's files
 # are old C: gnu89, common symbols, and their warnings left alone.
-QHOST_CC  := $(HOSTCC) -m32 -U__i386__ -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
-QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/nullgl.c lib/qbargs.c tests/sys_host.c)
+# Its floating point is the board's, bit for bit (M2, LOG 2026-11-12): SSE
+# (-msse2 -mfpmath=sse) rounds each float and double operation to its own
+# width, as the M33's FPU and softfp.c do, where -m32's default x87 keeps
+# them in 80 bits until they are stored; nothing is fused into a
+# multiply-add (-ffp-contract=off), as CANNER fuses nothing; and math.h's
+# functions are the SDK's own (sdk/lib/math.c, with softfp.c's packing),
+# linked ahead of -lm, so sinf and the rest give the board's last bit too
+# (but asin, which only mirrors call, and the board takes from qlibc.c).
+QHOST_CC  := $(HOSTCC) -m32 -msse2 -mfpmath=sse -ffp-contract=off -U__i386__ -fshort-enums \
+    -DGLQUAKE -I lib -I quake -O2 -g
+QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/nullgl.c lib/qbargs.c tests/sys_host.c) \
+    $(BUILD)/qhost/sdk/math.o $(BUILD)/qhost/sdk/softfp.o
 
 $(BUILD)/qhost/quake/%.o: quake/%.c $(wildcard quake/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)
@@ -151,6 +161,12 @@ $(BUILD)/qhost/%.o: %.c $(wildcard quake/*.h lib/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)
 	$(QHOST_CC) -std=gnu99 -fcommon -Wall -Wextra -Wno-unknown-pragmas \
 	    -Wno-unused-parameter -Wno-sign-compare -Werror -c -o $@ $<
+$(BUILD)/qhost/sdk/math.o: $(SDK)/lib/math.c $(SDK)/math.h $(SDK)/lib/mathcoef.h Makefile
+	@mkdir -p $(dir $@)
+	$(QHOST_CC) -std=c11 -c -o $@ $<
+$(BUILD)/qhost/sdk/softfp.o: $(PECTIN_ROOT)/kernel/lib/softfp.c $(PECTIN_ROOT)/kernel/lib/softfp.h Makefile
+	@mkdir -p $(dir $@)
+	$(QHOST_CC) -std=c11 -I $(PECTIN_ROOT)/kernel -c -o $@ $<
 $(BUILD)/quake_host: $(QHOST_OBJ)
 	$(QHOST_CC) -o $@ $^ -lm
 
