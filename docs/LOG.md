@@ -727,3 +727,33 @@ which a cheaper form would need GLQuake's matrices to be affine, and
   The runs above were made before the rule rounded; now `-bias -1`
   gives the rounded-down levels, and `-lod tri3`, `-lod exact -bias -1`
   and `-lod tri -bias -1` draw those runs' frames byte for byte.
+
+## 2026-11-12: M4's board run, and GCC's build over the program area
+
+On the Jam, PectinOS bafa5bf, one boot, main before M4 (698d71e) and
+with it (08790a2, #30); ms a frame, demo1 then e1m1:
+
+| build | before | M4 |
+|---|---|---|
+| CANNER | 46.4, 32.9 | 38.3 (-17%), 28.9 (-12%) |
+| GCC -O2 | 38.4, 27.4 | did not load |
+
+- Every gate held: state c8c17318 with 164 entities, checksum
+  122102208 before and 3500115068 with M4, selftest 136 and 210 checks.
+  The PB link at M4's rate is about 710 KB/s for demo1.
+- CANNER's build gained more than SIMMER said (-11%): the board's 8 ms
+  is about a third of the 23 ms our GL layer cost after M2. CANNER's
+  build with M4 now runs demo1 as fast as GCC's did without it.
+- **GCC's build with M4 printed `Headspace exceeded.`** GCC's build puts
+  all its code in SRAM, and the jar needed 368,208 bytes (code, data and
+  SRAM .bss) plus the 16 KB stack and the loader's 1 KB guard, 848 bytes
+  past the 384,768 HEADSPACE gives with nothing resident. Review 1's
+  guard-band checks were the last 2 KB. The fix: the selftest's two 2 KB
+  frame buffers go in PSRAM (`.pbss`, as `lib/qproto.h`'s QPSRAM), which
+  leaves GCC's build (on main with #29) 5.3 KB spare. And `make gcc` now
+  fails a build over `PROGRAM_SPAN`, so this shows on the PC.
+  Alternatives: a smaller stack (16 KB is the rule, CLAUDE.md), or a
+  heat cut for GCC's build too (a bigger change, for when the code
+  grows). CANNER's build keeps its cold code out by the heat file and
+  has room (inferred from its .JAM's sizes, not measured on the board).
+- The run's logs are on Jacob's Mac, `~/src/quince-board-run/m4/`.

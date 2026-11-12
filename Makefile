@@ -85,6 +85,11 @@ SDKLIB :=
 # The loader's default stack is 8 KB; 16 KB is the most there is. Big
 # buffers go in static or on the heap, never on the stack.
 STACK  := 16384
+# The largest program span HEADSPACE gives on the board at the pin, with
+# nothing resident: the 384 KB program area less the shell's stack (M4's
+# board run, LOG 2026-11-12). make gcc holds GCC's build to it: code,
+# data, SRAM .bss, the stack and the loader's 1 KB guard.
+PROGRAM_SPAN := 384768
 CANNER_FLAGS ?=
 # The .JAM that sim-smoke, sim-bench and send take: CANNER's plain build,
 # or build/heat/ or build/gcc/'s (below).
@@ -338,6 +343,12 @@ $(GCC_DIR)/$(NAME).elf: $(GCC_QOBJ) $(APP_LIBSRC) $(SDK)/app.ld $(SDK)/cold.ld
 	@if grep -q 'libgcc\.a' $(GCC_DIR)/$(NAME).map; then \
 	    echo "error: $@ links libgcc (pectinos has none: its CLAUDE.md, #112)"; rm -f $@; exit 1; fi
 	$(CROSS)objdump -d -S $@ > $(GCC_DIR)/$(NAME).lst
+	@end=$$($(CROSS)nm $@ | awk '$$3 == "__bss_end" { print $$1 }'); \
+	need=$$(( 0x$$end - 0x20000000 + $(STACK) + 1024 )); \
+	if [ $$need -gt $(PROGRAM_SPAN) ]; then \
+	    echo "error: $@ needs $$need bytes of SRAM with its stack and guard;" \
+	         "the board's program area has $(PROGRAM_SPAN) (Headspace exceeded.)"; \
+	    mv $@ $@.big; exit 1; fi
 $(BUILD)/gcc/$(NAME).JAM: $(GCC_DIR)/$(NAME).elf $(PAGE) $(VERB) $(PRF) $(VERBUSAGE) $(PREFCHECK)
 	$(VERBUSAGE) -f $(VERB) > /dev/null
 	$(if $(PRF),$(PREFCHECK) $(PRF) > /dev/null)
