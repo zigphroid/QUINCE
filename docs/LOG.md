@@ -120,3 +120,49 @@ They are now counted apart from textures and added to the link's rate.
 Alternatives: keep 5.5 MB and say which maps fit, which would drop a
 shareware level; or shrink the upload buffers, which a 256x256 texture
 needs whole.
+
+## 2026-11-12: M1's board run: Quake is worth going on with
+
+These are the first timings on the Fruit Jam itself. The run used PectinOS
+at the pin (bafa5bf, API 63, flashed for it on Jacob's OK) and QUINCE at
+0844958, built by CANNER. The pak went to `J:\LARDER\QUINCE\ID1` and is
+not committed. The log of every command is on Jacob's Mac in
+`~/src/quince-board-run/`.
+
+| | frames | seconds | fps | ms/frame | tris/frame | verts/frame | PB link |
+|---|---|---|---|---|---|---|---|
+| `/TIMEDEMO DEMO1` | 969 | 29.35 | 33.0 | 30.3 | 2,094 | 3,953 | 3,571 KB/s |
+| `/SERVER E1M1 300` | 300 | 6.47 | 46.4 | 21.6 | 1,103 | 2,167 | 2,799 KB/s |
+
+- `/SELFTEST` passed 41 checks. The server's totals (330,776 tris, 650,152
+  verts) are the same as the PC's and SIMMER's. The timedemo's totals vary
+  a little from run to run, because the client interpolates by the clock.
+- What the link carries:
+  - Almost all of it is vertices, at 28 bytes each.
+  - Lightmap updates are 2 KB/s in demo1 and 50 KB/s in e1m1.
+  - About 12 MB of textures cross once at load (demo1 952 uploads, e1m1
+    1,119, mip levels included). None are reloaded during a run at the
+    5.75 MB hunk.
+- THERMO, at 4 kHz, on the timedemo:
+  - The null GL's vertex transform (`vertex`, `glVertex3fv`) is about 15%
+    of the program's time, and `R_RecursiveWorldNode` 5%.
+  - `softfp.c`'s double arithmetic (`__aeabi_dmul`, `unpack`, `pack64`) is
+    about 9%: Quake's double constants promote float expressions.
+  - Texture resampling and mipmaps (`GL_ResampleTexture`, `GL_MipMap`,
+    `GL_Upload8`) are about 10%. That is all at load, and it leads the
+    short server run (23%).
+  - The kernel and interrupts take 13% (timedemo) and 22% (server).
+
+What it says: the RP2350 runs Quake's game and the CPU's half of its
+renderer at about 30 fps in demo1, behind the XIP cache, with no tuning.
+The PB's half is rasterizing about 2,000 triangles a frame and taking about
+3.6 MB/s over its link. Both are inferred to be within a Glide-class
+card's reach, and the link's real capacity has yet to be measured. The
+cheapest CPU wins in view:
+- float constants where id wrote doubles;
+- mip levels made by the PB, not the CPU, which affects load time only;
+- the hot code in the jar by THERMO's heat file, still to do in PR 3.
+
+The heat files (`J:\QTD.HOT`, `J:\QSV.HOT`) are still on the card. The
+console can't send a file from the board, so they come off with the card
+in the Mac.
