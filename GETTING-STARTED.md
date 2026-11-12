@@ -178,7 +178,7 @@ you only for what needs a person.
 | `quince/qlibc.c`, `quince/libc/` | the C library pieces Quake needs that the SDK hasn't got (`FILE`, `sprintf`, `malloc` on `mem_alloc`) |
 | `quake/` | id Software's Quake source, GPL, with QUINCE's changes marked `QUINCE:` (`quake/README.md`) |
 | `lib/` | the part worth testing: no kernel calls, so it builds on the host too |
-| `lib/nullgl.c`, `lib/GL/` | the null GL under GLQuake's renderer: it transforms and counts, and draws nothing |
+| `lib/pbgl.c`, `lib/GL/` | the GL layer under GLQuake's renderer: it writes the pixelboard's 3D commands (`lib/pb3d.h`, `lib/pb3d.c`), counted and not yet drawn |
 | `lib/qbench.c`, `lib/qbargs.c` | the two benchmarks, and their words |
 | `lib/selftest.c` | the checks, run by `make test` and by `QUINCE /SELFTEST` |
 | `tests/` | the host test's runner, and host-only checks |

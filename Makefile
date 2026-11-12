@@ -47,10 +47,10 @@ endif
 NAME   := QUINCE
 SRC    := quince/$(NAME).c
 # The core and the checks: no kernel calls, so they build on the host too.
-# The null GL and the benchmark's words are here, so the checks cover them
-# without the pak.
-CORE   := lib/quince_core.c lib/selftest.c lib/nullgl.c lib/qbargs.c lib/pb3d.c
-# Quake (M1): id's files, QUINCE's null GL and benchmark (lib/), the
+# The GL layer to PB, its commands and the benchmark's words are here, so
+# the checks cover them without the pak.
+CORE   := lib/quince_core.c lib/selftest.c lib/pbgl.c lib/qbargs.c lib/pb3d.c
+# Quake (M1): id's files, QUINCE's GL layer and benchmark (lib/), the
 # board's system layer and the C library pieces the SDK hasn't got
 # (quince/). The PC build below takes the same QUAKE_SRC and QUAKE_LIB.
 QUAKE_SRC := $(addprefix quake/,cd_null.c chase.c cl_demo.c cl_input.c cl_main.c \
@@ -134,15 +134,19 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	    -o $@ tests/test_quince.c $(CORE) -lm
 
 # Quake on the PC (M1): id's files in quake/ (as GLQuake builds them, with
-# the GL renderer and the null sound, CD and input), QUINCE's null GL,
+# the GL renderer and the null sound, CD and input), QUINCE's GL layer,
 # video layer and benchmark driver from lib/, and tests/sys_host.c. Built
 # 32-bit, because Quake keeps pointers in ints in places, and with id386
 # off (-U__i386__), so it takes the C paths the board takes, and with
 # enums as small as their values (-fshort-enums), as arm-none-eabi has them
-# (GCC and CANNER alike: quake/modelgen.h says what that cost). id's files
-# are old C: gnu89, common symbols, and their warnings left alone.
-QHOST_CC  := $(HOSTCC) -m32 -U__i386__ -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
-QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/nullgl.c lib/qbargs.c tests/sys_host.c)
+# (GCC and CANNER alike: quake/modelgen.h says what that cost), and with
+# floats in SSE registers, not the x87's 80-bit ones, so a float sum
+# rounds as the board's FPU rounds it and the GL layer's commands come out
+# the same word for word (M2 PR 2: the checksum test-quake and sim-bench
+# hold). id's files are old C: gnu89, common symbols, and their warnings
+# left alone.
+QHOST_CC  := $(HOSTCC) -m32 -msse2 -mfpmath=sse -U__i386__ -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
+QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/pbgl.c lib/pb3d.c lib/qbargs.c tests/sys_host.c tests/pbdump.c)
 
 $(BUILD)/qhost/quake/%.o: quake/%.c $(wildcard quake/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)

@@ -10,59 +10,71 @@
  * - server: a map loaded with its client connected over loopback, then
  *   FRAMES calls of Host_Frame(0.1), a tenth of a second of game time
  *   each, timed by the clock around them. Each frame runs the server
- *   (QuakeC, physics), the client, and the renderer over the null GL.
+ *   (QuakeC, physics), the client, and the renderer over the GL layer.
  *
- * Beside each timing, lib/nullgl.c's counts per frame, and the bytes per
- * second a PB link would carry at that rate: NULLGL_VERTEX_BYTES a vertex,
- * and the lightmaps' updates (glTexSubImage2D). Textures are counted apart:
- * the PB holds them all in its own memory, so each crosses the link once
- * (Jacob, 2026-11-12).
+ * Beside each timing, what lib/pbgl.c sent PB (M2): its commands' words
+ * per frame and of what kind, and the bytes per second the PB link would
+ * carry at that rate, the commands and the lightmaps' updates. Textures
+ * are counted apart: PB keeps them all in its own memory, so each crosses
+ * the link once, at load (Jacob, 2026-11-12). What GLQuake asked for, as
+ * M1 counted it, is on its own lines, so M1's numbers can be held beside
+ * these.
  */
 #include "quakedef.h"
-#include "nullgl.h"
+#include "pbgl.h"
 #include "qbench.h"
 
 /* The textures uploaded from Host_Init to the timed window's start: what
  * the PB is sent once, at load (kept by take_load before the reset). */
-static uint32_t load_uploads, load_bytes;
+static uint32_t load_uploads, load_bytes, load_rgba;
 
 static void take_load(void)
 {
-	load_uploads = nullgl_total.tex_uploads;
-	load_bytes = nullgl_total.tex_bytes;
-	nullgl_reset();
+	load_uploads = pbgl_total.tex_uploads;
+	load_bytes = pbgl_total.tex_bytes;
+	load_rgba = pbgl_total.tex_rgba;
+	pbgl_reset();
 }
 
 static void print_counts(const char *what, int frames, double seconds)
 {
+	const struct pbgl_counts *c = &pbgl_total;
 	double fps = seconds > 0 ? frames / seconds : 0;
 	double per = frames > 0 ? 1.0 / frames : 0;
-	double vbytes = (double)nullgl_total.verts * NULLGL_VERTEX_BYTES;
-	/* What crosses the PB link while the game runs: the vertices, the
-	 * lightmaps' updates and any texture reloaded. A texture crosses it
-	 * once, at load, since the PB keeps every one in its own 512 MB
-	 * (Jacob, 2026-11-12). */
-	double vrate = seconds > 0 ? vbytes / seconds : 0;
-	double lrate = seconds > 0 ? (nullgl_total.sub_bytes + nullgl_total.tex_bytes) / seconds : 0;
+	double cbytes = (double)c->words * 2;
+	/* What crosses the PB link while the game runs: the commands, the
+	 * lightmaps' updates and any texture made again. */
+	double crate = seconds > 0 ? cbytes / seconds : 0;
+	double lrate = seconds > 0 ? (c->sub_bytes + c->tex_bytes) / seconds : 0;
 	printf("%s: %d frames %.2f seconds %.2f fps %.1f ms/frame\n",
 	       what, frames, seconds, fps, frames > 0 ? seconds * 1000.0 / frames : 0.0);
-	printf("%s: per frame %.0f tris %.0f verts %.0f prims %.0f gl calls %.0f binds\n",
-	       what, nullgl_total.tris * per, nullgl_total.verts * per,
-	       nullgl_total.prims * per, nullgl_total.calls * per, nullgl_total.binds * per);
-	printf("%s: PB link %.0f KB/s at this rate: vertices %.0f KB/s, texture updates %.0f KB/s\n",
-	       what, (vrate + lrate) / 1024.0, vrate / 1024.0, lrate / 1024.0);
-	printf("%s: lightmap updates %u, %u bytes\n",
-	       what, (unsigned)nullgl_total.sub_uploads, (unsigned)nullgl_total.sub_bytes);
-	printf("%s: at load, textures %u uploads %u bytes, sent once\n",
-	       what, (unsigned)load_uploads, (unsigned)load_bytes);
-	/* A texture uploaded inside the window is one Quake's cache let go
-	 * and loaded again, which a tight hunk costs: link traffic too. */
+	printf("%s: GL per frame %.0f tris %.0f verts %.0f prims %.0f gl calls %.0f binds\n",
+	       what, c->tris * per, c->verts * per, c->prims * per, c->calls * per, c->binds * per);
+	printf("%s: PB per frame %.0f words (%.1f KB): %.0f TRIS with %.0f verts and %.0f tris, "
+	       "%.0f STATE, %.0f TEXTURE, %.0f DEPTH and DEPTHRANGE\n",
+	       what, c->words * per, cbytes * per / 1024.0, c->tris_cmds * per, c->sent_verts * per,
+	       c->sent_tris * per, c->state_cmds * per, c->texture_cmds * per, c->other_cmds * per);
+	printf("%s: PB link %.0f KB/s at this rate: commands %.0f KB/s (vertices %.0f), "
+	       "texture updates %.0f KB/s\n",
+	       what, (crate + lrate) / 1024.0, crate / 1024.0,
+	       seconds > 0 ? c->vertex_words * 2.0 / seconds / 1024.0 : 0.0, lrate / 1024.0);
+	printf("%s: culled %u primitives, cut %u into %u fans, split %u, dropped %u commands, "
+	       "biggest frame %u words\n",
+	       what, (unsigned)c->culled, (unsigned)c->clipped, (unsigned)c->clip_tris,
+	       (unsigned)c->split, (unsigned)c->dropped, (unsigned)c->max_frame_words);
+	printf("%s: lightmap updates %u, %u bytes (GLQuake made %u)\n",
+	       what, (unsigned)c->sub_uploads, (unsigned)c->sub_bytes, (unsigned)c->sub_calls);
+	printf("%s: at load, textures %u uploads %u bytes (%u as RGBA), sent once\n",
+	       what, (unsigned)load_uploads, (unsigned)load_bytes, (unsigned)load_rgba);
+	/* A texture made inside the window is one Quake's cache let go and
+	 * loaded again, which a tight hunk costs: link traffic too. */
 	printf("%s: during the run, textures %u uploads %u bytes (reloaded)\n",
-	       what, (unsigned)nullgl_total.tex_uploads, (unsigned)nullgl_total.tex_bytes);
+	       what, (unsigned)c->tex_uploads, (unsigned)c->tex_bytes);
 	printf("%s: totals %u tris %u verts %u lightmap bytes %u texture bytes\n", what,
-	       (unsigned)nullgl_total.tris, (unsigned)nullgl_total.verts,
-	       (unsigned)nullgl_total.sub_bytes, (unsigned)nullgl_total.tex_bytes);
-	printf("%s: checksum %.0f\n", what, (double)nullgl_checksum());
+	       (unsigned)c->tris, (unsigned)c->verts, (unsigned)c->sub_bytes, (unsigned)c->tex_bytes);
+	printf("%s: sent totals %u words %u verts %u tris\n", what,
+	       (unsigned)c->words, (unsigned)c->sent_verts, (unsigned)c->sent_tris);
+	printf("%s: checksum %u\n", what, (unsigned)pbgl_checksum());
 }
 
 static void run_timedemo(struct qbench_run *run, double (*clock)(void))

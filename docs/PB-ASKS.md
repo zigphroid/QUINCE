@@ -17,7 +17,7 @@ game, the BSP walk and the transforms.
 
 | Ask | Size | Where the number comes from |
 | --- | --- | --- |
-| Textured triangles in screen space, PB does the setup | 2,100 triangles and 3,950 vertices a frame (demo1), 790 primitives | M1 counts, `lib/nullgl.c` |
+| Textured triangles in screen space, PB does the setup | 2,100 triangles and 3,950 vertices a frame (demo1), 790 primitives | M1's counts, from its null GL |
 | Fans, strips and lists, vertices shared within one | about 1.9 vertices a triangle today | M1: 3,950 / 2,100 |
 | A compact vertex: 16 bytes for a world vertex | 4 MB/s at 60 fps (2.8 with two textures a pixel), against 6.5 MB/s at today's 28 bytes | "Link and memory", below |
 | Two textures a pixel: wall times lightmap | one pass over the world instead of two | GLQuake's `gl_mtexable` path, `gl_rsurf.c` |
@@ -36,7 +36,7 @@ trade Jam time for PB gateware.
 ## What GLQuake really uses
 
 About 45 GL entry points, and a small part of each. Our GL layer (M1's
-null GL grown up, `lib/`) takes them as Quake calls them, so `quake/`
+null GL grown up, `lib/pbgl.c`) takes them as Quake calls them, so `quake/`
 needs no changes for this; what reaches PB is far smaller. Counts are
 call sites in `quake/gl_*.c`.
 
@@ -85,8 +85,8 @@ Why A first:
 
 Only triangles that cross the near plane need clipping, since PB cuts
 spans to the surface (a guard band, as its fills do). That should keep
-the Jam's clipping to a few triangles a frame (inferred: M1's null GL
-doesn't clip).
+the Jam's clipping to a few triangles a frame (M2 measured it: about 4
+primitives a frame in demo1 on the PC, LOG 2026-11-12 "M2 PR 2").
 
 ## Commands and transfer
 
@@ -125,7 +125,7 @@ them. They are QUINCE's proposal, for pectinos to take over or reshape.
 | colour | 0, 2 or 4 | none (the world), a grey level in a word (models: Quake lights them in grey), or RGBA (particles, the screen tint) |
 
 A world vertex is 16 bytes, a model vertex 14, a HUD vertex 8 (no q).
-M1's guess in `lib/nullgl.h` is 28.
+M1's guess was 28.
 
 **What the kernel checks.** For drawn mode `pbdrawq_check` reads every
 word. For `TRIS` it needs only the command word and the count: PB cuts
@@ -224,10 +224,15 @@ can hold it back is flow control.
 | M1 as measured (two passes, the 28-byte guess) | 3,950 | 28 | 108 | 3.6 | 6.5 |
 | The compact vertex, two passes | 3,950 | 16 | 66 (3 KB of headers) | 2.2 | 4.0 |
 | The compact vertex, two textures a pixel | about 2,750 (inferred) | 16 | 47 | 1.6 | 2.8 |
+| M2 as measured on the PC: one pass, cut and culled, every command | 2,412 | 12.7 on average | 32 | 1.1 | 1.9 |
 
-The last row assumes the world is about 60% of the vertices and the
-lightmap pass sends it twice (inferred; our GL layer can count it). Load
-is about 2.5 MB of texture indices, well under a second.
+The third row assumed the world is about 60% of the vertices and the
+lightmap pass sends it twice (inferred). The last is what the GL layer
+sends (M2 PR 2, LOG 2026-11-12): demo1 on the PC, whose frames follow the
+PC's clock, so the board's will differ a little. A vertex averages 12.7
+bytes because the HUD's and the models' are smaller than the world's,
+and the primitives off the screen (about 240 a frame) aren't sent. Load
+is 2.6 MB of texture indices, well under a second.
 
 **Flow control is the catch.** Drawn mode reads `taken` over I2C (about
 0.6 ms at 100 kHz) and sends only what fits PB's queue, 7,144 words (14
