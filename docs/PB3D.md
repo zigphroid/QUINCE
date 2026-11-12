@@ -130,14 +130,17 @@ are opaque). Levels are made from the level above as stored, so PB can
 build them in place. A load into any rectangle of level 0 makes all the
 mips again.
 
-**The mip level (Jacob: one per triangle).** This is the largest l such
-that the triangle's texel area is at least 4^l times its pixel area. The
-texel area is the edge function over s, t, and for unit 1 it is compared
-with 16 times the pixel area, because 10.6 is finer. The level is held to
-the texture's last level, and is 0 unless the unit's `MIPMAP` is set. The
-cost of choosing per triangle: a long wall gets one level from end to end,
-so its far end shimmers where per-pixel levels wouldn't. Software Quake
-had the same per surface.
+**The mip level (Jacob: one per triangle, rounded).** This is the
+largest l such that twice the triangle's texel area is at least 4^l times
+its pixel area: log4 of the texels a pixel, rounded, half way going up.
+The texel area is the edge function over s, t, and for unit 1 it is
+compared with 16 times the pixel area, because 10.6 is finer. The level is
+held to the texture's last level, and is 0 unless the unit's `MIPMAP` is
+set. Rounded down, as it first was, a far floor read up to 2 texels a
+pixel and shimmered. A level a pixel was weighed and isn't asked for: on
+demo1, Quake's faces are too small for one level to be wrong across
+them, and rounding took off as much shimmer as GL's per-pixel rule
+(LOG 2026-11-12, the mip study; `tests/pbplay.c -lod`).
 
 **Reading** at level l: s and t are shifted down l places (floor), then:
 - **Nearest:** the texel floor(s), floor(t).

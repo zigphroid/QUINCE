@@ -584,3 +584,32 @@ primitive, more SRAM), and sending each lightmap update as it comes
   0.40 blended, against PB-ASKS's guess of overdraw 2 and 20% blended.
   The budget there is redone with them: about 160 MB/s at 30 fps and 285
   at 60, from 190 and 350.
+
+## 2026-11-12: the mip level rounds, per triangle (the mip study)
+
+- **Decided (Jacob):** PB keeps one mip level a triangle, but rounds log4
+  of the texels a pixel instead of rounding it down: `pick_level`
+  compares twice the texel area. No per-pixel level, no trilinear.
+- **Measured** by the C model on three 40-frame walks of demo1 (frames
+  200-240, 490-530, 900-940), against the same frames drawn 4x4 times
+  larger with an exact, trilinear level and averaged down. Far flicker
+  (frame-to-frame change the reference lacks, past about 256 units):
+  rounded down 3.00, rounded 2.78, per pixel from q 2.98, GL's exact
+  per-pixel rule 2.79, exact trilinear 2.95, bilinear walls 2.59 (but
+  error near 1.93 against 1.27: Quake's look changes). Per pixel from q
+  moved 1.1% of reads off the triangle's level: Quake's faces are at most
+  about 256 texels across, so q varies too little inside one. GL's rule
+  helped only by choosing blurrier levels, which rounding does too.
+- **Cost** (an 8 KB direct-mapped cache of 32-byte lines standing in for
+  PB's, a frame): rounded down 373 KB of misses, rounded 322, exact 313,
+  trilinear 513, bilinear walls 533. Rounding costs PB nothing a pixel;
+  the per-pixel rules need a log2 and the gradients in the pixel
+  pipeline, more DSP, which is PB's biggest risk.
+- **Alternatives:** per pixel from q (an add and a shift on log2 q):
+  buys nothing here. GL's exact rule: the same as rounding, for gradient
+  arithmetic every pixel. Trilinear (a Voodoo 2's): worse here, and a
+  second texel a pixel. Caveat: one demo, a dark one. The write-up is the
+  project doc "Mip choice on PB: per triangle or per pixel".
+- The study's switches stay in the model (`struct pbm_study`, all zeros
+  is the rule) and `tests/pbplay.c` (`-lod`, `-bias`, `-linear`,
+  `-scale`, `-raw`), so a later question can be measured the same way.

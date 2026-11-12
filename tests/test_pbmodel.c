@@ -689,15 +689,22 @@ static void mips(void)
     }
     pbm_texture_load(&m, 3, 0, 0, 4, 4, lv0);
 
-    // The level by area: 8x8 texels on 4x4 pixels is 4 texels a pixel,
-    // level 1; on 5x5 pixels, 2.56, level 0.
+    // The level by area, log4 of the texels a pixel rounded: 8x8 texels
+    // on 4x4 pixels is 4 texels a pixel, level 1; on 8x4, 2, which is
+    // half way and rounds up to level 1; a sixteenth of a texel less
+    // rounds down to level 0; on 6x6, 1.78, level 0.
     s.tex0 = 1;
     pbm_set_state(&m, &s);
     bind(0, 3, 0, 0, 1);
     rect(0, 0, 4, 4, 1, 0, 0, 8, 8);
     check("4 texels a pixel: level 1", colour[0], pbm_565(100, 100, 100));
-    rect(8, 8, 13, 13, 1, 0, 0, 8, 8);
-    check("2.56 a pixel: level 0", colour[8 * 16 + 8] == pbm_565(0, 0, 0) ||
+    rect(8, 0, 16, 4, 1, 0, 0, 8, 8);
+    check("2 a pixel, half way: level 1", colour[8], pbm_565(100, 100, 100));
+    rect(8, 4, 16, 8, 1, 0, 0, 8, 127 / 16.0);
+    check("just under 2: level 0", colour[4 * 16 + 8] == pbm_565(0, 0, 0) ||
+                                   colour[4 * 16 + 8] == pbm_565(200, 200, 200), 1);
+    rect(8, 8, 14, 14, 1, 0, 0, 8, 8);
+    check("1.78 a pixel: level 0", colour[8 * 16 + 8] == pbm_565(0, 0, 0) ||
                                    colour[8 * 16 + 8] == pbm_565(200, 200, 200), 1);
     bind(0, 3, 0, 0, 0);
     rect(0, 0, 4, 4, 1, 0, 0, 8, 8);
@@ -1238,7 +1245,7 @@ static void scene(const char *png)
     crc = png_crc32(0, (const uint8_t *)colour, sizeof *colour * 640u * 480u);
     // Change this only on purpose, with the picture looked at: it holds
     // the rules together (docs/PB3D.md, "Changing the rules").
-    check("the scene's CRC", (long)crc, (long)0xd8cd7614u);
+    check("the scene's CRC", (long)crc, (long)0xb6fe76e8u);
     printf("test_pbmodel: scene %08x, %u triangles, %u culled, %u pixels covered, %u drawn (%s)\n",
            crc, m.counts.tris, m.counts.culled, m.counts.covered, m.counts.drawn,
            png ? png : "no picture");

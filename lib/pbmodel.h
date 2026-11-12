@@ -81,6 +81,27 @@ struct pbm_counts {
 	uint32_t blended;     /* of those, read the picture first */
 };
 
+/* The mip study (LOG 2026-11-12): how a pixel's level is chosen, for
+ * tests/pbplay.c to compare. PBM_LOD_TRI is the rule (docs/PB3D.md's
+ * "The mip level"); the others are what PB was weighed against and isn't
+ * asked for. Their numbers are doubles, not rules; all zeros is the rule. */
+enum {
+	PBM_LOD_TRI,        /* one level a triangle, from its areas (the rule) */
+	PBM_LOD_Q,          /* a level a pixel, from the areas and q there */
+	PBM_LOD_EXACT,      /* a level a pixel, from the s and t gradients (GL's) */
+	PBM_LOD_TRILINEAR   /* as EXACT, the two levels round it blended */
+};
+struct pbm_study {
+	int lod;            /* PBM_LOD_* */
+	int scale;          /* 0 or 1: as sent; N: positions times N (supersampling) */
+	int bias;           /* half levels added to every choice: -1 rounds down */
+	int linear0;        /* unit 0 read bilinear whatever its bind says */
+	void (*texel)(void *ctx, uint32_t pool_index);   /* each texel read */
+	void *ctx;
+	uint64_t level_moved;   /* pixel reads whose level isn't the triangle's */
+	uint64_t mip_reads;     /* pixel reads of a mipmapped texture */
+};
+
 struct pbm {
 	uint16_t *colour, *depth;   /* w x h each, rows from the top */
 	int w, h;
@@ -93,6 +114,7 @@ struct pbm {
 	uint32_t depth_near, depth_far;
 	int clip[4];                /* x0, y0, x1, y1: the pixels drawn */
 	struct pbm_counts counts;
+	struct pbm_study study;
 };
 
 /* Errors the calls return: 0 is done. */
