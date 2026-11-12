@@ -91,8 +91,16 @@ CANNER_FLAGS ?=
 QUINCE_JAM ?= $(BUILD)/$(NAME).JAM
 
 .PHONY: FORCE all app heat gcc test quake-host test-quake test-builtins sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
-all: app
+all: app $(BUILD)/pbmodel.jo
 app: $(BUILD)/$(NAME).JAM
+
+# The triangle engine's C model isn't in the .JAM (PB draws, not the
+# Jam), but it keeps to CANNER's subset like all of lib/, so pectinos can
+# take it into its own tools: CANNER compiles it alone, an object no one
+# links.
+$(BUILD)/pbmodel.jo: lib/pbmodel.c lib/pbmodel.h $(CANNER) Makefile
+	@mkdir -p $(BUILD)
+	$(CANNER) -I lib -I $(SDK) -c -o $@ lib/pbmodel.c
 
 # pectinos's own rules decide whether its tools are current, so a checkout
 # moved to a new pin rebuilds them before they build QUINCE. FORCE only
@@ -125,8 +133,10 @@ page-check:
 # runs on the board; host-only ones go in tests/.
 HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
             -fno-omit-frame-pointer
-test: $(BUILD)/test_quince test-quake test-builtins
+test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins
 	$(BUILD)/test_quince
+	@mkdir -p $(BUILD)/pbmodel
+	$(BUILD)/test_pbmodel $(BUILD)/pbmodel/scene.png
 
 # quince/libc/math.h's FPU built-ins (M3, LOG 2026-11-12): CANNER compiles
 # tests/fpu_builtins.c through it, with the SDK's math.c beside it as in
@@ -146,6 +156,13 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	@mkdir -p $(BUILD)
 	$(HOSTCC) -std=c11 -g -O1 -Wall -Wextra -Werror -I lib $(HOST_SAN) \
 	    -o $@ tests/test_quince.c $(CORE) -lm
+
+# The triangle engine's C model (lib/pbmodel.c, docs/PB3D.md) held to its
+# rules, and a scene drawn with all of them: build/pbmodel/scene.png.
+$(BUILD)/test_pbmodel: tests/test_pbmodel.c tests/png.c tests/png.h lib/pbmodel.c lib/pbmodel.h Makefile
+	@mkdir -p $(BUILD)
+	$(HOSTCC) -std=c11 -g -O1 -Wall -Wextra -Werror -I lib $(HOST_SAN) \
+	    -o $@ tests/test_pbmodel.c tests/png.c lib/pbmodel.c -lm
 
 # Quake on the PC (M1): id's files in quake/ (as GLQuake builds them, with
 # the GL renderer and the null sound, CD and input), QUINCE's null GL,

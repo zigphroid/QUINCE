@@ -181,13 +181,16 @@ you only for what needs a person.
 | `lib/nullgl.c`, `lib/GL/` | the null GL under GLQuake's renderer: it transforms and counts, and draws nothing |
 | `lib/qbench.c`, `lib/qbargs.c` | the two benchmarks, and their words |
 | `lib/selftest.c` | the checks, run by `make test` and by `QUINCE /SELFTEST` |
+| `lib/pbmodel.c` | the C model of PB's triangle engine, the spec its gateware is held to (`docs/PB3D.md`); not in the .JAM |
 | `tests/` | the host test's runner, and host-only checks |
+| `tests/test_pbmodel.c`, `tests/png.c` | the model held to its rules, and a scene it draws: `build/pbmodel/scene.png` |
 | `tests/sys_host.c`, `tests/test_quake.py` | `make test-quake`: Quake on the PC (32-bit, `-m32`), against `QUINCE_PAK` |
 | `tests/fpu_builtins.c` | `make test-builtins`: `math.h`'s `sqrtf` and the rest are FPU instructions under CANNER |
 | `tools/simsmoke.py` | `make sim-smoke`: SIMMER, driven by pectinos's `simdrive.py` |
 | `tools/simbench.py` | `make sim-bench`: the benchmarks on SIMMER, against `QUINCE_PAK` |
 | `tools/PICKJAM.BAT` | the board's side of `make dist`, copied into `dist/` |
 | `dist/` | `make dist`'s output, committed: what the board's `PICKJAM` fetches |
+| `docs/PB-ASKS.md`, `docs/PB3D.md` | what Quake asks of PB, and the rules PB draws a triangle by |
 | `docs/ROADMAP.md`, `docs/LOG.md` | the milestones, and the decisions with their reasons |
 | `.claude/` | the hooks (setup, and `make test` before a turn ends), the skills |
 | `PECTIN_REV` | the pectinos commit this builds against |
