@@ -4,15 +4,20 @@
 Our own code (M2 PR 2). A second reader of the format, written apart from
 the C that writes it, so a mistake in one shows as a disagreement:
 
-    tests/pbcheck.py FILE [--frames N]
+    tests/pbcheck.py FILE [--last N]
 
 Checks every record: the magic and version, each record's length, the
 palette before any texture, each texture's size (powers of two up to
 1,024) and its texels' bytes, each update inside a texture already made,
 and each frame's words as whole commands: a known command, an argument
 with no stray bits, a TRIS cut short by nothing, a texture bound that was
-made, a CLIP on the 640x480 surface. Prints a line of totals, and the
-biggest frame; exits 1 on the first thing wrong, saying what and where.
+made, a CLIP on the 640x480 surface, a DEPTHRANGE with far at or above
+near, and a TRIS whose vertices carry the coordinates of each unit
+STATE has on. Prints a line of totals, and the
+biggest frame; with --last N, a second line of the last N frames' words,
+vertices and triangles, which are the timed window's, to hold against the
+layer's own "sent totals" for the same run. Exits 1 on the first thing
+wrong, saying what and where.
 """
 import struct
 import sys
@@ -41,9 +46,14 @@ class Bad(Exception):
     pass
 
 
+TEX0, TEX1 = 0x0080, 0x0100      # STATE's units
+F_ST, F_ST2 = 0x08, 0x10          # TRIS's format bits for their coordinates
+
+
 def check_frame(words, made, where):
     """The frame's commands, one by one. Returns (commands, vertices, tris)."""
     i, cmds, verts, tris = 0, 0, 0, 0
+    state = 0   # a frame starts with every STATE bit 0
     while i < len(words):
         w = words[i]
         op, arg = w >> 8, w & 0xff
@@ -56,6 +66,7 @@ def check_frame(words, made, where):
                 raise Bad("%s word %d: a bad STATE" % (where, i))
             if words[i + 1] & 0x0003 == 3:
                 raise Bad("%s word %d: STATE's depth test 3" % (where, i))
+            state = words[i + 1]
             n = 2
         elif op == TEXTURE:
             if arg > 1 or i + 2 >= len(words) or words[i + 2] & ~0x000f:
@@ -67,6 +78,9 @@ def check_frame(words, made, where):
         elif op == DEPTHRANGE:
             if arg or i + 2 >= len(words):
                 raise Bad("%s word %d: a bad DEPTHRANGE" % (where, i))
+            if words[i + 2] < words[i + 1]:
+                raise Bad("%s word %d: DEPTHRANGE's far %#x below its near %#x"
+                          % (where, i, words[i + 2], words[i + 1]))
             n = 3
         elif op == CLIP:
             if arg or i + 4 >= len(words):
@@ -80,6 +94,12 @@ def check_frame(words, made, where):
             kind, fmt = arg & 3, arg & 0x7c
             if arg & 0x80 or kind == 3 or arg & 0x60 == 0x60 or i + 1 >= len(words):
                 raise Bad("%s word %d: TRIS argument %#x" % (where, i, arg))
+            # A unit that is on reads its coordinates from every vertex
+            # (pbgl sends them whenever it is: choose_format).
+            if state & TEX0 and not fmt & F_ST:
+                raise Bad("%s word %d: TRIS without s, t while TEX0 is on" % (where, i))
+            if state & TEX1 and not fmt & F_ST2:
+                raise Bad("%s word %d: TRIS without s2, t2 while TEX1 is on" % (where, i))
             nv = words[i + 1]
             if nv < 3:
                 raise Bad("%s word %d: TRIS of %d vertices" % (where, i, nv))
@@ -106,6 +126,8 @@ def check_frame(words, made, where):
 
 def main():
     path = sys.argv[1]
+    last = int(sys.argv[3]) if len(sys.argv) > 3 and sys.argv[2] == "--last" else 0
+    per_frame = []
     data = open(path, "rb").read()
     if len(data) < 8 or struct.unpack_from("<II", data, 0) != (MAGIC, VERSION):
         raise Bad("%s: not a version %d dump" % (path, VERSION))
@@ -152,6 +174,7 @@ def main():
             fw = struct.unpack_from("<%dH" % (length // 2), body, 0)
             c, v, t = check_frame(fw, made, "frame %d" % frames)
             cmds, verts, tris, words = cmds + c, verts + v, tris + t, words + len(fw)
+            per_frame.append((len(fw), v, t))
             if len(fw) > biggest[0]:
                 biggest = (len(fw), frames)
             frames += 1
@@ -163,6 +186,11 @@ def main():
     print("pbcheck: %d frames, %d words, %d commands, %d vertices, %d triangles, "
           "%d textures (%d bytes), %d bytes of updates; biggest frame %d words (frame %d)"
           % (frames, words, cmds, verts, tris, len(made), texbytes, subs, biggest[0], biggest[1]))
+    if last:
+        tail = per_frame[-last:]
+        print("pbcheck: the last %d frames: %d words, %d vertices, %d triangles"
+              % (len(tail), sum(f[0] for f in tail), sum(f[1] for f in tail),
+                 sum(f[2] for f in tail)))
     return 0
 
 

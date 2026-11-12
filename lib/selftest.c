@@ -1099,10 +1099,103 @@ static void gl_split(void)
     }
 }
 
+// Each vertex of the kept frame's TRIS number k has the colour words a
+// red-or-other RGBA colour makes (r | g << 8, b | a << 8): 1 if every one
+// does, 0 if not, -1 if there's no such TRIS or it carries no RGBA.
+static long gl_tris_all(uint32_t k, const unsigned char *c)
+{
+    long at = gl_find_tris(k);
+    uint32_t f, vw, n;
+    if (at < 0)
+        return -1;
+    f = PB3D_ARG(gl_frame[at]) & PB3D_FORMAT_MASK;
+    if ((f & PB3D_F_COLOUR_MASK) != PB3D_F_RGBA)
+        return -1;
+    vw = PB3D_VERTEX_WORDS(f);
+    n = gl_frame[at + 1];
+    for (uint32_t i = 0; i < n; i++) {
+        const uint16_t *v = gl_frame + at + 2 + i * vw + vw - 2;
+        if (v[0] != (uint16_t)(c[0] | c[1] << 8) || v[1] != (uint16_t)(c[2] | c[3] << 8))
+            return 0;
+    }
+    return 1;
+}
+
+// GL 1.1's flat colour (section 2.13.7, #24): a polygon's first
+// vertex's, a quad's fourth's, a cut triangle's last's; and the layer's
+// counters for what it drops (#24, #7).
+static void gl_flat(void)
+{
+    static const unsigned char red[4] = { 255, 0, 0, 255 }, green[4] = { 0, 255, 0, 255 },
+        blue[4] = { 0, 0, 255, 255 }, grey[4] = { 9, 9, 9, 255 };
+    gl_start(1024);
+    ortho();
+    glShadeModel(GL_FLAT);
+    glBegin(GL_POLYGON);
+    glColor4ubv(red); glVertex2f(10, 10);
+    glColor4ubv(green); glVertex2f(50, 10);
+    glColor4ubv(blue); glVertex2f(50, 50);
+    glColor4ubv(grey); glVertex2f(10, 50);
+    glEnd();
+    glBegin(GL_QUADS);
+    glColor4ubv(red); glVertex2f(10, 10);
+    glColor4ubv(green); glVertex2f(50, 10);
+    glColor4ubv(grey); glVertex2f(50, 50);
+    glColor4ubv(blue); glVertex2f(10, 50);
+    glEnd();
+    // Past the guard band on the right (2,040 pixels), so it is cut.
+    glBegin(GL_TRIANGLES);
+    glColor4ubv(red); glVertex2f(100, 100);
+    glColor4ubv(green); glVertex2f(3000, 100);
+    glColor4ubv(blue); glVertex2f(100, 200);
+    glEnd();
+    pbgl_end_frame();
+    check_num("flat: a polygon's every vertex takes its first's", gl_tris_all(0, red), 1);
+    check_num("flat: a quad's, its fourth's", gl_tris_all(1, blue), 1);
+    check_num("flat: a cut triangle's fan, its last's", gl_tris_all(2, blue), 1);
+    check_num("which was cut", (long)pbgl_total.clipped, 1);
+    glShadeModel(GL_SMOOTH);
+    glBegin(GL_POLYGON);
+    glColor4ubv(red); glVertex2f(10, 10);
+    glColor4ubv(green); glVertex2f(50, 10);
+    glColor4ubv(blue); glVertex2f(50, 50);
+    glEnd();
+    pbgl_end_frame();
+    check_num("smooth: each vertex its own", gl_tris_all(0, red), 0);
+
+    // A primitive whose only crossing triangle is wholly off the screen
+    // sends no fan, so it isn't counted as clipped.
+    gl_start(1024);
+    ortho();
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(10, 0); glVertex2f(0, 10);
+    glVertex3f(700, 0, 2); glVertex3f(720, 0, 0); glVertex3f(700, 10, 0);
+    glEnd();
+    pbgl_end_frame();
+    check_num("a cut that sends no fan isn't counted", (long)pbgl_total.clipped, 0);
+    check_num("and its inside triangle still goes", (long)pbgl_total.sent_tris, 1);
+
+    // A texture named past the table isn't sent; a push past the matrix
+    // stack is dropped. Both are counted.
+    static const uint8_t px[4] = { 1, 2, 3, 4 };
+    gl_start(1024);
+    uint32_t seq = gl_tex_seq;
+    glBindTexture(GL_TEXTURE_2D, 16);   // the table holds 0 to 15
+    pbgl_upload8(px, 2, 2, 0, 0, 256);
+    check_num("a texture past the table isn't sent", (long)(gl_tex_seq == seq), 1);
+    check_num("and is counted", (long)pbgl_total.ignored, 1);
+    glMatrixMode(GL_MODELVIEW);
+    for (int i = 0; i < 8; i++)
+        glPushMatrix();
+    check_num("a push past the stack's 8 is counted", (long)pbgl_total.ignored, 2);
+    for (int i = 0; i < 7; i++)
+        glPopMatrix();
+}
+
 static void (*const checks[])(void) = { greeting, bench_words, pb3d_fixed, pb3d_commands,
                                          gl_screen, gl_prims, gl_clip, gl_state, gl_viewport,
                                          gl_textures_check, gl_full, gl_full_cut, gl_cuts,
-                                         gl_guard, gl_subs, gl_split };
+                                         gl_guard, gl_subs, gl_split, gl_flat };
 
 int quince_selftest(void (*fail)(const char *what, const char *got, const char *want),
                     int *count)
