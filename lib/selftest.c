@@ -604,6 +604,19 @@ static void gl_textures_check(void)
         same &= gl_tex[i] == four_by_two[i];
     check_num("its texels, point sampled as id's GL_ResampleTexture", same, 1);
     check_num("mipmapped, no alpha", (long)gl_tex_flags, PB3D_TEXF_MIPMAP);
+    // Rows too: 3 x 3 to 4 x 4 takes rows 0, 0, 1 and 2, as columns
+    // 0, 1, 1 and 2 (#24: 3 x 2 to 4 x 2 keeps every row, so a resample
+    // that ignored the row step passed it).
+    // A fourth row past the texture, so a resample that took rows 0 to 3
+    // reads 10s there and fails on its values rather than off the end.
+    static const uint8_t three_by_three[] = { 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 10, 10 };
+    static const uint8_t four_by_four[] = { 1, 2, 2, 3, 1, 2, 2, 3, 4, 5, 5, 6, 7, 8, 8, 9 };
+    pbgl_upload8(three_by_three, 3, 3, 0, 0, 256);
+    check_num("3 x 3 to 4 x 4", (long)(gl_tex_w * 100 + gl_tex_h), 404);
+    same = 1;
+    for (int i = 0; i < 16; i++)
+        same &= gl_tex[i] == four_by_four[i];
+    check_num("its rows, the nearest one down", same, 1);
     static const uint8_t see[] = { 0, 255, 7, 9 };
     pbgl_upload8(see, 2, 2, 0, 1, 256);
     check_num("index 255 with alpha: see-through", (long)gl_tex_flags, PB3D_TEXF_ALPHA);
@@ -621,6 +634,11 @@ static void gl_textures_check(void)
     static const uint8_t dot[] = { 255, 255, 255, 200, 1, 2, 3, 255 };
     glTexImage2D(GL_TEXTURE_2D, 0, 4, 2, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, dot);
     check_num("not palette colours: RGBA", (long)gl_tex_format, PB3D_TEX_RGBA8888);
+    // Opaque white is index 255's colour in this palette, but 255 is the
+    // see-through index, so white can't go as an index (#24).
+    static const uint8_t white[] = { 255, 255, 255, 255, 9, 9, 9, 255 };
+    glTexImage2D(GL_TEXTURE_2D, 0, 4, 2, 1, 0, GL_RGBA, GL_UNSIGNED_BYTE, white);
+    check_num("index 255's colour, opaque: RGBA", (long)gl_tex_format, PB3D_TEX_RGBA8888);
 
     // A world polygon: s, t scaled to the texture's texels with whole
     // textures taken off; the lightmap's by its own size.
@@ -855,6 +873,10 @@ static void gl_guard(void)
     // A viewport past the guard band (none GLQuake makes): x 2,050 is on
     // its screen and still outside the guard, so every test is made.
     gl_guard_at("a viewport at 1,800", 1800, 0, 640, 480, 1900, 240);
+    // And one whose right guard factor is between 0.5 and 1
+    // ((2,040 - 1,820) / 320, about 0.69): the screen's planes alone
+    // would pass x 2,050, so guard_wider must be off for it (#34).
+    gl_guard_at("a viewport at 1,500", 1500, 0, 640, 480, 1820, 240);
 }
 
 static void gl_subs(void)

@@ -29,7 +29,7 @@ SERVER_CHECKSUM = 3500115068   # of every word: the same commands, word for word
 # Where those frames leave the game, as the PC's (tests/test_quake.py):
 # since M3 the PC rounds floats as the M33 does, so these match exactly
 # too, and a difference is a bug in one build (LOG 2026-11-12).
-SERVER_STATE = "c8c17318, 164 entities"
+SERVER_STATE = "c8c17318, bits 1de00068, 164 entities"
 
 
 def main():

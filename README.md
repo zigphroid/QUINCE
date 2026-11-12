@@ -8,7 +8,8 @@ pectinos checkout at the commit `PECTIN_REV` names.
 
 ```sh
 make            # build/QUINCE.JAM (CANNER)
-make test       # the host suite, under the sanitizers
+make test       # the host suite, under the sanitizers, and the heat
+                # and GCC builds built
 make test-quake QUINCE_PAK=path/to/id1/pak0.pak
                 # Quake on the PC (32-bit: gcc-multilib), in make test too,
                 # its e1m1 frames drawn by PB's C model and held to CRCs

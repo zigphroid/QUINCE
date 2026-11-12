@@ -126,7 +126,9 @@ touches:
    the rounding functions are FPU instructions, not calls, and `make
    test-float` that the functions in `tests/float_hot.txt` call no more
    double code than it allows. A new `QUINCE:` float edit to a hot
-   function goes on that list.
+   function goes on that list. `make test-builds` builds `make heat`
+   and `make gcc` (GCC's skips without `arm-none-eabi-gcc`), without
+   running them.
 2. **`make sim-smoke`**: SIMMER, PectinOS in QEMU, with no window. It runs
    `/SELFTEST` on CANNER's code, then the program, then reads its screen
    back as text. The `simmer` skill has the recipes. `make sim-bench
