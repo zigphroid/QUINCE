@@ -25,6 +25,7 @@ double atan(double x);
 double atan2(double y, double x);
 double asin(double x);
 double pow(double x, double y);
+double fmod(double x, double y);
 float sqrtf(float x);
 float fabsf(float x);
 float floorf(float x);

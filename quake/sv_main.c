@@ -474,7 +474,9 @@ void SV_WriteEntitiesToClient (edict_t	*clent, sizebuf_t *msg)
 		for (i=0 ; i<3 ; i++)
 		{
 			miss = ent->v.origin[i] - ent->baseline.origin[i];
-			if ( miss < -0.1 || miss > 0.1 )
+			// QUINCE: float constants (M3, docs/LOG.md 2026-11-12): two
+			// softfp compares an axis, for every entity sent, each frame.
+			if ( miss < -0.1f || miss > 0.1f )
 				bits |= U_ORIGIN1<<i;
 		}
 

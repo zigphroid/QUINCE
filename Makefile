@@ -90,7 +90,7 @@ CANNER_FLAGS ?=
 # or build/heat/ or build/gcc/'s (below).
 QUINCE_JAM ?= $(BUILD)/$(NAME).JAM
 
-.PHONY: FORCE all app heat gcc test quake-host test-quake test-builtins sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
+.PHONY: FORCE all app heat gcc test quake-host test-quake test-builtins test-float sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
 all: app
 app: $(BUILD)/$(NAME).JAM
 
@@ -125,8 +125,19 @@ page-check:
 # runs on the board; host-only ones go in tests/.
 HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
             -fno-omit-frame-pointer
-test: $(BUILD)/test_quince test-quake test-builtins
+test: $(BUILD)/test_quince test-quake test-builtins test-float
 	$(BUILD)/test_quince
+
+# Quake's hot functions stay float (M3 PR 2, LOG 2026-11-12): CANNER writes
+# the whole program as assembly, and tools/floatcheck.py fails if a
+# function tests/float_hot.txt names calls softfp's double helpers or a
+# double math.h function more often than the list allows.
+test-float: $(SRC) $(CORE) $(QUAKE_BOARD) $(wildcard lib/*.h quake/*.h quince/libc/*.h) \
+            tests/float_hot.txt tools/floatcheck.py $(CANNER) Makefile
+	@mkdir -p $(BUILD)
+	$(CANNER) $(QUAKE_INC) -I $(SDK) -I lib $(CANNER_FLAGS) -S \
+	    $(SRC) $(CORE) $(QUAKE_BOARD) $(LIB) $(SDKLIB) > $(BUILD)/quince.s
+	$(PYTHON) tools/floatcheck.py $(BUILD)/quince.s tests/float_hot.txt
 
 # quince/libc/math.h's FPU built-ins (M3, LOG 2026-11-12): CANNER compiles
 # tests/fpu_builtins.c through it, with the SDK's math.c beside it as in

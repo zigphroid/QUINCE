@@ -455,6 +455,7 @@ void R_DrawAliasModel (entity_t *e)
 	trivertx_t	*verts, *v;
 	int			index;
 	float		s, t, an;
+	float		now;	// QUINCE: below
 	int			anim;
 
 	clmodel = currententity->model;
@@ -479,9 +480,13 @@ void R_DrawAliasModel (entity_t *e)
 	if (e == &cl.viewent && ambientlight < 24)
 		ambientlight = shadelight = 24;
 
+	// QUINCE: float, not double (M3, docs/LOG.md 2026-11-12): the clock
+	// as a float once, against each light's float die, where every light
+	// was a softfp compare.
+	now = cl.time;
 	for (lnum=0 ; lnum<MAX_DLIGHTS ; lnum++)
 	{
-		if (cl_dlights[lnum].die >= cl.time)
+		if (cl_dlights[lnum].die >= now)
 		{
 			VectorSubtract (currententity->origin,
 							cl_dlights[lnum].origin,
@@ -513,12 +518,13 @@ void R_DrawAliasModel (entity_t *e)
 		|| !strcmp (clmodel->name, "progs/flame.mdl") )
 		ambientlight = shadelight = 256;
 
-	shadedots = r_avertexnormal_dots[((int)(e->angles[1] * (SHADEDOT_QUANT / 360.0))) & (SHADEDOT_QUANT - 1)];
-	shadelight = shadelight / 200.0;
+	// QUINCE: float constants, sinf and cosf (M3).
+	shadedots = r_avertexnormal_dots[((int)(e->angles[1] * (SHADEDOT_QUANT / 360.0f))) & (SHADEDOT_QUANT - 1)];
+	shadelight = shadelight / 200.0f;
 	
-	an = e->angles[1]/180*M_PI;
-	shadevector[0] = cos(-an);
-	shadevector[1] = sin(-an);
+	an = e->angles[1]/180*(float)M_PI;
+	shadevector[0] = cosf(-an);
+	shadevector[1] = sinf(-an);
 	shadevector[2] = 1;
 	VectorNormalize (shadevector);
 

@@ -129,7 +129,9 @@ void SV_UserFriction (void)
 	
 	vel = velocity;
 	
-	speed = sqrt(vel[0]*vel[0] +vel[1]*vel[1]);
+	// QUINCE: sqrtf, the same bits as sqrt of a float (M3, docs/LOG.md
+	// 2026-11-12).
+	speed = sqrtf(vel[0]*vel[0] +vel[1]*vel[1]);
 	if (!speed)
 		return;
 

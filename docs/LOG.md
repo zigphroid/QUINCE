@@ -350,3 +350,71 @@ QUINCE builds.
   `fabsf`, `floorf` or `ceilf` is a call. The state can't catch it,
   since `math.c`'s `sqrtf` is correctly rounded too, only slower.
   Checked: with the built-ins taken out of the header, all four fail.
+
+## 2026-11-12: M3 PR 2, Quake's hot functions in float
+
+- **Finding them.** THERMO's profile counts softfp's own functions, not
+  who calls them, so the PC said where the doubles are: the PC build
+  with inlining off, under valgrind's callgrind, counting each executed
+  double SSE instruction (and each call to a double `math.h` function)
+  by the function it is in. demo1 executed 6.4 million of them; 44% in
+  `EmitWaterPolys`, 14% in `R_RecursiveWorldNode`, 11% in
+  `R_DrawParticles`, 9% in `Draw_Character`, 7% in `R_DrawAliasModel`.
+  The double `sqrt` was a cost of its own: about 3,000 instructions a
+  call, 3.2 million calls over demo1 (most from `VectorNormalize`).
+  CANNER's `-S` listing then showed what each one calls.
+- **What changed** (each edit marked `QUINCE:`): `sqrtf`
+  for `sqrt` (`Length`, `VectorNormalize`, `EmitSkyPolys`,
+  `SV_UserFriction`); `sinf` and `cosf` (`AngleVectors`,
+  `R_DrawAliasModel`, `R_RenderDlight`, `SV_StepDirection`); float
+  constants, three of them `#define`s (`BACKFACE_EPSILON` in
+  `glquake.h`, `DIST_EPSILON`, `STOP_EPSILON`); `R_RecursiveWorldNode`'s `dot` a
+  float; and, where a loop compared each particle's or light's float
+  `die` with the double `cl.time`, the clock taken as a float once
+  before it. The swaying in `V_AddIdle` and `CalcGunAngle`, three double
+  sines a frame each, is skipped when `v_idlescale` is 0, as it is
+  unless set.
+- **The clocks stay double**, as planned. `EmitWaterPolys` needed the
+  clock in every vertex: its table repeats every 2*pi seconds, so the
+  clock is wrapped to that once a call with `fmod`, in double, and the
+  rest is float.
+- **Many of these are exact.** A float's square root taken in double and
+  rounded back is the correctly rounded float one, so `sqrtf` gives the
+  same bits; so do multiplying or dividing by a power of two (`1/8`,
+  `1/16`, `1/64`), `MSG_ReadAngle`'s `45/32` on a char, and a compare
+  with a constant whose float lies on the safe side of it (`0.01`,
+  `0.1`). The rest can differ in the last bits.
+- **Result on SIMMER** (instructions, `-icount`), against PR 1:
+
+  | build | demo1 ms/frame | e1m1 server ms/frame |
+  |---|---|---|
+  | CANNER | 14.2 → 7.7 (-46%) | 7.9 → 6.7 (-15%) |
+  | GCC -O2 | 10.1 → 6.9 (-32%) | 6.6 → 5.7 (-14%) |
+
+  softfp went from 38% of CANNER's demo1 samples to 7%, and most of
+  what's left is load time. CANNER's code is now 12% behind GCC's on
+  demo1, where it was 41%: the gap was mostly softfp (pectinos#2107).
+  On the board, where the XIP cache and PSRAM weigh more, the gain will
+  be smaller (inferred); its timing waits for the Jam.
+- **The game is the same.** e1m1's state and checksum didn't change
+  (`c8c17318, 164 entities`, -3592846848), so the gate values stay. The
+  PC's float build and PR 1's double build print the same state and
+  checksum after 300, 1,000 and 3,000 frames of e1m1, e1m3 and e1m5.
+  demo1 can't be compared that way, since it runs by the clock; with the
+  PC's clock made a fixed step (a scratch change, not committed), both
+  sent the same triangles and vertices, and the sum of their screen
+  positions differed by 7 parts in a million.
+- **`make test-float`** keeps it: CANNER writes the program as assembly,
+  and `tools/floatcheck.py` fails if a function in `tests/float_hot.txt`
+  calls softfp's double helpers or a double `math.h` function more often
+  than the list allows, or is missing. The list names what stays and why
+  (the clock as a float, once a frame or a call). Checked against PR 1's
+  code: all 15 functions then on the list fail.
+- **Left as they were:** load-time code (`BuildSurfaceDisplayList`,
+  `BuildTris`, `CalcSurfaceExtents`: no frame time, and the surface
+  extents are where M1's "Bad surface extents" came from), once-a-frame
+  clock sums (`V_CalcBob`, `CL_LerpPoint`, `SV_RunThink`), and
+  `lib/nullgl.c`'s `glOrtho` and `glFrustum`, whose GLdouble divides the
+  GL layer thread's `lib/pbgl.c` makes float as it replaces the file.
+- `quince/QUINCE.HOT`, M1's board heat file for `make heat`, was taken
+  from the double code; the next board run should take a new one.

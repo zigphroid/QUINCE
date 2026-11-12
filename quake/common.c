@@ -716,12 +716,15 @@ char *MSG_ReadString (void)
 
 float MSG_ReadCoord (void)
 {
-	return MSG_ReadShort() * (1.0/8);
+	// QUINCE: a float constant (M3, docs/LOG.md 2026-11-12): a short
+	// times 1/8 is exact in a float, so the same bits without softfp.
+	return MSG_ReadShort() * (1.0f/8);
 }
 
 float MSG_ReadAngle (void)
 {
-	return MSG_ReadChar() * (360.0/256);
+	// QUINCE: as MSG_ReadCoord's: a char times 45/32 is exact in a float.
+	return MSG_ReadChar() * (360.0f/256);
 }
 
 

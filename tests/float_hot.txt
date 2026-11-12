@@ -1,0 +1,28 @@
+# tests/float_hot.txt: Quake's hot functions, kept float (M3, docs/LOG.md
+# 2026-11-12). make test-float compiles QUINCE with CANNER -S and fails if
+# one of these calls softfp's double helpers (__aeabi_d*, __aeabi_f2d and
+# the rest) or a double math.h function more often than is listed here.
+# The ones listed are once a call or once a frame, and say why.
+#
+# function              allowed            # why
+AngleVectors
+Length
+VectorNormalize
+EmitWaterPolys          fmod d2f           # the clock wrapped to 2*pi, once a call
+EmitSkyPolys
+R_RecursiveWorldNode
+R_DrawParticles         dsub d2f d2f       # the frame's time and the clock as a float, once a frame
+Draw_Character
+R_DrawAliasModel        d2f dmul d2iz      # the clock as a float, and the skin's animation from it, once a model
+R_RenderDlight          f2d dmul d2f       # AddLightBlend's 0.0003, only from inside a light
+R_RenderDlights         d2f                # the clock as a float, once a frame
+CL_DecayLights          dsub d2f d2f       # the frame's time and the clock as a float, once a frame
+MSG_ReadCoord
+MSG_ReadAngle
+SV_RecursiveHullCheck
+SV_StepDirection
+ClipVelocity
+SV_WriteEntitiesToClient
+PR_ExecuteProgram
+Draw_TileClear
+V_CalcBlend

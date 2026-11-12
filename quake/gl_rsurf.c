@@ -1195,7 +1195,9 @@ void R_RecursiveWorldNode (mnode_t *node)
 	mplane_t	*plane;
 	msurface_t	*surf, **mark;
 	mleaf_t		*pleaf;
-	double		d, dot;
+	// QUINCE: float, not double (M3, docs/LOG.md 2026-11-12): dot is a
+	// float sum, so the same value, kept where the FPU can test it.
+	float		d, dot;
 	vec3_t		mins, maxs;
 
 	if (node->contents == CONTENTS_SOLID)

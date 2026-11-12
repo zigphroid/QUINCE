@@ -123,7 +123,10 @@ touches:
    rounds floats as the board does (SSE, nothing fused, the SDK's
    `math.c`), so e1m1's state and checksum are the board's, bit for bit.
    `make test-builtins` checks with CANNER that `math.h`'s `sqrtf` and
-   the rounding functions are FPU instructions, not calls.
+   the rounding functions are FPU instructions, not calls, and `make
+   test-float` that the functions in `tests/float_hot.txt` call no more
+   double code than it allows. A new `QUINCE:` float edit to a hot
+   function goes on that list.
 2. **`make sim-smoke`**: SIMMER, PectinOS in QEMU, with no window. It runs
    `/SELFTEST` on CANNER's code, then the program, then reads its screen
    back as text. The `simmer` skill has the recipes. `make sim-bench
