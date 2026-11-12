@@ -239,6 +239,7 @@ static int32_t held(int32_t v, int32_t hi)
 #define P_CUT       (P_NEAR | P_GUARD)
 #define GUARD       2040.0f
 static float plane[PLANES][4];
+static int guard_wider = 1;   /* the guard band is outside the viewport on every side */
 
 static void set_plane(int i, float a, float b, float c, float d)
 {
@@ -258,6 +259,12 @@ static void remake_planes(void)
 	set_plane(6, -1, 0, 0, (GUARD - bx) / ax);
 	set_plane(7, 0, -1, 0, (GUARD + by) / ay);
 	set_plane(8, 0, 1, 0, (GUARD - by) / ay);
+	/* With each guard factor at least 1, a vertex inside the screen's
+	 * four planes (x + w >= 0, say) is inside the guard's too: a rounded
+	 * g w is at least w (rounding keeps order). A viewport wider than the
+	 * guard band (none GLQuake makes) gets every test. */
+	guard_wider = plane[5][3] >= 1.0f && plane[6][3] >= 1.0f && plane[7][3] >= 1.0f &&
+	              plane[8][3] >= 1.0f;
 }
 
 void glViewport(GLint x, GLint y, GLsizei w, GLsizei h)
@@ -765,11 +772,16 @@ void glClear(GLbitfield mask)
 	}
 }
 
+/* FNV-1a (Fowler, Noll and Vo's hash, from its description), two words
+ * a step: half the multiplies of a word a step, which M2's board run had
+ * at 5% of the program (LOG 2026-11-12). Only the tests read it. */
 static uint32_t words_sum(const uint16_t *w, uint32_t n)
 {
 	uint32_t h = checksum, i;
-	for (i = 0; i < n; i++)
-		h = (h ^ w[i]) * 16777619u;   /* FNV-1a, a word a step */
+	for (i = 0; i + 1 < n; i += 2)
+		h = (h ^ ((uint32_t)w[i] | (uint32_t)w[i + 1] << 16)) * 16777619u;
+	if (i < n)
+		h = (h ^ w[i]) * 16777619u;
 	return h;
 }
 
@@ -858,15 +870,47 @@ static struct vert prim[PRIM_MAX];
 static uint16_t outcode[PRIM_MAX];
 static GLenum prim_mode;
 
+/* Which planes a vertex is outside of. Every plane is one coordinate
+ * against w (remake_planes), so each test is a compare, or a multiply and
+ * a compare for the guard band's, not a dot product of four: the same
+ * sums as plane[i] . v, since the terms left out are exact zeros. M2's
+ * board run had the dot products at 17% of the program (LOG 2026-11-12).
+ * A vertex on the screen is inside the guard band too, which is wider
+ * (guard_wider), so the guard's four tests are made only off it. */
 static uint16_t outcode_of(const struct vert *v)
 {
+	float x = v->x, y = v->y, w = v->w;
 	uint16_t c = 0;
-	int i;
-	for (i = 0; i < PLANES; i++)
-		if (plane[i][0] * v->x + plane[i][1] * v->y + plane[i][2] * v->z +
-		    plane[i][3] * v->w < 0.0f)
-			c |= (uint16_t)(1u << i);
+	if (v->z + w < 0.0f) c |= 0x001u;
+	if (x + w < 0.0f) c |= 0x002u;
+	if (w - x < 0.0f) c |= 0x004u;
+	if (y + w < 0.0f) c |= 0x008u;
+	if (w - y < 0.0f) c |= 0x010u;
+	if ((c & 0x01eu) || !guard_wider) {
+		if (x + plane[5][3] * w < 0.0f) c |= 0x020u;
+		if (plane[6][3] * w - x < 0.0f) c |= 0x040u;
+		if (plane[7][3] * w - y < 0.0f) c |= 0x080u;
+		if (y + plane[8][3] * w < 0.0f) c |= 0x100u;
+	}
 	return c;
+}
+
+/* Whether a vertex is outside plane p alone: the clipper's test, as
+ * outcode_of makes it for that plane. */
+static int outside(const struct vert *v, int p)
+{
+	float x = v->x, y = v->y, w = v->w;
+	switch (p) {
+	case 0: return v->z + w < 0.0f;
+	case 1: return x + w < 0.0f;
+	case 2: return w - x < 0.0f;
+	case 3: return y + w < 0.0f;
+	case 4: return w - y < 0.0f;
+	case 5: return x + plane[5][3] * w < 0.0f;
+	case 6: return plane[6][3] * w - x < 0.0f;
+	case 7: return plane[7][3] * w - y < 0.0f;
+	default: return y + plane[8][3] * w < 0.0f;
+	}
 }
 
 static uint32_t kind_of(GLenum mode)
@@ -1026,7 +1070,7 @@ static void cut_triangle(const struct vert *a, const struct vert *b, const struc
 			continue;
 		for (i = 0; i < n; i++) {
 			const struct vert *u = &poly[src][i], *v = &poly[src][(i + 1) % n];
-			int uin = !(outcode_of(u) >> p & 1u), vin = !(outcode_of(v) >> p & 1u);
+			int uin = !outside(u, p), vin = !outside(v, p);
 			if (uin && m < CUT_MAX)
 				poly[src ^ 1][m++] = *u;
 			if (uin != vin && m < CUT_MAX)
