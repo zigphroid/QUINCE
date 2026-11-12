@@ -61,8 +61,10 @@ To keep within 64 bits:
    are taken `>> es`, so each is at most 24 bits. `qs` = max(0, bits(largest q) - 16),
    and each q is taken `>> qs`, so each is 16 bits. A weight is then at most
    40 bits.
-2. **Per pixel:** S is the sum of the weights. `sh` = max(0, bits(S) - 16),
-   S16 = S `>> sh`, and R = floor(2^40 / S16). If S is 0, the pixel isn't drawn.
+2. **Per pixel:** S is the sum of the weights. If S is 0, the pixel isn't
+   drawn. `sh` = bits(S) - 16, which is -15 to 26, and S16 = floor(S / 2^sh).
+   S16 is always 16 bits, 2^15 to 2^16 - 1, cut down from a long S or moved
+   up from a short one. R = floor(2^40 / S16), 2^24 to 2^25.
 3. **An attribute** is N = the sum of weight times value, and the result is
    floor(floor(N / 2^sh) x R / 2^36). That is the value with 4 more
    fraction bits: s and t come out as 12.8, s2 and t2 as 10.10, and colour
@@ -173,8 +175,10 @@ will measure in step 2's second PR.
 
 ## Changing the rules
 
-A change to any rule changes the model's code first. `make test`'s scene
-(`build/pbmodel/scene.png`) holds every rule at once by its CRC. A rule
+A change to any rule changes the model's code first. `tests/test_pbmodel.c`
+holds each rule with a check of its own, and `make test`'s scene
+(`build/pbmodel/scene.png`) holds them together, as Quake uses them, by
+its CRC. A rule
 changed on purpose gets a new CRC, with the picture looked at and the
 reason in `docs/LOG.md`. When pectinos takes this over for its gateware,
 these rules are what its test benches hold PB to.

@@ -136,7 +136,7 @@ void pbm_triangle(struct pbm *m, const struct pbm_vertex *v0,
 /* The rules' pieces, for the checks and for anyone holding gateware to
  * them. */
 uint32_t pbm_depth_of_q(uint32_t q);        /* q (1.31) to d, 0 nearest */
-uint32_t pbm_recip(uint32_t s16);           /* floor(2^40 / s16), s16 1-65535 */
+uint32_t pbm_recip(uint32_t s16);           /* floor(2^40 / s16), s16 2^15-65535 */
 uint16_t pbm_565(uint32_t r, uint32_t g, uint32_t b);
 
 #endif

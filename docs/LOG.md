@@ -288,6 +288,14 @@ The model's own choices, each one a rule PB has to keep:
 The model isn't in QUINCE.JAM, since PB draws, not the Jam. Its checks are
 a host test (`tests/test_pbmodel.c`), and `make` compiles it with CANNER
 so it stays inside the subset pectinos can take. The checks were tried
-against a dozen rules broken on purpose in the model, and each break
-failed at least one.
+against rules broken on purpose in the model: a dozen at first, and the
+review's eight more that had slipped through (depth written by a pixel the
+alpha test drops, a mip with a side of 1, negative repeats, s and t
+clamped apart, the lightmap and alpha, unit 1's mip level, the depth
+range's +1, MULINV's weight). Each break now fails at least one check.
+
+The review also found the per-pixel reciprocal held at 32 bits when the
+weights' sum was 256 or less, which happens on slivers far away. The sum
+is now always brought to 16 bits, moved up when it is short as well as cut
+when it is long, so the reciprocal is always 25 bits and needs no clamp.
 

@@ -1,6 +1,6 @@
 // tests/test_pbmodel.c: the triangle engine's C model (lib/pbmodel.c)
-// held to its rules (docs/PB3D.md), then a scene drawn with every rule at
-// once, written to build/pbmodel/scene.png and held to its CRC.
+// held to its rules (docs/PB3D.md), each with a check of its own, then a
+// scene drawn with them together, as Quake uses them, written to build/pbmodel/scene.png and held to its CRC.
 //
 // A host test, not /SELFTEST: the model isn't in QUINCE.JAM (PB draws,
 // not the Jam), and a scene needs a 640x480 picture and a file.
@@ -634,6 +634,203 @@ static void blends(void)
     check("alpha 0 is the picture", colour[0], dst);
 }
 
+// --- the corners review 1 found untested ---
+
+static void bind2(int unit, uint32_t id, int clamp_s, int clamp_t, int linear, int mipmap)
+{
+    struct pbm_bind b;
+    b.id = id;
+    b.clamp_s = clamp_s;
+    b.clamp_t = clamp_t;
+    b.linear = linear;
+    b.mipmap = mipmap;
+    pbm_bind_texture(&m, unit, &b);
+}
+
+// A pixel whose weights' sum S is tiny: the near vertex's weight is 0 (the
+// pixel is on the opposite edge), the other two are far (q 1/4096, 8
+// once cut to the near one's 16 bits) and the triangle a sliver of a 16th
+// of a pixel, so S is 16 x 8 = 128. S16 is S moved up to 16 bits, so the texel is still the right one: halfway along s 0 to 17.
+static void short_sum(void)
+{
+    static uint8_t ramp[64];
+    struct pbm_state s = state();
+    struct pbm_vertex v[3];
+    int i;
+
+    model(2, 2);
+    for (i = 0; i < 64; i++)
+        ramp[i] = (uint8_t)(i * 4);
+    pbm_texture(&m, 6, PBM_TEX_GREY8, 6, 0, 0, 0);
+    pbm_texture_load(&m, 6, 0, 0, 64, 1, ramp);
+    s.tex0 = 1;
+    pbm_set_state(&m, &s);
+    bind(0, 6, 1, 0, 0);
+    v[0] = vtx(0, 0.5, 1 / 4096.0, 0, 0);
+    v[1] = vtx(1, 0.5, 1 / 4096.0, 17, 0);
+    v[2] = vtx(0.5, 0.5 + 1 / 16.0, 1, 0, 0);
+    pbm_draw(&m, PBM_LIST, v, 3);
+    check("the sliver takes its one pixel", (long)m.counts.drawn, 1);
+    check("a short sum still finds texel 8", colour[0], pbm_565(32, 32, 32));
+    check("the reciprocal at 2^15", (long)pbm_recip(1u << 15), 1L << 25);
+    check("and at 2^16 - 1", (long)pbm_recip(65535), (long)((1ull << 40) / 65535));
+}
+
+static void corners(void)
+{
+    struct pbm_state s = state();
+    struct pbm_vertex v[4];
+    int k;
+
+    // A pixel the alpha test drops writes no depth.
+    {
+        static const uint8_t idx[1] = { 255 };
+        model(2, 2);
+        pbm_texture(&m, 8, PBM_TEX_INDEX8, 0, 0, 0, 1);
+        pbm_texture_load(&m, 8, 0, 0, 1, 1, idx);
+        s.tex0 = 1;
+        s.alpha_test = 1;
+        s.depth_func = PBM_DEPTH_LEQUAL;
+        s.depth_write = 1;
+        pbm_set_state(&m, &s);
+        bind(0, 8, 0, 0, 0);
+        rect(0, 0, 2, 2, 0.5, 0, 0, 1, 1);
+        check("dropped by the alpha test", (long)m.counts.alpha_fail, 4);
+        check("no depth written", depth[0], 0xffff);
+    }
+
+    // Mips of textures with a side of 1: 4x1 and 1x4. Each level 1 texel
+    // takes its one row (or column) twice, never the next level's texels.
+    {
+        static const uint8_t line[4] = { 10, 30, 100, 201 };
+        model(2, 2);
+        pbm_texture(&m, 11, PBM_TEX_GREY8, 2, 0, 1, 0);
+        pbm_texture_load(&m, 11, 0, 0, 4, 1, line);
+        check("4x1 levels", m.tex[11].levels, 3);
+        check("4x1 level 1, texel 0", m.tex[11].level[1][0], (2 * 10 + 2 * 30 + 2) / 4);
+        check("4x1 level 1, texel 1", m.tex[11].level[1][1], (2 * 100 + 2 * 201 + 2) / 4);
+        check("4x1 level 2", m.tex[11].level[2][0], (2 * 20 + 2 * 151 + 2) / 4);
+        pbm_texture(&m, 12, PBM_TEX_GREY8, 0, 2, 1, 0);
+        pbm_texture_load(&m, 12, 0, 0, 1, 4, line);
+        check("1x4 level 1, texel 0", m.tex[12].level[1][0], (2 * 10 + 2 * 30 + 2) / 4);
+        check("1x4 level 1, texel 1", m.tex[12].level[1][1], (2 * 100 + 2 * 201 + 2) / 4);
+        check("1x4 level 2", m.tex[12].level[2][0], (2 * 20 + 2 * 151 + 2) / 4);
+    }
+
+    // Repeat with negative coordinates, and s and t each with their own
+    // clamp, on a 4x4 texture whose texel (x, y) is 10 x + 50 y.
+    {
+        static uint8_t grid[16];
+        for (k = 0; k < 16; k++)
+            grid[k] = (uint8_t)(10 * (k % 4) + 50 * (k / 4));
+        model(1, 1);
+        pbm_texture(&m, 13, PBM_TEX_GREY8, 2, 2, 0, 0);
+        pbm_texture_load(&m, 13, 0, 0, 4, 4, grid);
+        s = state();
+        s.tex0 = 1;
+        pbm_set_state(&m, &s);
+        bind2(0, 13, 0, 0, 0, 0);
+        rect(0, 0, 1, 1, 1, -3, -7, -2, -6);   // the centre at -2.5, -6.5
+        check("repeat: -3, -7 is 1, 1", colour[0], pbm_565(60, 60, 60));
+        bind2(0, 13, 1, 0, 0, 0);
+        rect(0, 0, 1, 1, 1, 5, 6, 6, 7);       // 5.5, 6.5
+        check("clamp s, repeat t: 3, 2", colour[0], pbm_565(130, 130, 130));
+        bind2(0, 13, 0, 1, 0, 0);
+        check("repeat s, clamp t: 1, 3", (rect(0, 0, 1, 1, 1, 5, 6, 6, 7), colour[0]),
+              pbm_565(160, 160, 160));
+    }
+
+    // Unit 1 darkens the colour but leaves its alpha: an opaque texel times
+    // a vertex alpha of 200 passes the alpha test under a lightmap of 255.
+    {
+        static const uint8_t white = 255, dark = 255;
+        model(2, 2);
+        pbm_texture(&m, 1, PBM_TEX_GREY8, 0, 0, 0, 0);
+        pbm_texture_load(&m, 1, 0, 0, 1, 1, &white);
+        pbm_texture(&m, 2, PBM_TEX_GREY8, 0, 0, 0, 0);
+        pbm_texture_load(&m, 2, 0, 0, 1, 1, &dark);
+        s = state();
+        s.tex0 = s.tex1 = s.modulate = s.alpha_test = 1;
+        pbm_set_state(&m, &s);
+        bind(0, 1, 0, 0, 0);
+        bind(1, 2, 0, 0, 0);
+        for (k = 0; k < 4; k++)
+            v[k] = rgba(vtx(k == 1 || k == 2 ? 2 : 0, k >= 2 ? 2 : 0, 1, 0, 0), 255, 255, 255, 200);
+        pbm_draw(&m, PBM_FAN, v, 4);
+        check("the lightmap keeps alpha", (long)m.counts.alpha_fail, 0);
+    }
+
+    // Unit 1's mip level: 10.6 coordinates are 16 times finer squared than
+    // the screen's 12.4, so 8 texels on 4 pixels each way is level 1. The
+    // texture's levels differ: texel x of level 0 is 32 x, so level 1's
+    // first is 16 and level 2's 48.
+    {
+        static uint8_t ramp[64];
+        model(4, 4);
+        for (k = 0; k < 64; k++)
+            ramp[k] = (uint8_t)(32 * (k % 8));
+        pbm_texture(&m, 14, PBM_TEX_GREY8, 3, 3, 1, 0);
+        pbm_texture_load(&m, 14, 0, 0, 8, 8, ramp);
+        check("level 1's first", m.tex[14].level[1][0], 16);
+        check("level 2's first", m.tex[14].level[2][0], 48);
+        s = state();
+        s.tex1 = 1;
+        pbm_set_state(&m, &s);
+        bind(1, 14, 0, 0, 1);
+        v[0] = st2(vtx(0, 0, 1, 0, 0), 0, 0);
+        v[1] = st2(vtx(4, 0, 1, 0, 0), 8, 0);
+        v[2] = st2(vtx(4, 4, 1, 0, 0), 8, 8);
+        v[3] = st2(vtx(0, 4, 1, 0, 0), 0, 8);
+        pbm_draw(&m, PBM_FAN, v, 4);
+        check("level 1 on unit 1", colour[0], pbm_565(255 * 240 >> 8, 255 * 240 >> 8, 255 * 240 >> 8));
+    }
+
+    // q 0.5 on a 2x2 square comes out exactly (its sums are powers of
+    // two), so its depth is exactly q 0.5's, the whole range's +1 kept.
+    {
+        model(2, 2);
+        s = state();
+        s.depth_write = 1;
+        pbm_set_state(&m, &s);
+        rect(0, 0, 2, 2, 0.5, 0, 0, 0, 0);
+        check("q 0.5 exactly, the whole range", depth[0], 0x0fff);
+    }
+
+    // The depth range, exactly: the same triangle drawn once with the
+    // whole range and once with 0 to 0x1233 stores d, then d (0x1234) / 2^16.
+    {
+        uint16_t d;
+        model(2, 2);
+        s = state();
+        s.depth_write = 1;
+        pbm_set_state(&m, &s);
+        rect(0, 0, 2, 2, 0.3, 0, 0, 0, 0);
+        d = depth[0];
+        pbm_depth_range(&m, 0, 0x1233);
+        rect(0, 0, 2, 2, 0.3, 0, 0, 0, 0);
+        check("near + d (far - near + 1) / 2^16", depth[0], (long)(((uint32_t)d * 0x1234u) >> 16));
+        pbm_depth_range(&m, 0x100, 0x1233);
+        rect(0, 0, 2, 2, 0.3, 0, 0, 0, 0);
+        check("with near past 0", depth[0], (long)(0x100 + (((uint32_t)d * 0x1134u) >> 16)));
+    }
+
+    // MULINV's weight w(c) = c + c / 128, against white: red 7 gives
+    // 255 x 249 / 256 = 248 (255 - c would give 247, another 5-bit step),
+    // green 131 gives 255 x 124 / 256 = 123 (256 - c, 124, another 6-bit step).
+    {
+        model(2, 2);
+        s = state();
+        s.smooth = 1;
+        s.blend = PBM_BLEND_MULINV;
+        pbm_set_state(&m, &s);
+        pbm_clear_colour(&m, 0xffff);
+        for (k = 0; k < 4; k++)
+            v[k] = rgba(vtx(k == 1 || k == 2 ? 2 : 0, k >= 2 ? 2 : 0, 1, 0, 0), 7, 131, 0, 255);
+        pbm_draw(&m, PBM_FAN, v, 4);
+        check("mulinv's w()", colour[0], pbm_565(248, 123, 255));
+    }
+}
+
 // --- the scene ---
 
 // A point seen by a camera at the origin looking down +z, y up, 90
@@ -791,7 +988,7 @@ static void scene(const char *png)
         printf("FAIL: couldn't write %s\n", png);
     crc = png_crc32(0, (const uint8_t *)colour, sizeof *colour * 640u * 480u);
     // Change this only on purpose, with the picture looked at: it holds
-    // every rule at once (docs/PB3D.md, "Changing the rules").
+    // the rules together (docs/PB3D.md, "Changing the rules").
     check("the scene's CRC", (long)crc, (long)0xd8cd7614u);
     printf("test_pbmodel: scene %08x, %u triangles, %u culled, %u pixels covered, %u drawn (%s)\n",
            crc, m.counts.tris, m.counts.culled, m.counts.covered, m.counts.drawn,
@@ -810,6 +1007,8 @@ int main(int argc, char **argv)
     mips();
     wrap_and_filter();
     perspective();
+    short_sum();
+    corners();
     combine();
     blends();
     scene(argc > 1 ? argv[1] : 0);

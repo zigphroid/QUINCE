@@ -46,14 +46,20 @@ uint16_t pbm_565(uint32_t r, uint32_t g, uint32_t b)
 
 /* --- the parts PB needs a unit for: the reciprocal and depth --- */
 
-/* floor(2^40 / s16). PB may find it by a table and a Newton step, as long
- * as a last step makes it exactly this. */
+/* floor(2^40 / s16), for s16 from 2^15 to 2^16 - 1 (the model always
+ * gives it one there): 2^24 to 2^25, 25 bits. PB may find it by a table
+ * and a Newton step, as long as a last step makes it exactly this. */
 uint32_t pbm_recip(uint32_t s16)
 {
 	if (s16 == 0)
 		return 0;
-	return (uint32_t)(((uint64_t)1 << 40) / s16 > 0xffffffffu ? 0xffffffffu
-	                                                           : ((uint64_t)1 << 40) / s16);
+	return (uint32_t)(((uint64_t)1 << 40) / s16);
+}
+
+/* x times 2^n, n either sign, rounded down. */
+static int64_t scale(int64_t x, int n)
+{
+	return n >= 0 ? x * ((int64_t)1 << n) : asr(x, -n);
 }
 
 /* q (1.31, larger nearer) to a 16-bit depth d, 0 nearest: a float of q
@@ -523,7 +529,8 @@ void pbm_triangle(struct pbm *m, const struct pbm_vertex *v0,
 
 				/* Perspective: each vertex weighs its edge value
 				 * times its q, and an attribute is the weighted mean.
-				 * One reciprocal of the weights' sum, cut to 16 bits,
+				 * One reciprocal of the weights' sum, brought to 16
+				 * bits (cut down, or moved up if it is shorter),
 				 * serves every attribute. */
 				s = 0;
 				for (i = 0; i < 3; i++) {
@@ -532,17 +539,15 @@ void pbm_triangle(struct pbm *m, const struct pbm_vertex *v0,
 				}
 				if (s == 0)
 					continue;
-				sh = bitlen((uint64_t)s) - 16;
-				if (sh < 0)
-					sh = 0;
-				s16 = s >> sh;
+				sh = bitlen((uint64_t)s) - 16;   /* -15 to 26 */
+				s16 = scale(s, (int)-sh);       /* 2^15 to 2^16 - 1 */
 				r = (int64_t)pbm_recip((uint32_t)s16);
 #define MEAN(f) (n = w[0] * v[0]->f + w[1] * v[1]->f + w[2] * v[2]->f, \
-                 asr(asr(n, (int)sh) * r, 36))
+                 asr(scale(n, (int)-sh) * r, 36))
 
 				/* Depth: q at the pixel, from the same sum. */
 				{
-					int k = 46 - (int)sh - qs;
+					int k = 46 - (int)sh - qs;   /* 4 to 61 */
 					uint64_t qv = (uint64_t)s16 * (uint64_t)rda;
 					qv = k >= 0 ? qv >> k : qv << -k;
 					qf = qv > 0xffffffffu ? 0xffffffffu : (uint32_t)qv;
