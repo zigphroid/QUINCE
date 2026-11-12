@@ -279,6 +279,133 @@ can't put the weapon in front of a wall it is inside). The numbers 15 to
 19 are QUINCE's proposal; pectinos owns PB's command numbers and may
 change them when it builds the 3D service.
 
+## 2026-11-12: M3, Quake's hot math in float (the plan)
+
+Jacob took every recommendation. M1's profile (SIMMER, `-icount`,
+THERMO, project files `quince/canner-vs-gcc/`) had doubles in 27% of
+GCC's demo1 instructions and 40% of CANNER's. Quake's vectors are
+`float`, but C promotes: `v * 0.5` is a double multiply, and
+`sqrt(x*x + y*y)` a double square root, each a call into `softfp.c`
+because the M33's FPU is single precision only (RP2350 datasheet
+§3.6.4). GCC's `-Wdouble-promotion` finds 289 such places in the files
+QUINCE builds.
+
+- **Scope: the hot functions only**, chosen by the profile, file by file,
+  each step measured. Alternatives: all 289 places, mechanical but
+  touching cold load code where precision matters (gl_model.c's
+  `floor(mins/16)` surface extents) for no speed; or no edits to id's
+  files, with `#define sqrt sqrtf` and GCC's
+  `-fsingle-precision-constant`, which CANNER hasn't got, and which
+  would quietly make the clocks float too.
+- **The clocks stay double** (`realtime`, `cl.time`, `sv.time`,
+  `host_frametime`): a float clock loses its fractions after hours.
+- **Correctness**: the PC rounds floats as the board does, and e1m1's
+  state after 300 frames is a gate between the PC and SIMMER, not only
+  printed. Float against double on the PC is reported, not gated:
+  physics after collisions is chaotic, so small differences may grow.
+- **Two PRs**: ours first (below), then id's files.
+
+## 2026-11-12: M3 PR 1, our side of the float work
+
+- **`quince/libc/math.h` was missing the SDK's built-ins.** The SDK's
+  `math.h` spells `sqrtf`, `fabsf`, `floorf` and `ceilf` as
+  `__builtin_sqrtf` and so on (on `__arm__`), because `-ffreestanding`
+  stops GCC knowing the names and CANNER only makes the instruction for
+  the built-in. Ours declared them as plain functions, so `glRotatef`'s
+  `sqrtf` was a call to `sdk/lib/math.c`'s integer square root. Now each
+  is one instruction. On SIMMER (instructions, deterministic), demo1 went
+  from 14.5 to 14.2 ms a frame in CANNER's build (THERMO samples 71,860
+  to 70,596, -1.8%) and 10.3 to 10.1 in GCC's (-1.8%); the server run
+  moved under 0.5%. softfp is untouched: that is PR 2.
+- **The PC rounds floats as the board does.** `-m32`'s default is the
+  x87, which keeps values in 80 bits until they are stored, so the PC's
+  float and double results can differ from the M33's FPU and
+  `softfp.c` in the last bits. The PC build is now `-msse2 -mfpmath=sse
+  -ffp-contract=off` and links the SDK's own `math.c` (and softfp.c's
+  packing) ahead of `-lm`. Checked: with the x87, e1m1's null-GL
+  checksum was -3593997312; with SSE it is -3592846848, which CANNER's
+  and GCC's builds on SIMMER print too. glibc's math against the SDK's
+  made no difference to it yet, but PR 2's `sinf` and `cosf` will
+  depend on it. `asin` (mirrors only) is still glibc's. The PC build is
+  `-fno-builtin` too, as the board's `-ffreestanding` is: without it GCC
+  had turned a `sin` and a `cos` of one angle into a call to glibc's
+  `sincos`, in `AngleVectors` and seven other functions, so the SDK's
+  `sin` and `cos` weren't the ones running there. It changed neither
+  e1m1's state nor its checksum.
+- **`/SERVER` prints the game's state**: an FNV-1a hash of each entity in
+  use, its origin in eighths of a unit (as `MSG_WriteCoord` sends it),
+  its angles in 256ths of a turn (finer than `MSG_WriteAngle`, which
+  drops the fraction of a degree first), its frame and its health.
+  `make test-quake` and `make sim-bench` both hold
+  e1m1's 300 frames to `c8c17318, 164 entities` and checksum
+  -3592846848, beside the triangle totals; the PC, CANNER's build and
+  GCC's all print them. Alternatives: the triangle totals alone, which
+  are what a float change is likely to leave the same while the game
+  differs; a dump of every entity, compared by a script, which says more
+  about where two runs part, but which a hash and the PC's own dump can
+  do when that's needed.
+- **`make test-builtins`** keeps the `math.h` fix: CANNER compiles
+  `tests/fpu_builtins.c` through `quince/libc/math.h`, with the SDK's
+  `math.c` beside it as in the real build, and fails if `sqrtf`,
+  `fabsf`, `floorf` or `ceilf` is a call. The state can't catch it,
+  since `math.c`'s `sqrtf` is correctly rounded too, only slower.
+  Checked: with the built-ins taken out of the header, all four fail.
+
+## 2026-11-12: the triangle engine's rules (PB-ASKS step 2, PR 1)
+
+QUINCE's C model of PB's triangle engine (`lib/pbmodel.c`) is the spec PB
+draws to. Its rules are in `docs/PB3D.md`. Jacob took all five
+recommendations of the plan:
+- **Perspective:** a divide every pixel, rather than every 8 with straight
+  steps between. Each vertex weighs its edge function times its q, and one
+  reciprocal of the weights' sum serves every attribute, with no divides
+  at setup. A divide every 8 pixels saves PB the reciprocal unit, but adds
+  a second way of stepping and can swim.
+- **Depth:** a 16-bit float of q (4 bits of exponent, 12 of mantissa), as
+  Voodoo's w-buffer, rather than linear z, which spends nearly all its
+  precision near the eye over Quake's 4 to 4,096 units.
+- **The mip level:** one per triangle, from its texel and pixel areas,
+  rather than per pixel, which costs more multipliers. The scene shows the
+  cost: a long wall gets one level end to end, and its far end shimmers.
+  If Quake's frames show it too, per pixel is the change to make.
+- **Colour:** 8 bits a channel inside and RGB565 out, with no dithering
+  yet.
+- **The lightmap:** GLQuake's 1x, with software Quake's 2x left as a later
+  STATE bit.
+
+The model's own choices, each one a rule PB has to keep:
+- **The top-left rule** for pixels on an edge, so a shared edge is drawn
+  once.
+- **Colour is perspective-correct** like the texture coordinates, since
+  the same reciprocal makes it free. Gouraud in screen space would need a
+  second divide.
+- **Textures with see-through texels are kept as ARGB1555,** and the rest
+  as RGB565. 565 has no bit to spare, and a colour key breaks under mip
+  averaging. Only HUD pictures, sprites and the sky's top layer lose a bit
+  of green.
+- **Mips are made from the level above as stored,** not from the palette's
+  8 bits, so PB can build them in place. A mip texel is see-through if two
+  or more of its four are (GLQuake's alpha test passes three of four).
+- **Weights are 1/256** (w(x) = x + x/128), so alpha 0 and 255 give exactly
+  the picture and exactly the source.
+- **Exact integer rules,** with the widths said: 64-bit edge functions
+  (35 bits in the guard band), weights cut to 40 bits, reciprocals as
+  floors. Floats would leave the gateware no way to match bit for bit.
+
+The model isn't in QUINCE.JAM, since PB draws, not the Jam. Its checks are
+a host test (`tests/test_pbmodel.c`), and `make` compiles it with CANNER
+so it stays inside the subset pectinos can take. The checks were tried
+against rules broken on purpose in the model: a dozen at first, and the
+review's eight more that had slipped through (depth written by a pixel the
+alpha test drops, a mip with a side of 1, negative repeats, s and t
+clamped apart, the lightmap and alpha, unit 1's mip level, the depth
+range's +1, MULINV's weight). Each break now fails at least one check.
+
+The review also found the per-pixel reciprocal held at 32 bits when the
+weights' sum was 256 or less, which happens on slivers far away. The sum
+is now always brought to 16 bits, moved up when it is short as well as cut
+when it is long, so the reciprocal is always 25 bits and needs no clamp.
+
 ## 2026-11-12: the GL layer to PB, measured (M2 PR 2)
 
 `lib/pbgl.c` replaces M1's null GL. It writes PB's commands (`lib/pb3d.h`)
@@ -293,8 +420,9 @@ frames are the same on the PC and on SIMMER, word for word: 2,836,051
 words, one checksum. That took the PC's build off the x87: with its
 80-bit registers the word counts matched but the words didn't, so the
 PC's Quake now keeps floats in SSE registers (`-msse2 -mfpmath=sse`),
-rounding as the board's FPU does. GLQuake's own counts and M1's totals
-didn't move.
+rounding as the board's FPU does. (M3 PR 1, merged first, went on to
+make the PC's floats the board's bit for bit; the counts here are
+re-measured on top of it.)
 
 Where the bytes went:
 - **One pass.** With `gl_mtexable` on, GLQuake draws wall and lightmap

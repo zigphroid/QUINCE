@@ -90,9 +90,17 @@ CANNER_FLAGS ?=
 # or build/heat/ or build/gcc/'s (below).
 QUINCE_JAM ?= $(BUILD)/$(NAME).JAM
 
-.PHONY: FORCE all app heat gcc test quake-host test-quake sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
-all: app
+.PHONY: FORCE all app heat gcc test quake-host test-quake test-builtins sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
+all: app $(BUILD)/pbmodel.jo
 app: $(BUILD)/$(NAME).JAM
+
+# The triangle engine's C model isn't in the .JAM (PB draws, not the
+# Jam), but it keeps to CANNER's subset like all of lib/, so pectinos can
+# take it into its own tools: CANNER compiles it alone, an object no one
+# links.
+$(BUILD)/pbmodel.jo: lib/pbmodel.c lib/pbmodel.h $(CANNER) Makefile
+	@mkdir -p $(BUILD)
+	$(CANNER) -I lib -I $(SDK) -c -o $@ lib/pbmodel.c
 
 # pectinos's own rules decide whether its tools are current, so a checkout
 # moved to a new pin rebuilds them before they build QUINCE. FORCE only
@@ -125,13 +133,36 @@ page-check:
 # runs on the board; host-only ones go in tests/.
 HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
             -fno-omit-frame-pointer
-test: $(BUILD)/test_quince test-quake
+test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins
 	$(BUILD)/test_quince
+	@mkdir -p $(BUILD)/pbmodel
+	$(BUILD)/test_pbmodel $(BUILD)/pbmodel/scene.png
+
+# quince/libc/math.h's FPU built-ins (M3, LOG 2026-11-12): CANNER compiles
+# tests/fpu_builtins.c through it, with the SDK's math.c beside it as in
+# the real build, and any q_ function that calls sqrtf, fabsf, floorf or
+# ceilf instead of making the instruction fails it. The state and checksum
+# can't catch that: math.c's sqrtf is correctly rounded too, only slower.
+test-builtins: tests/fpu_builtins.c quince/libc/math.h $(CANNER) Makefile
+	@mkdir -p $(BUILD)
+	$(CANNER) -I quince/libc -I $(SDK) -S tests/fpu_builtins.c $(filter %/math.c %/softfp.c,$(LIB)) \
+	    > $(BUILD)/fpu_builtins.s
+	@awk '/^[A-Za-z_][A-Za-z0-9_.]*:$$/ { fn = substr($$1, 1, length($$1) - 1) } \
+	    fn ~ /^q_/ && /\tb(l|\.w)?\t/ { print "test-builtins: FAIL: " fn " calls " $$2; bad = 1 } \
+	    END { exit bad }' $(BUILD)/fpu_builtins.s
+	@echo "test-builtins: sqrtf, fabsf, floorf and ceilf are FPU instructions"
 
 $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	@mkdir -p $(BUILD)
 	$(HOSTCC) -std=c11 -g -O1 -Wall -Wextra -Werror -I lib $(HOST_SAN) \
 	    -o $@ tests/test_quince.c $(CORE) -lm
+
+# The triangle engine's C model (lib/pbmodel.c, docs/PB3D.md) held to its
+# rules, and a scene drawn with all of them: build/pbmodel/scene.png.
+$(BUILD)/test_pbmodel: tests/test_pbmodel.c tests/png.c tests/png.h lib/pbmodel.c lib/pbmodel.h Makefile
+	@mkdir -p $(BUILD)
+	$(HOSTCC) -std=c11 -g -O1 -Wall -Wextra -Werror -I lib $(HOST_SAN) \
+	    -o $@ tests/test_pbmodel.c tests/png.c lib/pbmodel.c -lm
 
 # Quake on the PC (M1): id's files in quake/ (as GLQuake builds them, with
 # the GL renderer and the null sound, CD and input), QUINCE's GL layer,
@@ -139,14 +170,25 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 # 32-bit, because Quake keeps pointers in ints in places, and with id386
 # off (-U__i386__), so it takes the C paths the board takes, and with
 # enums as small as their values (-fshort-enums), as arm-none-eabi has them
-# (GCC and CANNER alike: quake/modelgen.h says what that cost), and with
-# floats in SSE registers, not the x87's 80-bit ones, so a float sum
-# rounds as the board's FPU rounds it and the GL layer's commands come out
-# the same word for word (M2 PR 2: the checksum test-quake and sim-bench
-# hold). id's files are old C: gnu89, common symbols, and their warnings
-# left alone.
-QHOST_CC  := $(HOSTCC) -m32 -msse2 -mfpmath=sse -U__i386__ -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
-QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/pbgl.c lib/pb3d.c lib/qbargs.c tests/sys_host.c tests/pbdump.c)
+# (GCC and CANNER alike: quake/modelgen.h says what that cost). id's files
+# are old C: gnu89, common symbols, and their warnings left alone.
+# Its floating point is the board's, bit for bit (M3, LOG 2026-11-12), so
+# the GL layer's commands come out the same word for word (M2 PR 2: the
+# checksum test-quake and sim-bench hold): SSE
+# (-msse2 -mfpmath=sse) rounds each float and double operation to its own
+# width, as the M33's FPU and softfp.c do, where -m32's default x87 keeps
+# them in 80 bits until they are stored; nothing is fused into a
+# multiply-add (-ffp-contract=off), as CANNER fuses nothing; and math.h's
+# functions are the SDK's own (sdk/lib/math.c, with softfp.c's packing),
+# linked ahead of -lm, so sinf and the rest give the board's last bit too
+# (but asin, which only mirrors call, and the board takes from qlibc.c).
+# -fno-builtin keeps GCC from swapping those calls for its own, as the
+# board's -ffreestanding does: without it a sin and a cos of one angle
+# became a call to glibc's sincos (AngleVectors and seven others).
+QHOST_CC  := $(HOSTCC) -m32 -msse2 -mfpmath=sse -ffp-contract=off -fno-builtin -U__i386__ \
+    -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
+QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/pbgl.c lib/pb3d.c lib/qbargs.c tests/sys_host.c tests/pbdump.c) \
+    $(BUILD)/qhost/sdk/math.o $(BUILD)/qhost/sdk/softfp.o
 
 $(BUILD)/qhost/quake/%.o: quake/%.c $(wildcard quake/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)
@@ -155,6 +197,12 @@ $(BUILD)/qhost/%.o: %.c $(wildcard quake/*.h lib/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)
 	$(QHOST_CC) -std=gnu99 -fcommon -Wall -Wextra -Wno-unknown-pragmas \
 	    -Wno-unused-parameter -Wno-sign-compare -Werror -c -o $@ $<
+$(BUILD)/qhost/sdk/math.o: $(SDK)/lib/math.c $(SDK)/math.h $(SDK)/lib/mathcoef.h Makefile
+	@mkdir -p $(dir $@)
+	$(QHOST_CC) -std=c11 -c -o $@ $<
+$(BUILD)/qhost/sdk/softfp.o: $(PECTIN_ROOT)/kernel/lib/softfp.c $(PECTIN_ROOT)/kernel/lib/softfp.h Makefile
+	@mkdir -p $(dir $@)
+	$(QHOST_CC) -std=c11 -I $(PECTIN_ROOT)/kernel -c -o $@ $<
 $(BUILD)/quake_host: $(QHOST_OBJ)
 	$(QHOST_CC) -o $@ $^ -lm
 

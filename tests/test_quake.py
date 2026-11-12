@@ -23,6 +23,10 @@ SERVER_FRAMES = 300
 SERVER_TOTALS = (186776, 357952)   # triangles, vertices GLQuake asked for
 SERVER_SENT = (2836051, 330356, 162178)   # words, vertices, triangles sent PB
 SERVER_CHECKSUM = 666297688   # of every word: the same commands, word for word
+# ...and where those frames leave the game (lib/qbench.c's print_state).
+# Since M3 the PC rounds floats as the board does (the Makefile's QHOST_CC),
+# so CANNER's build on SIMMER must print these too (tools/simbench.py).
+SERVER_STATE = "c8c17318, 164 entities"
 DUMP_FRAMES = 30   # e1m1's frames written by QUINCE_PBDUMP and read back
 MAPS = ["START"] + ["E1M%d" % i for i in range(1, 9)]
 
@@ -73,6 +77,11 @@ def main():
     if got != SERVER_TOTALS:
         print("FAIL: e1m1's %d frames sent %s (tris, verts), want %s"
               % (SERVER_FRAMES, got, SERVER_TOTALS))
+        failed += 1
+    m = re.search(r"^server: state (.*)$", server, re.M)
+    if not m or m.group(1) != SERVER_STATE:
+        print("FAIL: e1m1's %d frames left state %s, want %s"
+              % (SERVER_FRAMES, m and m.group(1), SERVER_STATE))
         failed += 1
     m = re.search(r"^server: sent totals (\d+) words (\d+) verts (\d+) tris", server, re.M)
     got = m and tuple(int(g) for g in m.groups())

@@ -825,7 +825,9 @@ struct vert {
 /* The longest primitive kept whole. A longer one is sent in pieces: a
  * fan keeps its first and last vertex, a strip its last two (at an even
  * count, so the next piece winds as the strip does), a list starts again.
- * GLQuake's longest are alias models' strips and fans, well under it. */
+ * Most of GLQuake's primitives are well under it; what is split is its
+ * particle lists, about 1,370 primitives over demo1's 969 frames, and an
+ * alias model's longest strips and fans now and then. */
 #define PRIM_MAX 256
 static struct vert prim[PRIM_MAX];
 static uint16_t outcode[PRIM_MAX];

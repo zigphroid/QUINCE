@@ -22,14 +22,19 @@ triangles, vertices, primitives and GL calls the renderer made, and what
 the pixelboard would be sent for them: its commands' words, of each
 kind, and the bytes a second its link would carry at that rate, the
 commands and the lightmaps' updates. The primitives dropped as off the
-screen, the ones cut at the screen's edge or the eye, and any commands
+screen, the ones cut at the near plane or at the guard band (2,040
+pixels out, past which PB's 12.4 positions can't reach), and any commands
 that didn't fit a frame are counted too. The textures sent at load are
 counted apart, sent once, and any reloaded during the run are added to
 the rate.
 
 `/SERVER map frames` loads a map with a player in it and runs that many
 frames of a tenth of a second of game time each: the game's code, its
-physics and the renderer. It prints the same lines.
+physics and the renderer. It prints the same lines, and then `state`:
+a hash of where every entity ended up (its origin in eighths of a unit,
+its angles in 256ths of a turn, its frame and its health) and how many
+there are.
+Two builds that print the same state played the same game.
 
 Quake's files come from `J:\LARDER\QUINCE`: copy `PAK0.PAK` from your own
 Quake (the shareware one is enough) to `J:\LARDER\QUINCE\ID1\PAK0.PAK`.

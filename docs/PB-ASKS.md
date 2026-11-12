@@ -36,8 +36,10 @@ trade Jam time for PB gateware.
 ## What GLQuake really uses
 
 About 45 GL entry points, and a small part of each. Our GL layer (M1's
-null GL grown up, `lib/pbgl.c`) takes them as Quake calls them, so `quake/`
-needs no changes for this; what reaches PB is far smaller. Counts are
+null GL grown up, `lib/pbgl.c`) takes them as Quake calls them, so
+`quake/` needs one change for this, a `QUINCE:` hook at the top of
+`GL_Upload8` that hands the layer a texture's 8-bit indices; what reaches
+PB is far smaller. Counts are
 call sites in `quake/gl_*.c`.
 
 | Area | What Quake calls | What PB does |
@@ -204,13 +206,18 @@ needs PB to work in bursts (a span's depth in one, its writes in
 another), and 3D starts on `pbshow3`'s DDR3. At a pixel a clock on the
 screen's 74 MHz the engine has twice what 60 fps needs.
 
-- **Depth:** 16 bits from q, in a small floating format (as Voodoo's
-  w-buffer) so far walls don't fight; pectinos picks it.
-- **Perspective:** a divide every 8 pixels with straight steps between is
-  what software Quake did (every 16) and can't be seen at 640 wide.
-  QUINCE asks for no visible swim; how is pectinos's call.
-- **Colour:** RGB565 blending is coarse on the lightmap multiply;
-  dithering, or blending at 8 bits a channel, can come later.
+Step 2's C model settles these as rules (`docs/PB3D.md`; Jacob,
+2026-11-12), for pectinos to change in the model first if the gateware
+wants them otherwise:
+
+- **Depth:** 16 bits from q, in a small floating format (4 bits of
+  exponent, 12 of mantissa, as Voodoo's w-buffer) so far walls don't fight.
+- **Perspective:** a divide every pixel, one reciprocal shared by every
+  attribute, so nothing swims. Software Quake divided every 16 pixels.
+- **Mips:** one level a triangle, from its texel and pixel areas.
+- **Colour:** 8 bits a channel inside, RGB565 out with no dithering. The
+  lightmap multiply is coarse in 565; dithering can come later as a STATE
+  bit.
 - **1080p** (`pbshow3_1080`): 640x480 has no whole scale there; x2 with
   bars, or 960x540 at x2 (1.7 times the pixels).
 

@@ -26,6 +26,10 @@ SERVER_FRAMES = 300
 SERVER_TOTALS = (186776, 357952)   # triangles, vertices GLQuake asked for
 SERVER_SENT = (2836051, 330356, 162178)   # words, vertices, triangles sent PB
 SERVER_CHECKSUM = 666297688   # of every word: the same commands, word for word
+# Where those frames leave the game, as the PC's (tests/test_quake.py):
+# since M3 the PC rounds floats as the M33 does, so these match exactly
+# too, and a difference is a bug in one build (LOG 2026-11-12).
+SERVER_STATE = "c8c17318, 164 entities"
 
 
 def main():
@@ -69,13 +73,19 @@ def main():
                 print("FAIL: demo1's load-time textures not counted")
                 failed += 1
             out = sim.run("QUINCE /SERVER E1M1 %d" % args.frames,
-                          want=[re.compile(r"server: checksum")], wait=1800)
+                          want=[re.compile(r"server: state .* entities")], wait=1800)
             print("\n".join(l for l in out.splitlines() if l.startswith("server:")))
             m = re.search(r"server: totals (\d+) tris (\d+) verts", out)
             got = m and (int(m.group(1)), int(m.group(2)))
             if args.frames == SERVER_FRAMES and got != SERVER_TOTALS:
                 print("FAIL: e1m1's %d frames sent %s (tris, verts), want %s, as the PC's"
                       % (SERVER_FRAMES, got, SERVER_TOTALS))
+                failed += 1
+            m = re.search(r"server: state ([^\r\n]*)", out)
+            got = m and m.group(1).strip()
+            if args.frames == SERVER_FRAMES and got != SERVER_STATE:
+                print("FAIL: e1m1's %d frames left state %s, want %s, as the PC's"
+                      % (SERVER_FRAMES, got, SERVER_STATE))
                 failed += 1
             m = re.search(r"server: sent totals (\d+) words (\d+) verts (\d+) tris", out)
             got = m and tuple(int(g) for g in m.groups())
@@ -90,7 +100,7 @@ def main():
                 failed += 1
             # Every shareware map fits the board's pool (LOG 2026-11-12).
             for name in MAPS:
-                sim.run("QUINCE /SERVER %s 5" % name, want=[re.compile(r"server: checksum")],
+                sim.run("QUINCE /SERVER %s 5" % name, want=[re.compile(r"server: state .* entities")],
                         wait=600)
             print("sim-bench: every shareware map loaded")
         except simdrive.SimError as e:

@@ -119,12 +119,16 @@ touches:
    With `QUINCE_PAK` naming the shareware `id1/pak0.pak` (never
    committed), `make test` also runs `make test-quake`: Quake built for
    the PC (`-m32`, which needs `gcc-multilib`; it skips without one),
-   its two benchmarks, and every shareware map loaded.
+   its two benchmarks, and every shareware map loaded. The PC build
+   rounds floats as the board does (SSE, nothing fused, the SDK's
+   `math.c`), so e1m1's state and checksum are the board's, bit for bit.
+   `make test-builtins` checks with CANNER that `math.h`'s `sqrtf` and
+   the rounding functions are FPU instructions, not calls.
 2. **`make sim-smoke`**: SIMMER, PectinOS in QEMU, with no window. It runs
    `/SELFTEST` on CANNER's code, then the program, then reads its screen
    back as text. The `simmer` skill has the recipes. `make sim-bench
    QUINCE_PAK=...` runs Quake's benchmarks there, CANNER's build, and
-   holds the server's counts to the PC's.
+   holds the server's counts, state and checksum to the PC's.
 3. **The board**, through a Claude Code session on the computer it's
    plugged into. Use the serial console, the screen viewer and the sound
    recorder (the `pectin-board` skill). Ask Jacob only for what a
