@@ -241,7 +241,7 @@ the board. The timedemo's frames follow the clock, and the board's sent
 14% fewer words and 21% fewer vertices than the PC's do today (16,000
 words, 2,325 vertices; the PC row is from before PR 2's last changes);
 inferred to be the client's interpolation at 22 fps against the PC's
-thousands. MB/s here is MiB. A vertex averages 12.7 to 14.1
+thousands. The board's row's MB/s are MiB/s. A vertex averages 12.7 to 14.1
 bytes because the HUD's and the models' are smaller than the world's,
 and the primitives off the screen (about 240 a frame) aren't sent. Load
 is 2.6 MB of texture indices, well under a second.
