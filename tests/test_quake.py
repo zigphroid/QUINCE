@@ -4,8 +4,9 @@
 Our own code. Runs build/quake_host's timedemo of demo1 and its server
 benchmark on e1m1, prints their lines, and checks what doesn't depend on
 the PC's speed: demo1's frame count, and the server benchmark's totals,
-which its fixed 0.1-second steps make the same every run. The pak is the
-shareware 1.06 pak0.pak (md5 5906e5998fc3d896ddaf5e6a62e03abb), from the
+which its fixed 0.1-second steps make the same every run. It also loads
+every shareware map for a few frames, to show each fits the hunk. The
+pak is the shareware 1.06 pak0.pak (md5 5906e5998fc3d896ddaf5e6a62e03abb), from the
 person running it: it's never committed.
 """
 import re
@@ -15,7 +16,8 @@ import sys
 DEMO1_FRAMES = 969
 # 300 server frames of e1m1 from the start, this build's renderer:
 SERVER_FRAMES = 300
-SERVER_TOTALS = (331290, 651180)   # triangles, vertices
+SERVER_TOTALS = (330776, 650152)   # triangles, vertices
+MAPS = ["START"] + ["E1M%d" % i for i in range(1, 9)]
 
 
 def run(exe, base, *words):
@@ -43,9 +45,11 @@ def main():
         print("FAIL: e1m1's %d frames sent %s (tris, verts), want %s"
               % (SERVER_FRAMES, got, SERVER_TOTALS))
         failed += 1
+    for name in MAPS:
+        run(exe, base, "server", name, "5")
     if failed:
         sys.exit(1)
-    print("test-quake: demo1 and e1m1 OK")
+    print("test-quake: demo1, e1m1 and every shareware map OK")
 
 
 if __name__ == "__main__":

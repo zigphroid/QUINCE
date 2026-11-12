@@ -99,3 +99,24 @@ without the fix.
 Alternatives: build with 4-byte enums (CANNER has no such switch, and the
 SDK's ABI fixes the size), or read the fields with `LittleLong` on a
 `byte *`, which changes more of id's code than changing the types does.
+
+## 2026-11-12: a 5.75 MB hunk and 20 lightmaps
+
+The PR 2 review found that E1M4 fails at the 5.5 MB hunk
+(`Cache_TryAlloc: 428688 is greater then free hunk`). The hunk is now
+5.75 MB (`MINIMUM_MEMORY` 0x5C0000), and every shareware map loads at
+that size on the PC. `make test-quake` and `make sim-bench` load each map,
+the board's build on SIMMER too. To make room in the 7 MB pool,
+`MAX_LIGHTMAPS` goes from 32 to 20, which saves 192 KB. The maps need 13
+to 16: on the PC, E1M2, E1M3 and E1M4 fail at 12 and all pass at 16. On
+SIMMER, a 6 MB hunk leaves too little of the pool for the lightmaps even
+at 20, so 5.75 MB is the most that fits (inferred from a few sizes tried).
+
+The same review corrected one figure. The 75 KB that demo1 sends at an
+8 MB hunk are lightmap updates (`glTexSubImage2D`), not textures. Those
+updates change as the game runs, so they cross the PB link every frame.
+They are now counted apart from textures and added to the link's rate.
+
+Alternatives: keep 5.5 MB and say which maps fit, which would drop a
+shareware level; or shrink the upload buffers, which a 256x256 texture
+needs whole.

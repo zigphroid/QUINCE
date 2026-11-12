@@ -18,7 +18,8 @@ board runs the game itself.
 the seconds, the frames a second and the time a frame, as Quake's own
 `timedemo` works them out. Then, for each frame on average, the
 triangles, vertices, primitives and GL calls the renderer sent, and the
-bytes a second a card's link would carry at that rate.
+bytes a second a card's link would carry at that rate: the vertices and
+the lightmaps' updates. Textures are counted apart, sent once.
 
 `/SERVER map frames` loads a map with a player in it and runs that many
 frames of a tenth of a second of game time each: the game's code, its
@@ -27,8 +28,10 @@ physics and the renderer. It prints the same lines.
 Quake's files come from `J:\LARDER\QUINCE`: copy `PAK0.PAK` from your own
 Quake (the shareware one is enough) to `J:\LARDER\QUINCE\ID1\PAK0.PAK`.
 
-`/MEM:kb` sets the size of Quake's memory (its hunk) in KB, 5632 unless
-given; the rest of the PSRAM goes to its textures and lightmaps. `/V`
+`/MEM:kb` sets the size of Quake's memory (its hunk) in KB, 5888 unless
+given, which every shareware map fits; the rest of the PSRAM goes to
+its texture buffers and lightmaps, so a bigger one leaves them too
+little. `/V`
 also prints Quake's console as it runs.
 
 With no switch, QUINCE fills the screen and says hello: to `name`, or to

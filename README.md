@@ -9,7 +9,11 @@ pectinos checkout at the commit `PECTIN_REV` names.
 ```sh
 make            # build/QUINCE.JAM (CANNER)
 make test       # the host suite, under the sanitizers
+make test-quake QUINCE_PAK=path/to/id1/pak0.pak
+                # Quake on the PC (32-bit: gcc-multilib), in make test too
 make sim-smoke  # on SIMMER (PectinOS in QEMU), no window
+make sim-bench QUINCE_PAK=path/to/id1/pak0.pak
+                # Quake's two benchmarks on SIMMER, CANNER's build
 make sim        # on SIMMER, in a window
 make send       # onto the board's card over USB-C
 make os         # the pinned PectinOS onto the board (BOOTSEL)

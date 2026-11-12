@@ -16,12 +16,14 @@ import shutil
 import sys
 
 DEMO1_FRAMES = 969
+MAPS = ["START"] + ["E1M%d" % i for i in range(1, 9)]
 # e1m1's 300 server frames send what the PC's do (tests/test_quake.py's
-# SERVER_TOTALS): the server is deterministic, so CANNER's build has to
-# match GCC's on the PC exactly. demo1's totals follow the clock (the
+# SERVER_TOTALS): the server is deterministic, and both builds take
+# lib/qrand.c's rand, so CANNER's build has to match GCC's on the PC
+# exactly. demo1's totals follow the clock (the
 # client's interpolation), so only its frame count is checked.
 SERVER_FRAMES = 300
-SERVER_TOTALS = (331290, 651180)   # triangles, vertices
+SERVER_TOTALS = (330776, 650152)   # triangles, vertices
 
 
 def main():
@@ -70,6 +72,11 @@ def main():
                 print("FAIL: e1m1's %d frames sent %s (tris, verts), want %s, as the PC's"
                       % (SERVER_FRAMES, got, SERVER_TOTALS))
                 failed += 1
+            # Every shareware map fits the board's pool (LOG 2026-11-12).
+            for name in MAPS:
+                sim.run("QUINCE /SERVER %s 5" % name, want=[re.compile(r"server: checksum")],
+                        wait=600)
+            print("sim-bench: every shareware map loaded")
         except simdrive.SimError as e:
             print("sim-bench: FAILED: %s" % e, file=sys.stderr)
             print(e.out[-3000:] if e.out else sim.tail(), file=sys.stderr)

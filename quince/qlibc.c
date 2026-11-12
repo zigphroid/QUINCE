@@ -76,24 +76,6 @@ char *strrchr(const char *s, int c)
 
 /* ---- stdlib.h ---- */
 
-/* A 32-bit linear congruential generator, the constants from Knuth's
- * TAOCP vol. 2 §3.3.4's table (Numerical Recipes' pair); the high bits are
- * the good ones, so the 15 returned come from there. Quake only needs it
- * to look random, and to be the same from run to run, so the server
- * benchmark sends the same frames each time. */
-static uint32_t rand_state = 1;
-
-int rand(void)
-{
-	rand_state = rand_state * 1664525u + 1013904223u;
-	return (int)((rand_state >> 16) & RAND_MAX);
-}
-
-void srand(unsigned seed)
-{
-	rand_state = seed;
-}
-
 long strtol(const char *s, char **end, int base)
 {
 	const char *p = s;

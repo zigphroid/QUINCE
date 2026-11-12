@@ -11,8 +11,11 @@ struct nullgl_counts {
 	uint32_t prims;        /* glBegin ... glEnd pairs */
 	uint32_t verts;        /* glVertex* */
 	uint32_t tris;         /* triangles those vertices make */
-	uint32_t tex_uploads;  /* glTexImage2D and glTexSubImage2D */
+	uint32_t tex_uploads;  /* glTexImage2D: a texture, sent once */
 	uint32_t tex_bytes;    /* the bytes those uploads carried */
+	uint32_t sub_uploads;  /* glTexSubImage2D: GLQuake's lightmaps, changed
+	                        * by dynamic lights while the game runs */
+	uint32_t sub_bytes;    /* the bytes those updates carried */
 	uint32_t binds;        /* glBindTexture */
 };
 

@@ -37,9 +37,9 @@ unsigned		blocklights[18*18];
 #define	BLOCK_WIDTH		128
 #define	BLOCK_HEIGHT	128
 
-// QUINCE: 32, not 64: the shareware maps use fewer (tests/test_quake.py loads
-// each one), and each is 16 KB of PSRAM
-#define	MAX_LIGHTMAPS	32
+// QUINCE: 20, not 64: the shareware maps need at most 13 to 16 (found on
+// the PC: E1M2, E1M3 and E1M4 fail at 12), and each is 16 KB of PSRAM
+#define	MAX_LIGHTMAPS	20
 int			active_lightmaps;
 
 typedef struct glRect_s {
@@ -55,7 +55,7 @@ QPSRAM int			allocated[MAX_LIGHTMAPS][BLOCK_WIDTH];	// QUINCE: in PSRAM (lib/qpr
 // the lightmap texture data needs to be kept in
 // main memory so texsubimage can update properly
 // QUINCE: from the PSRAM pool in GL_BuildLightmaps, lightmap_bytes a texel
-// (1 with -lm_1, as QUINCE runs it), not 4 MB of static memory
+// (1: GL_LUMINANCE, the default), not 4 MB of static memory
 byte		*lightmaps;
 
 // For gl_texsort 0

@@ -288,8 +288,8 @@ void glTexSubImage2D(GLenum target, GLint level, GLint x, GLint y, GLsizei w, GL
 {
 	count_call();
 	(void)target; (void)level; (void)x; (void)y; (void)type; (void)px;
-	nullgl_total.tex_uploads++;
-	nullgl_total.tex_bytes += (uint32_t)w * (uint32_t)h * texel_bytes(fmt);
+	nullgl_total.sub_uploads++;
+	nullgl_total.sub_bytes += (uint32_t)w * (uint32_t)h * texel_bytes(fmt);
 }
 
 void glBindTexture(GLenum target, GLuint tex) { count_call(); (void)target; (void)tex; nullgl_total.binds++; }

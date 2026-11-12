@@ -78,10 +78,10 @@ void	VID_UnlockBuffer (void);
 
 #define UNUSED(x)	(x = x)	// for pesky compiler / lint warnings
 
-// QUINCE: 5.5 MB, not 5.3: what demo1 and e1m1 need, found on the PC
-// (tests/test_quake.py runs both at it); QUINCE's hunk is this, from a
-// 7 MB PSRAM pool that the textures and lightmaps share
-#define	MINIMUM_MEMORY			0x580000
+// QUINCE: 5.75 MB, not 5.3: what every shareware map needs (E1M4 fails
+// at 5.5), found on the PC; QUINCE's hunk is this, from a 7 MB PSRAM
+// pool that the texture buffers and lightmaps share (LOG 2026-11-12)
+#define	MINIMUM_MEMORY			0x5C0000
 #define	MINIMUM_MEMORY_LEVELPAK	(MINIMUM_MEMORY + 0x100000)
 
 #define MAX_NUM_ARGVS	50

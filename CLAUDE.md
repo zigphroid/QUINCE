@@ -116,9 +116,15 @@ touches:
 1. **`make test`**: the host suite under ASan and UBSan. `lib/selftest.c`
    holds the checks, so `QUINCE /SELFTEST` runs the same ones on the board.
    Put new checks there unless they need the host (fixtures, files).
+   With `QUINCE_PAK` naming the shareware `id1/pak0.pak` (never
+   committed), `make test` also runs `make test-quake`: Quake built for
+   the PC (`-m32`, which needs `gcc-multilib`; it skips without one),
+   its two benchmarks, and every shareware map loaded.
 2. **`make sim-smoke`**: SIMMER, PectinOS in QEMU, with no window. It runs
    `/SELFTEST` on CANNER's code, then the program, then reads its screen
-   back as text. The `simmer` skill has the recipes.
+   back as text. The `simmer` skill has the recipes. `make sim-bench
+   QUINCE_PAK=...` runs Quake's benchmarks there, CANNER's build, and
+   holds the server's counts to the PC's.
 3. **The board**, through a Claude Code session on the computer it's
    plugged into. Use the serial console, the screen viewer and the sound
    recorder (the `pectin-board` skill). Ask Jacob only for what a

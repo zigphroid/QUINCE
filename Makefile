@@ -47,7 +47,9 @@ endif
 NAME   := QUINCE
 SRC    := quince/$(NAME).c
 # The core and the checks: no kernel calls, so they build on the host too.
-CORE   := lib/quince_core.c lib/selftest.c
+# The null GL and the benchmark's words are here, so the checks cover them
+# without the pak.
+CORE   := lib/quince_core.c lib/selftest.c lib/nullgl.c lib/qbargs.c
 # Quake (M1): id's files, QUINCE's null GL and benchmark (lib/), the
 # board's system layer and the C library pieces the SDK hasn't got
 # (quince/). The PC build below takes the same QUAKE_SRC and QUAKE_LIB.
@@ -57,7 +59,7 @@ QUAKE_SRC := $(addprefix quake/,cd_null.c chase.c cl_demo.c cl_input.c cl_main.c
     pr_edict.c pr_exec.c r_part.c sbar.c snd_null.c sv_main.c sv_move.c sv_phys.c \
     sv_user.c view.c wad.c world.c zone.c gl_draw.c gl_mesh.c gl_model.c \
     gl_refrag.c gl_rlight.c gl_rmain.c gl_rmisc.c gl_rsurf.c gl_screen.c gl_warp.c)
-QUAKE_LIB := lib/nullgl.c lib/qvid.c lib/qbench.c
+QUAKE_LIB := lib/qvid.c lib/qbench.c lib/qrand.c
 QUAKE_BOARD := $(QUAKE_SRC) $(QUAKE_LIB) quince/sys_quince.c quince/qlibc.c
 # quince/libc/ first: id's files include <stdio.h> and the rest, which
 # PectinOS hasn't got as such (quince/libc/stdio.h says why).
@@ -126,7 +128,7 @@ test: $(BUILD)/test_quince test-quake
 $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	@mkdir -p $(BUILD)
 	$(HOSTCC) -std=c11 -g -O1 -Wall -Wextra -Werror -I lib $(HOST_SAN) \
-	    -o $@ tests/test_quince.c $(CORE)
+	    -o $@ tests/test_quince.c $(CORE) -lm
 
 # Quake on the PC (M1): id's files in quake/ (as GLQuake builds them, with
 # the GL renderer and the null sound, CD and input), QUINCE's null GL,
@@ -137,7 +139,7 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 # (GCC and CANNER alike: quake/modelgen.h says what that cost). id's files
 # are old C: gnu89, common symbols, and their warnings left alone.
 QHOST_CC  := $(HOSTCC) -m32 -U__i386__ -fshort-enums -DGLQUAKE -I lib -I quake -O2 -g
-QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) tests/sys_host.c)
+QHOST_OBJ := $(patsubst %.c,$(BUILD)/qhost/%.o,$(QUAKE_SRC) $(QUAKE_LIB) lib/nullgl.c lib/qbargs.c tests/sys_host.c)
 
 $(BUILD)/qhost/quake/%.o: quake/%.c $(wildcard quake/*.h) lib/GL/gl.h Makefile
 	@mkdir -p $(dir $@)
@@ -150,15 +152,23 @@ $(BUILD)/quake_host: $(QHOST_OBJ)
 	$(QHOST_CC) -o $@ $^ -lm
 
 # M1's two timings on the PC, against the shareware pak QUINCE_PAK names
-# (never committed: tests/README.md). Skipped, saying so, without one.
-# Checked: demo1 is 969 frames, and the server benchmark's fixed steps
-# send the same triangles and vertices every run. The times are printed,
-# not checked.
+# (never committed: Quake's game data comes from your own copy, README's
+# "Licence"). Skipped, saying so, without one, and without a 32-bit C
+# library to build quake_host with (-m32: gcc-multilib on Debian and
+# Ubuntu, which the cloud session's start hook installs; Apple's clang
+# has none), so `make test` passes on a fresh machine either way.
+# Checked: demo1 is 969 frames, the server benchmark's fixed steps send
+# the same triangles and vertices every run, and every shareware map
+# loads. The times are printed, not checked.
 QUINCE_PAK ?=
 quake-host: $(BUILD)/quake_host
-test-quake: $(BUILD)/quake_host
+test-quake:
 	@if [ -z "$(QUINCE_PAK)" ] || [ ! -f "$(QUINCE_PAK)" ]; then \
 	    echo "test-quake: skipped (set QUINCE_PAK to the shareware id1/pak0.pak)"; exit 0; fi; \
+	if ! printf '#include <stdio.h>\nint main(void) { return 0; }\n' | \
+	    $(HOSTCC) -m32 -x c -o /dev/null - 2>/dev/null; then \
+	    echo "test-quake: skipped ($(HOSTCC) -m32 can't build: no 32-bit C library; gcc-multilib on Debian and Ubuntu)"; exit 0; fi; \
+	$(MAKE) --no-print-directory $(BUILD)/quake_host && \
 	mkdir -p $(BUILD)/qdata/id1 && ln -sf "$(abspath $(QUINCE_PAK))" $(BUILD)/qdata/id1/pak0.pak && \
 	$(PYTHON) tests/test_quake.py $(BUILD)/quake_host $(BUILD)/qdata
 

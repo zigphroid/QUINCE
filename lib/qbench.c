@@ -13,94 +13,38 @@
  *   (QuakeC, physics), the client, and the renderer over the null GL.
  *
  * Beside each timing, lib/nullgl.c's counts per frame, and the bytes per
- * second a PB link would carry at that rate (NULLGL_VERTEX_BYTES a vertex).
- * Textures are counted apart: the PB holds them all in its own memory, so
- * each crosses the link once (Jacob, 2026-11-12).
+ * second a PB link would carry at that rate: NULLGL_VERTEX_BYTES a vertex,
+ * and the lightmaps' updates (glTexSubImage2D). Textures are counted apart:
+ * the PB holds them all in its own memory, so each crosses the link once
+ * (Jacob, 2026-11-12).
  */
 #include "quakedef.h"
 #include "nullgl.h"
 #include "qbench.h"
-
-int qbench_verbose;
-
-static int to_int(const char *s, int *out)
-{
-	int v = 0;
-	if (!*s)
-		return -1;
-	for (; *s; s++) {
-		if (*s < '0' || *s > '9')
-			return -1;
-		v = v * 10 + (*s - '0');
-	}
-	*out = v;
-	return 0;
-}
-
-/* The shell hands a program its words in capitals (DEMO1, E1M1), and
- * Quake's pak names are lower case and compared exactly (COM_FindFile's
- * strcmp, common.c), so the name is lowered here. */
-static char *lower(const char *s)
-{
-	static char buf[64];
-	size_t i;
-	for (i = 0; s[i] && i < sizeof buf - 1; i++)
-		buf[i] = s[i] >= 'A' && s[i] <= 'Z' ? s[i] - 'A' + 'a' : s[i];
-	buf[i] = 0;
-	return buf;
-}
-
-int qbench_parse(int argc, char **argv, struct qbench_run *run)
-{
-	char *words[4];
-	int n = 0, i, kb;
-	memset(run, 0, sizeof *run);
-	for (i = 0; i < argc; i++) {
-		if (!strcmp(argv[i], "-v"))
-			qbench_verbose = 1;
-		else if (!strcmp(argv[i], "-mem") && i + 1 < argc) {
-			if (to_int(argv[++i], &kb) != 0 || kb <= 0 || kb > 65536)
-				return -1;
-			run->memsize = kb * 1024;
-		} else if (n < 4)
-			words[n++] = argv[i];
-		else
-			return -1;
-	}
-	if (n == 3 && !strcmp(words[1], "timedemo"))
-		run->kind = QBENCH_TIMEDEMO;
-	else if (n == 4 && !strcmp(words[1], "server")) {
-		run->kind = QBENCH_SERVER;
-		if (to_int(words[3], &run->frames) != 0 || run->frames <= 0)
-			return -1;
-	} else
-		return -1;
-	run->basedir = words[0];
-	if (strlen(words[2]) >= 64)
-		return -1;
-	run->name = lower(words[2]);
-	return 0;
-}
 
 static void print_counts(const char *what, int frames, double seconds)
 {
 	double fps = seconds > 0 ? frames / seconds : 0;
 	double per = frames > 0 ? 1.0 / frames : 0;
 	double vbytes = (double)nullgl_total.verts * NULLGL_VERTEX_BYTES;
-	/* Vertices only: the PB keeps every texture in its own 512 MB, so
-	 * a texture crosses the link once, at load, not every frame. */
-	double link = seconds > 0 ? vbytes / seconds : 0;
+	/* What crosses the PB link while the game runs: the vertices and the
+	 * lightmaps' updates. A texture crosses it once, at load, since the
+	 * PB keeps every one in its own 512 MB (Jacob, 2026-11-12). */
+	double vrate = seconds > 0 ? vbytes / seconds : 0;
+	double lrate = seconds > 0 ? nullgl_total.sub_bytes / seconds : 0;
 	printf("%s: %d frames %.2f seconds %.2f fps %.1f ms/frame\n",
 	       what, frames, seconds, fps, frames > 0 ? seconds * 1000.0 / frames : 0.0);
 	printf("%s: per frame %.0f tris %.0f verts %.0f prims %.0f gl calls %.0f binds\n",
 	       what, nullgl_total.tris * per, nullgl_total.verts * per,
 	       nullgl_total.prims * per, nullgl_total.calls * per, nullgl_total.binds * per);
-	printf("%s: PB link %.0f KB/s of vertices at this rate; textures %u uploads %u bytes, sent once\n",
-	       what, link / 1024.0, (unsigned)nullgl_total.tex_uploads,
-	       (unsigned)nullgl_total.tex_bytes);
-	printf("%s: totals %u tris %u verts %u texture bytes\n", what,
+	printf("%s: PB link %.0f KB/s at this rate: vertices %.0f KB/s, lightmap updates %.0f KB/s\n",
+	       what, (vrate + lrate) / 1024.0, vrate / 1024.0, lrate / 1024.0);
+	printf("%s: lightmap updates %u, %u bytes; textures %u uploads %u bytes, sent once\n",
+	       what, (unsigned)nullgl_total.sub_uploads, (unsigned)nullgl_total.sub_bytes,
+	       (unsigned)nullgl_total.tex_uploads, (unsigned)nullgl_total.tex_bytes);
+	printf("%s: totals %u tris %u verts %u lightmap bytes %u texture bytes\n", what,
 	       (unsigned)nullgl_total.tris, (unsigned)nullgl_total.verts,
-	       (unsigned)nullgl_total.tex_bytes);
+	       (unsigned)nullgl_total.sub_bytes, (unsigned)nullgl_total.tex_bytes);
 	printf("%s: checksum %.0f\n", what, (double)nullgl_checksum());
 }
 

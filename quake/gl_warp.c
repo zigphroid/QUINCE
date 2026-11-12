@@ -57,7 +57,7 @@ void SubdividePolygon (int numverts, float *verts)
 	vec3_t	mins, maxs;
 	float	m;
 	float	*v;
-	vec3_t	front[64], back[64];
+	vec3_t	*front, *back;	// QUINCE: 1.5 KB a level, not on the stack (below)
 	int		f, b;
 	float	dist[64];
 	float	frac;
@@ -88,6 +88,14 @@ void SubdividePolygon (int numverts, float *verts)
 		v-=i;
 		VectorCopy (verts, v);
 
+		// QUINCE: from the pool, not the stack: a level of this recursion
+		// held 1.5 KB of them, and start.bsp's water went deep enough to
+		// overflow the board's 16 KB stack (SIMMER)
+		front = malloc (2 * 64 * sizeof(vec3_t));
+		if (!front)
+			Sys_Error ("SubdividePolygon: no memory");
+		back = front + 64;
+
 		f = b = 0;
 		v = verts;
 		for (j=0 ; j<numverts ; j++, v+= 3)
@@ -117,6 +125,7 @@ void SubdividePolygon (int numverts, float *verts)
 
 		SubdividePolygon (f, front[0]);
 		SubdividePolygon (b, back[0]);
+		free (front);	// QUINCE: as above
 		return;
 	}
 
