@@ -149,7 +149,7 @@ void CL_KeepaliveMessage (void)
 	static float lastmsg;
 	int		ret;
 	sizebuf_t	old;
-	byte		olddata[8192];
+	static QPSRAM	byte		olddata[8192];	// QUINCE: static in PSRAM, not on the 16 KB stack (lib/qproto.h)
 	
 	if (sv.active)
 		return;		// no need if server is local
@@ -206,8 +206,8 @@ void CL_ParseServerInfo (void)
 	char	*str;
 	int		i;
 	int		nummodels, numsounds;
-	char	model_precache[MAX_MODELS][MAX_QPATH];
-	char	sound_precache[MAX_SOUNDS][MAX_QPATH];
+	static QPSRAM	char	model_precache[MAX_MODELS][MAX_QPATH];	// QUINCE: static in PSRAM, not on the 16 KB stack (lib/qproto.h)
+	static QPSRAM	char	sound_precache[MAX_SOUNDS][MAX_QPATH];	// QUINCE: static in PSRAM, not on the 16 KB stack (lib/qproto.h)
 	
 	Con_DPrintf ("Serverinfo packet received.\n");
 //

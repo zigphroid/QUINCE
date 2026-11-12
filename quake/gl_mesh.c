@@ -32,16 +32,16 @@ ALIAS MODEL DISPLAY LIST GENERATION
 model_t		*aliasmodel;
 aliashdr_t	*paliashdr;
 
-qboolean	used[8192];
+QPSRAM qboolean	used[8192];	// QUINCE: in PSRAM (lib/qproto.h)
 
 // the command list holds counts and s/t values that are valid for
 // every frame
-int		commands[8192];
+QPSRAM int		commands[8192];	// QUINCE: in PSRAM (lib/qproto.h)
 int		numcommands;
 
 // all frames will have their vertexes rearranged and expanded
 // so they are in the order expected by the command list
-int		vertexorder[8192];
+QPSRAM int		vertexorder[8192];	// QUINCE: in PSRAM (lib/qproto.h)
 int		numorder;
 
 int		allverts, alltris;
@@ -207,8 +207,8 @@ void BuildTris (void)
 	float	s, t;
 	int		index;
 	int		len, bestlen, besttype;
-	int		bestverts[1024];
-	int		besttris[1024];
+	static QPSRAM	int		bestverts[1024];	// QUINCE: static in PSRAM, not on the 16 KB stack (lib/qproto.h)
+	static QPSRAM	int		besttris[1024];	// QUINCE: static in PSRAM, not on the 16 KB stack (lib/qproto.h)
 	int		type;
 
 	//

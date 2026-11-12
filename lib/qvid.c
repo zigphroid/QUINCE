@@ -19,7 +19,9 @@
 
 /* vid itself is gl_screen.c's. */
 unsigned d_8to24table[256];
-unsigned char d_15to8table[65536];
+/* For 8-bit paletted cards only, so never read here: in PSRAM, out of the
+ * program area (lib/qproto.h). */
+QPSRAM unsigned char d_15to8table[65536];
 
 int texture_mode = GL_LINEAR;
 int texture_extension_number = 1;

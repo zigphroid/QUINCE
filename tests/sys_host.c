@@ -113,8 +113,9 @@ void Sys_HighFPPrecision(void) { }
 void Sys_MakeCodeWriteable(unsigned long start, unsigned long len) { (void)start; (void)len; }
 
 /* The hunk: Quake asks for one block at startup and carves everything
- * from it. The board's comes from the PSRAM pool; here, malloc. */
-#define HOST_MEM (8 * 1024 * 1024)
+ * from it. The board's comes from the PSRAM pool; here, malloc, the same
+ * size as the board's, so the two runs send the same frames. */
+#define HOST_MEM MINIMUM_MEMORY
 
 int main(int argc, char **argv)
 {

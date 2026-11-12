@@ -78,7 +78,10 @@ void	VID_UnlockBuffer (void);
 
 #define UNUSED(x)	(x = x)	// for pesky compiler / lint warnings
 
-#define	MINIMUM_MEMORY			0x550000
+// QUINCE: 5.5 MB, not 5.3: what demo1 and e1m1 need, found on the PC
+// (tests/test_quake.py runs both at it); QUINCE's hunk is this, from a
+// 7 MB PSRAM pool that the textures and lightmaps share
+#define	MINIMUM_MEMORY			0x580000
 #define	MINIMUM_MEMORY_LEVELPAK	(MINIMUM_MEMORY + 0x100000)
 
 #define MAX_NUM_ARGVS	50
@@ -261,6 +264,8 @@ typedef struct
 #ifdef GLQUAKE
 #include "glquake.h"
 #endif
+
+#include "qproto.h"	// QUINCE: prototypes for the calls id made before a declaration (lib/qproto.h)
 
 //=============================================================================
 

@@ -16,7 +16,7 @@ struct qbench_run {
 extern int qbench_verbose;   /* print Quake's console to the console too */
 
 /* Read "BASEDIR timedemo DEMO" or "BASEDIR server MAP FRAMES", and an
- * optional -v and -mem MB. 0, or -1 for words that aren't one. */
+ * optional -v and -mem KB (the hunk). 0, or -1 for words that aren't one. */
 int qbench_parse(int argc, char **argv, struct qbench_run *run);
 
 /* Host_Init, then run the benchmark and print its line. parms holds the

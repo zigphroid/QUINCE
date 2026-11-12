@@ -1035,7 +1035,7 @@ void R_InitSky (texture_t *mt)
 {
 	int			i, j, p;
 	byte		*src;
-	unsigned	trans[128*128];
+	unsigned	*trans = malloc (128*128*sizeof(unsigned));	// QUINCE: was trans[128*128] on the stack (64 KB)
 	unsigned	transpix;
 	int			r, g, b;
 	unsigned	*rgba;
@@ -1088,5 +1088,6 @@ void R_InitSky (texture_t *mt)
 	glTexImage2D (GL_TEXTURE_2D, 0, gl_alpha_format, 128, 128, 0, GL_RGBA, GL_UNSIGNED_BYTE, trans);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
 	glTexParameterf(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+	free (trans);	// QUINCE
 }
 

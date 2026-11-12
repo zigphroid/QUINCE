@@ -37,7 +37,9 @@ unsigned		blocklights[18*18];
 #define	BLOCK_WIDTH		128
 #define	BLOCK_HEIGHT	128
 
-#define	MAX_LIGHTMAPS	64
+// QUINCE: 32, not 64: the shareware maps use fewer (tests/test_quake.py loads
+// each one), and each is 16 KB of PSRAM
+#define	MAX_LIGHTMAPS	32
 int			active_lightmaps;
 
 typedef struct glRect_s {
@@ -48,11 +50,13 @@ glpoly_t	*lightmap_polys[MAX_LIGHTMAPS];
 qboolean	lightmap_modified[MAX_LIGHTMAPS];
 glRect_t	lightmap_rectchange[MAX_LIGHTMAPS];
 
-int			allocated[MAX_LIGHTMAPS][BLOCK_WIDTH];
+QPSRAM int			allocated[MAX_LIGHTMAPS][BLOCK_WIDTH];	// QUINCE: in PSRAM (lib/qproto.h)
 
 // the lightmap texture data needs to be kept in
 // main memory so texsubimage can update properly
-byte		lightmaps[4*MAX_LIGHTMAPS*BLOCK_WIDTH*BLOCK_HEIGHT];
+// QUINCE: from the PSRAM pool in GL_BuildLightmaps, lightmap_bytes a texel
+// (1 with -lm_1, as QUINCE runs it), not 4 MB of static memory
+byte		*lightmaps;
 
 // For gl_texsort 0
 msurface_t  *skychain = NULL;
@@ -1640,6 +1644,15 @@ void GL_BuildLightmaps (void)
 	case GL_ALPHA:
 		lightmap_bytes = 1;
 		break;
+	}
+
+	// QUINCE: the lightmaps' memory, once lightmap_bytes is known (the
+	// format comes from the command line, so it's the same every map)
+	if (!lightmaps)
+	{
+		lightmaps = malloc (lightmap_bytes*MAX_LIGHTMAPS*BLOCK_WIDTH*BLOCK_HEIGHT);
+		if (!lightmaps)
+			Sys_Error ("GL_BuildLightmaps: no memory for the lightmaps");
 	}
 
 	for (j=1 ; j<MAX_MODELS ; j++)

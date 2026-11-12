@@ -1,0 +1,72 @@
+#!/usr/bin/env python3
+"""make sim-bench: M1's two timings on SIMMER (PectinOS in QEMU).
+
+QUINCE's own (M1). The same QUINCE.JAM the board runs, on a scratch card
+with the shareware pak at J:\\LARDER\\QUINCE\\ID1\\PAK0.PAK, then
+`QUINCE /TIMEDEMO DEMO1` and `QUINCE /SERVER E1M1 FRAMES`, their lines
+printed. SIMMER's times say nothing about the board's (QEMU runs as fast
+as the PC lets it); what this checks is that CANNER's build runs Quake
+through, and that its counts match the PC's (tests/test_quake.py), so the
+board run in M1's PR 3 is only a matter of the clock.
+"""
+import argparse
+import os
+import re
+import shutil
+import sys
+
+DEMO1_FRAMES = 969
+
+
+def main():
+    ap = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    ap.add_argument("--root", required=True, help="the pectinos checkout")
+    ap.add_argument("--app", required=True, help="QUINCE.JAM")
+    ap.add_argument("--pak", required=True, help="the shareware id1/pak0.pak")
+    ap.add_argument("--work", required=True, help="a directory for the card and the log")
+    ap.add_argument("--frames", type=int, default=300, help="server frames")
+    args = ap.parse_args()
+
+    sys.path.insert(0, os.path.join(args.root, "tools"))
+    import simdrive
+
+    qemu = os.path.join(args.root, "simmer", "qemu", "bin", "qemu-system-arm")
+    kernel = os.path.join(args.root, "build", "sim", "pectinos.elf")
+    jarcard = os.path.join(args.root, "build", "host", "jarcard")
+    os.makedirs(args.work, exist_ok=True)
+    tree = os.path.join(args.work, "tree")
+    shutil.rmtree(tree, ignore_errors=True)
+    os.makedirs(os.path.join(tree, "ID1"))
+    shutil.copyfile(args.pak, os.path.join(tree, "ID1", "PAK0.PAK"))
+    card = os.path.join(args.work, "card.img")
+    simdrive.new_card(jarcard, card, [args.app])
+    simdrive.subprocess.run([jarcard, card, "tree", tree, "\\LARDER\\QUINCE"], check=True,
+                            stdout=simdrive.subprocess.DEVNULL)
+
+    failed = 0
+    with open(os.path.join(args.work, "console.log"), "w") as log, \
+            simdrive.Sim(qemu, kernel, card, log) as sim:
+        try:
+            sim.boot()
+            out = sim.run("QUINCE /TIMEDEMO DEMO1", want=[re.compile(r"timedemo: checksum")],
+                          wait=1800)
+            print("\n".join(l for l in out.splitlines() if l.startswith("timedemo:")))
+            m = re.search(r"timedemo: (\d+) frames", out)
+            if not m or int(m.group(1)) != DEMO1_FRAMES:
+                print("FAIL: demo1 ran %s frames, want %d" % (m and m.group(1), DEMO1_FRAMES))
+                failed += 1
+            out = sim.run("QUINCE /SERVER E1M1 %d" % args.frames,
+                          want=[re.compile(r"server: checksum")], wait=1800)
+            print("\n".join(l for l in out.splitlines() if l.startswith("server:")))
+        except simdrive.SimError as e:
+            print("sim-bench: FAILED: %s" % e, file=sys.stderr)
+            print(e.out[-3000:] if e.out else sim.tail(), file=sys.stderr)
+            return 1
+    if failed:
+        return 1
+    print("sim-bench: Quake ran on SIMMER")
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

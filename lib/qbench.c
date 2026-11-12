@@ -39,15 +39,15 @@ static int to_int(const char *s, int *out)
 int qbench_parse(int argc, char **argv, struct qbench_run *run)
 {
 	char *words[4];
-	int n = 0, i, mb;
+	int n = 0, i, kb;
 	memset(run, 0, sizeof *run);
 	for (i = 0; i < argc; i++) {
 		if (!strcmp(argv[i], "-v"))
 			qbench_verbose = 1;
 		else if (!strcmp(argv[i], "-mem") && i + 1 < argc) {
-			if (to_int(argv[++i], &mb) != 0 || mb <= 0 || mb > 64)
+			if (to_int(argv[++i], &kb) != 0 || kb <= 0 || kb > 65536)
 				return -1;
-			run->memsize = mb * 1024 * 1024;
+			run->memsize = kb * 1024;
 		} else if (n < 4)
 			words[n++] = argv[i];
 		else

@@ -15,7 +15,7 @@ import sys
 DEMO1_FRAMES = 969
 # 300 server frames of e1m1 from the start, this build's renderer:
 SERVER_FRAMES = 300
-SERVER_TOTALS = (328116, 644832)   # triangles, vertices
+SERVER_TOTALS = (331290, 651180)   # triangles, vertices
 
 
 def run(exe, base, *words):

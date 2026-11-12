@@ -236,7 +236,10 @@ void R_TranslatePlayerSkin (int playernum)
 	model_t	*model;
 	aliashdr_t *paliashdr;
 	byte	*original;
-	unsigned	pixels[512*256], *out;
+	unsigned	*pixels, *out;	// QUINCE: was pixels[512*256] on the stack (512 KB; the
+				// stack is 16 KB): GL_Upload32's buffer, 256x256 (gl_max_size), as
+				// nothing here calls GL_Upload32
+	extern unsigned	*quince_scaled32;
 	unsigned	scaled_width, scaled_height;
 	int			inwidth, inheight;
 	byte		*inrow;
@@ -273,6 +276,8 @@ void R_TranslatePlayerSkin (int playernum)
 		return;		// player doesn't have a model yet
 	if (model->type != mod_alias)
 		return; // only translate skins on alias models
+
+	pixels = quince_scaled32;	// QUINCE: see its declaration
 
 	paliashdr = (aliashdr_t *)Mod_Extradata (model);
 	s = paliashdr->skinwidth * paliashdr->skinheight;
@@ -317,7 +322,7 @@ void R_TranslatePlayerSkin (int playernum)
 		byte *out2;
 
 		out2 = (byte *)pixels;
-		memset(pixels, 0, sizeof(pixels));
+		memset(pixels, 0, 256*256*sizeof(unsigned)	/* QUINCE: was sizeof(pixels) */);
 		fracstep = inwidth*0x10000/scaled_width;
 		for (i=0 ; i<scaled_height ; i++, out2 += scaled_width)
 		{
