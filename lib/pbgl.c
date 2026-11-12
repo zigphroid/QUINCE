@@ -382,12 +382,16 @@ static int back_find(uint32_t c)
 }
 
 static void flush_subs(void);
+static struct pb3d_buf buf;
+static void spill(struct pb3d_buf *b);
 
 static void tex_made(uint32_t id, uint32_t w, uint32_t h, uint32_t flags, uint32_t bytes,
                      uint32_t format, const void *texels)
 {
 	uint8_t *ti = tex_info(id);
-	flush_subs();   /* an update held for a texture goes before it is made again */
+	/* The window's words so far, and an update held for a texture,
+	 * go before it is made again: the stream keeps GL's order. */
+	spill(&buf);
 	if (ti) {
 		ti[0] = (uint8_t)(log2_of(w) | log2_of(h) << 4);
 		ti[1] = (uint8_t)(TI_KNOWN | ((flags & PB3D_TEXF_MIPMAP) ? TI_MIPMAP : 0) |
@@ -507,12 +511,13 @@ void glTexImage2D(GLenum target, GLint level, GLint internal, GLsizei w, GLsizei
 	tex_made(bound[unit], (uint32_t)w, (uint32_t)h, flags, n * 4u, PB3D_TEX_RGBA8888, px);
 }
 
-/* Lightmap updates, held to the frame's end. GLQuake's one-pass path
+/* Lightmap updates, held to the next window handed on, or the frame's
+ * end (M4 PR 4). GLQuake's one-pass path
  * (gl_rsurf.c's R_DrawSequentialPoly) updates a lightmap's changed rows
  * each time it draws a surface on it after a dynamic light touched it, so
  * one block can go up many times a frame. Held, the rows each block
- * changed go once, as one band, at the frame's end (before the frame's
- * commands, as every texture call is: lib/pbgl.h). The texels are read
+ * changed go once, as one band, before the window of words that may use
+ * them (lib/pbgl.h's sink). The texels are read
  * then, from GLQuake's own copy (lightmaps[], gl_rsurf.c), which by then
  * holds every change. Only full-width bands are held (all of GLQuake's
  * are); anything else goes at once. */
@@ -558,7 +563,7 @@ void glTexSubImage2D(GLenum target, GLint level, GLint x, GLint y, GLsizei w, GL
 	}
 	pbgl_total.sub_calls++;
 	if (x != 0 || !ti || !(ti[1] & TI_KNOWN) || (uint32_t)w != 1u << (ti[0] & 15u)) {
-		flush_subs();
+		spill(&buf);   /* after the words before it, as tex_made */
 		send_sub(id, format, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h, px);
 		return;
 	}
@@ -683,7 +688,6 @@ static uint32_t state_bits(void)
 
 /* --- the frame: what has been sent, so only changes are --- */
 
-static struct pb3d_buf buf;
 static uint32_t sent_state, sent_tex[UNITS], sent_how[UNITS], sent_near, sent_far;
 static uint32_t sent_clip[4];
 static int sent_depth;
@@ -774,29 +778,65 @@ void glClear(GLbitfield mask)
 
 /* FNV-1a (Fowler, Noll and Vo's hash, from its description), two words
  * a step: half the multiplies of a word a step, which M2's board run had
- * at 5% of the program (LOG 2026-11-12). Only the tests read it. */
-static uint32_t words_sum(const uint16_t *w, uint32_t n)
+ * at 5% of the program (LOG 2026-11-12). Only the tests read it. The
+ * frame comes a window at a time, so a window's odd last word waits in
+ * sum_word to pair with the next one's first: the sum is the whole
+ * frame's, as it was before the words streamed (M4 PR 4). */
+static uint32_t sum_word;
+static int sum_held;
+
+static void words_sum(const uint16_t *w, uint32_t n)
 {
-	uint32_t h = checksum, i;
-	for (i = 0; i + 1 < n; i += 2)
+	uint32_t h = checksum, i = 0;
+	if (sum_held && n > 0) {
+		h = (h ^ (sum_word | (uint32_t)w[0] << 16)) * 16777619u;
+		sum_held = 0;
+		i = 1;
+	}
+	for (; i + 1 < n; i += 2)
 		h = (h ^ ((uint32_t)w[i] | (uint32_t)w[i + 1] << 16)) * 16777619u;
-	if (i < n)
-		h = (h ^ w[i]) * 16777619u;
-	return h;
+	if (i < n) {
+		sum_word = w[i];
+		sum_held = 1;
+	}
+	checksum = h;
+}
+
+/* The words the frame has handed on so far, for the counts. */
+static uint32_t frame_words;
+
+/* The window's words go on: summed, then to the sink, after any texture
+ * update still held, since PB draws a window as it arrives and the
+ * words may use the update (M4 PR 4). Then the window is empty again;
+ * what has been sent to PB this frame stays sent. */
+static void spill(struct pb3d_buf *b)
+{
+	words_sum(b->w, b->n);
+	flush_subs();
+	if (sink && sink->words && b->n)
+		sink->words(b->w, b->n);
+	frame_words += b->n;
+	b->n = 0;
 }
 
 void pbgl_end_frame(void)
 {
+	uint32_t n;
+	spill(&buf);
+	if (sum_held) {
+		checksum = (checksum ^ sum_word) * 16777619u;
+		sum_held = 0;
+	}
+	n = frame_words;
+	frame_words = 0;
 	pbgl_total.frames++;
-	pbgl_total.words += buf.n;
-	if (buf.n > pbgl_total.max_frame_words)
-		pbgl_total.max_frame_words = buf.n;
+	pbgl_total.words += n;
+	if (n > pbgl_total.max_frame_words)
+		pbgl_total.max_frame_words = n;
 	pbgl_total.dropped += buf.dropped;
 	buf.dropped = 0;
-	checksum = words_sum(buf.w, buf.n);
-	flush_subs();
 	if (sink && sink->frame)
-		sink->frame(buf.w, buf.n);
+		sink->frame();
 	frame_start();
 }
 
@@ -818,6 +858,9 @@ void pbgl_init(const struct pbgl_mem *m, int width, int height, const struct pbg
 	sink = s;
 	memset(mem.textures, 0, (size_t)mem.max_textures * PBGL_TEXTURE_BYTES);
 	pb3d_init(&buf, mem.words, mem.nwords);
+	buf.full = spill;
+	frame_words = 0;
+	sum_held = 0;
 	surf_w = width;
 	surf_h = height;
 	for (i = 0; i < STACK_DEPTH; i++) {
@@ -865,7 +908,7 @@ struct vert {
  * Most of GLQuake's primitives are well under it; what is split is its
  * particle lists, about 1,370 primitives over demo1's 969 frames, and an
  * alias model's longest strips and fans now and then. */
-#define PRIM_MAX 256
+#define PRIM_MAX 256   /* PBGL_WORDS_MIN counts on it */
 static struct vert prim[PRIM_MAX];
 static uint16_t outcode[PRIM_MAX];
 static GLenum prim_mode;
@@ -1132,15 +1175,28 @@ static void flush(void)
 			if (!((outcode[a] | outcode[b] | outcode[c]) & P_CUT))
 				inside++;
 		}
-		if (inside && open_tris(PB3D_KIND_LIST, &f, inside * 3) == 0)
-			for (k = 0; k < ntri; k++) {
-				tri_of(kind, k, &a, &b, &c);
-				if ((outcode[a] | outcode[b] | outcode[c]) & P_CUT)
-					continue;
-				send_vertex(&prim[a], &f);
-				send_vertex(&prim[b], &f);
-				send_vertex(&prim[c], &f);
+		/* As lists of what fits the words window: a cut strip or fan
+		 * of 256 has 254 triangles inside, 762 vertices, more than
+		 * PBGL_WORDS_MIN holds (M4 PR 4). Whole, it would be dropped. */
+		{
+			uint32_t per = (buf.cap - PB3D_TRIS_WORDS) / (3u * PB3D_VERTEX_WORDS(f.format));
+			k = 0;
+			while (inside) {
+				uint32_t m = inside < per ? inside : per;
+				if (open_tris(PB3D_KIND_LIST, &f, m * 3) != 0)
+					break;
+				inside -= m;
+				for (; m; k++) {
+					tri_of(kind, k, &a, &b, &c);
+					if ((outcode[a] | outcode[b] | outcode[c]) & P_CUT)
+						continue;
+					send_vertex(&prim[a], &f);
+					send_vertex(&prim[b], &f);
+					send_vertex(&prim[c], &f);
+					m--;
+				}
 			}
+		}
 		for (k = 0; k < ntri; k++) {
 			uint16_t o;
 			tri_of(kind, k, &a, &b, &c);

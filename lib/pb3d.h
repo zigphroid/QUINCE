@@ -190,6 +190,12 @@ struct pb3d_buf {
 	                       * TRIS opened inside another will (#15) */
 	uint32_t tris_left;   /* vertices the open TRIS still takes */
 	uint8_t tris_format;
+	/* Called when a command doesn't fit and no TRIS is open, to hand the
+	 * words on and empty the buffer (n to 0), so the buffer is a window
+	 * on a frame that streams through it (M4 PR 4). 0, as pb3d_init sets
+	 * it, drops the command instead. A command bigger than cap is
+	 * dropped either way. */
+	void (*full)(struct pb3d_buf *b);
 };
 
 /* A vertex after the divide, for pb3d_vertex (the checks'; the GL layer
@@ -205,7 +211,8 @@ struct pb3d_vertex {
 void pb3d_init(struct pb3d_buf *b, uint16_t *words, uint32_t cap);
 void pb3d_clear(struct pb3d_buf *b);   /* empty again, for the next frame */
 
-/* Each writes one command, whole, or nothing and counts it in dropped. */
+/* Each writes one command, whole, or nothing and counts it in dropped
+ * (when it doesn't fit even after full has emptied the buffer). */
 void pb3d_depth(struct pb3d_buf *b, int clear);
 void pb3d_state(struct pb3d_buf *b, uint32_t bits);
 void pb3d_texture(struct pb3d_buf *b, uint32_t unit, uint32_t id, uint32_t how);

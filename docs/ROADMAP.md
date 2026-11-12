@@ -118,6 +118,11 @@ for odd values past 2^23 and is now right.
 - PR 3: a THERMO run on main's board build and a new heat file, then the
   per-vertex send in one pass (`send_vertex` into `pb3d_vertex_of`, no
   struct between them, the words through a local pointer).
+- PR 4: the frame's words streamed through an 8 KB window in SRAM,
+  handed to the sink each time it fills, instead of the whole frame in
+  the PSRAM pool (Jacob, option A); the room for it from three statics
+  moved to PSRAM (the menu's picture, a load-time table and printf's
+  buffer).
 
 ## Later: drawing on the pixelboard
 

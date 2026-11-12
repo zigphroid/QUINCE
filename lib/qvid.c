@@ -37,15 +37,17 @@ const char *gl_extensions = "";
 
 cvar_t gl_ztrick = {"gl_ztrick", "0", false, false, 0, NULL};
 
-/* What lib/pbgl.c works in (lib/pbgl.h). A frame's commands: demo1's
- * biggest is 77,401 words on the PC, an explosion's particles (each a
- * list triangle of 30 words), against 16,400 for its average frame
- * (LOG 2026-11-12, "M2 PR 2"), so 128 K words, 256 KB; a frame past it
- * loses commands, counted as dropped. The
+/* What lib/pbgl.c works in (lib/pbgl.h). A window on the frame's
+ * commands, handed to the sink each time it fills: 4 K words, 8 KB,
+ * static so it is in SRAM on the board. The whole frame in the PSRAM
+ * pool, 256 KB, cost demo1 5 ms a frame of PSRAM writes against SRAM
+ * (LOG 2026-11-12, "M4 PR 4"); a window needs only the biggest command,
+ * PBGL_WORDS_MIN, 2,818 words. The
  * textures by GL's name: GLQuake numbers them from 1 as it makes them,
  * about 1,200 for a shareware map. The scratch is a 256x256 texture,
  * gl_max_size. */
-#define QVID_WORDS    (128u * 1024u)
+#define QVID_WORDS    4096u
+typedef char qvid_words_fit[QVID_WORDS >= PBGL_WORDS_MIN ? 1 : -1];
 #define QVID_TEXTURES 4096u
 #define QVID_SCRATCH  (256u * 256u)
 
@@ -56,13 +58,14 @@ const struct pbgl_sink *qvid_sink;
 static void init_gl(void)
 {
 	static struct pbgl_mem mem;
-	mem.words = malloc(QVID_WORDS * sizeof(uint16_t));
+	static uint16_t words[QVID_WORDS];
+	mem.words = words;
 	mem.nwords = QVID_WORDS;
 	mem.textures = malloc(QVID_TEXTURES * PBGL_TEXTURE_BYTES);
 	mem.max_textures = QVID_TEXTURES;
 	mem.scratch = malloc(QVID_SCRATCH);
 	mem.nscratch = QVID_SCRATCH;
-	if (!mem.words || !mem.textures || !mem.scratch)
+	if (!mem.textures || !mem.scratch)
 		Sys_Error("VID_Init: no memory for the GL layer");
 	pbgl_init(&mem, QVID_WIDTH, QVID_HEIGHT, qvid_sink);
 	/* The state id's GL_Init (gl_vidnt.c, gl_vidlinux.c) sets once, which
