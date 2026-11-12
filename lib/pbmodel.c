@@ -506,8 +506,12 @@ static int study_level(const struct pbm *m, const struct pbm_texture *t,
 	}
 	if (ratio <= 0)
 		return 0;
-	/* Texels a pixel as a power of 2, rounded as the rule rounds. */
-	lambda = log2d(ratio) / 2 + 0.5 + m->study.bias * 0.5;
+	/* Texels a pixel as a power of 2. The single-level modes round it
+	 * half up, as the rule does; TRILINEAR keeps GL's floor and blends
+	 * by the fraction, so it needs no rounding. */
+	lambda = log2d(ratio) / 2 + m->study.bias * 0.5;
+	if (m->study.lod != PBM_LOD_TRILINEAR)
+		lambda += 0.5;
 	if (lambda < 0)
 		return 0;
 	l = (int)lambda;

@@ -89,12 +89,14 @@ enum {
 	PBM_LOD_TRI,        /* one level a triangle, from its areas (the rule) */
 	PBM_LOD_Q,          /* a level a pixel, from the areas and q there */
 	PBM_LOD_EXACT,      /* a level a pixel, from the s and t gradients (GL's) */
-	PBM_LOD_TRILINEAR   /* as EXACT, the two levels round it blended */
+	PBM_LOD_TRILINEAR   /* GL's trilinear: EXACT's level unrounded, blending
+	                     * floor(lambda) and the next by its fraction */
 };
 struct pbm_study {
 	int lod;            /* PBM_LOD_* */
 	int scale;          /* 0 or 1: as sent; N: positions times N (supersampling) */
-	int bias;           /* half levels added to every choice: -1 rounds down */
+	int bias;           /* half levels added to every choice: -1 rounds the
+	                     * single-level modes down; TRILINEAR is GL's at 0 */
 	int linear0;        /* unit 0 read bilinear whatever its bind says */
 	void (*texel)(void *ctx, uint32_t pool_index);   /* each texel read */
 	void *ctx;

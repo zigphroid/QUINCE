@@ -1039,6 +1039,21 @@ static void corners(void)
         v[3] = st2(vtx(0, 4, 1, 0, 0), 0, 8);
         pbm_draw(&m, PBM_FAN, v, 4);
         check("level 1 on unit 1", colour[0], pbm_565(255 * 240 >> 8, 255 * 240 >> 8, 255 * 240 >> 8));
+        // Half way rounds up on unit 1 as on unit 0: 8 by 4 texels on
+        // 4 by 4 pixels is 2 texels a pixel, level 1; a 64th of a texel
+        // less down is under 2, level 0. Pixel 0's texel is level 1's
+        // first either way, level 0's second (32) otherwise; unit 1 takes
+        // 255 minus its texel, as GLQuake's lightmaps hold.
+        pbm_clear_colour(&m, 0);
+        v[2] = st2(vtx(4, 4, 1, 0, 0), 8, 4);
+        v[3] = st2(vtx(0, 4, 1, 0, 0), 0, 4);
+        pbm_draw(&m, PBM_FAN, v, 4);
+        check("2 texels a pixel on unit 1, level 1", colour[0], pbm_565(255 * 240 >> 8, 255 * 240 >> 8, 255 * 240 >> 8));
+        pbm_clear_colour(&m, 0);
+        v[2] = st2(vtx(4, 4, 1, 0, 0), 8, 4 - 1.0 / 64);
+        v[3] = st2(vtx(0, 4, 1, 0, 0), 0, 4 - 1.0 / 64);
+        pbm_draw(&m, PBM_FAN, v, 4);
+        check("just under 2 on unit 1, level 0", colour[0], pbm_565(255 * 224 >> 8, 255 * 224 >> 8, 255 * 224 >> 8));
     }
 
     // q 0.5 on a 2x2 square comes out exactly (its sums are powers of

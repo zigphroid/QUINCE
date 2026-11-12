@@ -658,17 +658,19 @@ cache, PSRAM or the FPU's latencies.
   compares twice the texel area. No per-pixel level, no trilinear.
 - **Measured** by the C model on three 40-frame walks of demo1 (frames
   200-240, 490-530, 900-940), against the same frames drawn 4x4 times
-  larger with an exact, trilinear level and averaged down. Far flicker
+  larger with GL's trilinear (the exact per-pixel level, rounded down,
+  blended with the next by its fraction) and averaged down. Far flicker
   (frame-to-frame change the reference lacks, past about 256 units):
-  rounded down 3.00, rounded 2.78, per pixel from q 2.98, GL's exact
-  per-pixel rule 2.79, exact trilinear 2.95, bilinear walls 2.59 (but
-  error near 1.93 against 1.27: Quake's look changes). Per pixel from q
-  moved 1.1% of reads off the triangle's level: Quake's faces are at most
-  about 256 texels across, so q varies too little inside one. GL's rule
-  helped only by choosing blurrier levels, which rounding does too.
+  rounded down 3.00, rounded 2.78, per pixel from q 2.98, the exact
+  per-pixel level rounded down 2.79 and rounded (GL's rule for one
+  level) 2.86, GL's trilinear 2.95, bilinear walls 2.59 (but error near
+  1.93 against 1.27: Quake's look changes). Per pixel from q moved 1.1%
+  of reads off the triangle's level: Quake's faces are at most about 256
+  texels across, so q varies too little inside one. The exact level
+  helped only by being blurrier, as rounding the triangle's is.
 - **Cost** (an 8 KB direct-mapped cache of 32-byte lines standing in for
   PB's, a frame): rounded down 373 KB of misses, rounded 322, exact 313,
-  trilinear 513, bilinear walls 533. Rounding costs PB nothing a pixel;
+  trilinear 513, bilinear walls 533 (exact here is the rounded-down one). Rounding costs PB nothing a pixel;
   the per-pixel rules need a log2 and the gradients in the pixel
   pipeline, more DSP, which is PB's biggest risk.
 - **Alternatives:** per pixel from q (an add and a shift on log2 q):
@@ -679,3 +681,6 @@ cache, PSRAM or the FPU's latencies.
 - The study's switches stay in the model (`struct pbm_study`, all zeros
   is the rule) and `tests/pbplay.c` (`-lod`, `-bias`, `-linear`,
   `-scale`, `-raw`), so a later question can be measured the same way.
+  The runs above were made before the rule rounded; now `-bias -1`
+  gives the rounded-down levels, and `-lod tri3`, `-lod exact -bias -1`
+  and `-lod tri -bias -1` draw those runs' frames byte for byte.
