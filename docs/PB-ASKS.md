@@ -151,8 +151,9 @@ are about 2.5 MB (13 MB / 4 bytes / 4/3 for the mips; inferred). PB:
   format of its own (RGB565 is the obvious one; pectinos's choice);
 - takes the few textures that aren't palette colours (the particle dot)
   as 32-bit RGBA, alpha under 128 see-through (`lib/pb3d.h`);
-- keeps index 255 as see-through, for the HUD's pictures, sprites and the
-  sky's top layer;
+- keeps index 255 as see-through in a texture marked as having alpha
+  (the HUD's pictures, sprites and the sky's top layer), and as a colour
+  in the rest (the world and skins use it);
 - builds the mips by averaging 2x2 blocks, as `GL_MipMap` does, at load;
 - takes power-of-two sizes only; the Jam resamples the few that aren't,
   in indices.

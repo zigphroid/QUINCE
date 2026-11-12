@@ -75,13 +75,19 @@ enum {
 #define PB3D_S_MODULATE     0x0040u  /* unit 0's texel times the vertex colour;
                                       * 0 is the texel alone (GL_REPLACE) */
 #define PB3D_S_TEX0         0x0080u  /* unit 0 is on; 0 is the colour alone */
-#define PB3D_S_TEX1         0x0100u  /* unit 1 is on: times its texel (the lightmap) */
-#define PB3D_S_CULL_MASK    0x0600u  /* drop triangles by their winding on the screen: */
+#define PB3D_S_TEX1         0x0100u  /* unit 1 is on: the colour so far darkened by its
+                                      * texel, a grey g, as colour (256 - g) / 256,
+                                      * since GLQuake stores 255 - light
+                                      * (gl_rsurf.c); docs/PB3D.md has the rule */
+#define PB3D_S_CULL_MASK    0x0600u  /* drop triangles by their winding as seen on the
+                                      * screen, y down: clockwise is a positive
+                                      * (x1 - x0)(y2 - y0) - (y1 - y0)(x2 - x0) */
 #define PB3D_S_CULL_NONE    0x0000u
 #define PB3D_S_CULL_CW      0x0200u  /*   clockwise ones */
 #define PB3D_S_CULL_CCW     0x0400u  /*   counter-clockwise ones */
 #define PB3D_S_SMOOTH       0x0800u  /* colour shaded across the triangle (Gouraud);
-                                      * 0 takes the first vertex's (GL_FLAT) */
+                                      * 0 takes each triangle's first vertex's, in
+                                      * TRIS's order below (GL_FLAT) */
 #define PB3D_S_ALL          0x0fffu
 
 /* TEXTURE: arg is the unit, 0 (the wall, model or picture) or 1 (the
@@ -96,9 +102,10 @@ enum {
 /* TRIS: arg's bits 0-1 the kind, bits 2-6 the vertex format; word 1 the
  * number of vertices, n; then n vertices, each PB3D_VERTEX_WORDS(format)
  * words. A list takes n / 3 triangles (vertices 3k, 3k + 1, 3k + 2), a
- * strip n - 2 (k, k + 1, k + 2), a fan n - 2 (0, k + 1, k + 2); fewer
- * than three vertices draw nothing, and a list's leftover one or two are
- * ignored. */
+ * strip n - 2 (k, k + 1, k + 2 for even k, and k + 1, k, k + 2 for odd,
+ * as GL's, so every triangle of a strip winds the same way), a fan n - 2
+ * (0, k + 1, k + 2); fewer than three vertices draw nothing, and a list's
+ * leftover one or two are ignored. */
 #define PB3D_KIND_MASK      0x03u
 #define PB3D_KIND_LIST      0x00u
 #define PB3D_KIND_STRIP     0x01u
@@ -111,7 +118,8 @@ enum {
  *   q       2 words  1/w as near / w, unsigned 1.31: 1.0 (0x80000000) at
  *                    the near plane, smaller farther. Perspective and
  *                    depth come from it. Without it a triangle is flat on
- *                    the screen (the HUD, the console) and its depth is 0
+ *                    the screen (the HUD, the console) and its depth d is
+ *                    0 before DEPTHRANGE, so it stores near
  *   s, t    2 words  unit 0's texel position, signed 12.4 texels: the Jam
  *                    scales by the texture's size and takes whole sizes
  *                    off a primitive's coordinates, and PB repeats
@@ -206,7 +214,9 @@ uint32_t pb3d_fix_q(float q);   /* 1.31, 0 to 0xFFFFFFFF */
 enum {
 	/* 768 bytes: the palette 8-bit textures are read through, r, g, b
 	 * for each of 256 indices. Sent before the first texture. Index 255
-	 * is see-through, whatever its colour. */
+	 * is see-through, whatever its colour, but only in a texture made
+	 * with PB3D_TEXF_ALPHA: GLQuake's world and skins use it as a
+	 * colour. */
 	PB3D_REC_PALETTE  = 1,
 	/* Make (or make again) a texture and fill it: a 16-bit id (1-65535),
 	 * an 8-bit PB3D_TEX_* format, 8 bits of PB3D_TEXF_* flags, a 16-bit
@@ -236,7 +246,8 @@ enum {
 };
 
 #define PB3D_TEXF_MIPMAP  0x01u   /* PB builds the mips (2x2 averages) */
-#define PB3D_TEXF_ALPHA   0x02u   /* it has see-through texels */
+#define PB3D_TEXF_ALPHA   0x02u   /* it has see-through texels: index 255, or
+                                   * RGBA alpha under 128 */
 
 #define PB3D_TEX_MAX      1024u   /* a side */
 
