@@ -1,12 +1,12 @@
-/* lib/GL/gl.h: QUINCE's null GL, the declarations GLQuake's renderer
+/* lib/GL/gl.h: QUINCE's GL, the declarations GLQuake's renderer
  * (quake/gl_*.c) uses, and no more.
  *
- * Our own header, written for M1 (docs/ROADMAP.md): lib/nullgl.c defines
- * these functions, and none of them draws. They count what a card would
- * have been sent, and transform each vertex as a Glide-style card (which
- * takes screen-space vertices) would need the CPU to. The enum values are
- * QUINCE's own numbering, not OpenGL's: nothing reads them but nullgl.c,
- * which only needs them distinct (bits for the two buffer masks).
+ * Our own header, written for M1 (docs/ROADMAP.md): lib/pbgl.c defines
+ * these functions (M2), turning them into the pixelboard's 3D commands.
+ * The enum values are QUINCE's own numbering, not OpenGL's: nothing reads
+ * them but pbgl.c, which only needs them distinct (bits for the two
+ * buffer masks), and small enough that glTexEnvf's float holds one
+ * exactly.
  */
 #ifndef QUINCE_GL_H
 #define QUINCE_GL_H

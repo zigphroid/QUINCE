@@ -406,3 +406,67 @@ weights' sum was 256 or less, which happens on slivers far away. The sum
 is now always brought to 16 bits, moved up when it is short as well as cut
 when it is long, so the reciprocal is always 25 bits and needs no clamp.
 
+## 2026-11-12: the GL layer to PB, measured (M2 PR 2)
+
+`lib/pbgl.c` replaces M1's null GL. It writes PB's commands (`lib/pb3d.h`)
+for every frame, and the timings print what it sent. On the PC, demo1
+averages 16,400 words a frame (32 KB): 466 `TRIS` holding 2,412 vertices
+and 1,293 triangles, 7 `STATE`, 56 `TEXTURE`, and 2 `DEPTH` and
+`DEPTHRANGE`. Vertices are 93% of the words. At M1's board rate of 33
+frames a second that is 1.1 MB/s, and 1.9 MB/s at 60, against PB-ASKS's
+inferred 2.8 and M1's 6.5. Load is 151 textures, 2.6 MB of palette
+indices, none as RGBA, against M1's 13 MB with mips. e1m1's 300 server
+frames are the same on the PC and on SIMMER, word for word: 2,836,051
+words, one checksum. That took the PC's build off the x87: with its
+80-bit registers the word counts matched but the words didn't, so the
+PC's Quake now keeps floats in SSE registers (`-msse2 -mfpmath=sse`),
+rounding as the board's FPU does. (M3 PR 1, merged first, went on to
+make the PC's floats the board's bit for bit; the counts here are
+re-measured on top of it.)
+
+Where the bytes went:
+- **One pass.** With `gl_mtexable` on, GLQuake draws wall and lightmap
+  together (`R_DrawSequentialPoly`), so the world goes once. GLQuake's
+  own counts drop too: e1m1's 300 frames ask for 186,776 triangles, not
+  330,776, so `test-quake`'s and `sim-bench`'s totals moved.
+- **Culling.** About 240 primitives a frame are wholly off the screen or
+  behind the eye and aren't sent. GLQuake culls BSP nodes by their boxes,
+  not each surface.
+- **Cutting.** About 4 primitives a frame cross the near plane or run past
+  the guard band. Each is cut a triangle at a time, the ones inside going
+  as one list and each cut one as a small fan, rather than cutting the
+  whole polygon. That needs buffers for 8 vertices, not 2 x 264, and it
+  costs a few bytes on a few primitives.
+- **Lightmaps.** The one-pass path updates a block each time it draws a
+  surface a dynamic light touched, so e1m1's 300 frames made 2,146
+  updates (1.7 MB). The layer holds them to the frame's end and sends
+  one band of rows a block: 148 updates, 331,520 bytes, M1's figures
+  exactly. The texels are read at the frame's end from GLQuake's own
+  copy, which by then holds every change.
+- **Particles** are the biggest frames: each is a list triangle of 30
+  words (q, s and t, RGBA), so an explosion's 2,000 particles take 60,000
+  words. The largest demo1 frame is 77,401 words, and the board's buffer
+  is 128 K words (256 KB) from the PSRAM pool. With the texture table and
+  the scratch it is 328 KB, about what is freed by the
+  320 KB of id's RGBA upload buffers no longer allocated, since
+  `GL_Upload8` now hands its indices straight to the layer. A strip or a
+  particle list longer than 256 vertices is sent in pieces.
+
+Smaller decisions:
+- GL's filters and wraps are ignored. Walls are point sampled and
+  lightmaps bilinear and clamped (PB-ASKS, decision 4), so `TEXTURE`
+  carries PB's choice, not GL's.
+- The colour buffer isn't cleared, since GLQuake draws its whole view
+  (`gl_clear` 0). The depth is cleared each frame.
+- RGBA uploads that GLQuake makes itself (the sky, a player's translated
+  skin) are turned back into indices through a table from colour to
+  index. Only a texture with a colour off the palette goes as RGBA, and
+  in the shareware maps none does.
+- `quince/QUINCE.HOT` names M1's functions. `make heat` still builds, but
+  it puts the new layer in the cold code until a board run makes a new
+  heat file (PR 3).
+
+Alternatives: cutting whole polygons (fewer bytes on a crossing
+primitive, more SRAM), and sending each lightmap update as it comes
+(simpler, but up to 6.5 times the bytes on e1m1).
+

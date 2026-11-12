@@ -10,17 +10,23 @@
 ## What it does
 
 QUINCE is id Software's Quake (the GPL source, GLQuake's renderer),
-ported. Milestone 1 draws nothing: the renderer runs over a null GL that
-only counts what a 3D card would be sent, so QUINCE can time how fast the
-board runs the game itself.
+ported. It draws nothing yet: the renderer runs over a GL layer that
+writes the commands the pixelboard's 3D engine will take (screen-space
+triangles, their state and textures), counts them and drops them, so
+QUINCE can time the game and what drawing will cost the board.
 
 `/TIMEDEMO demo` plays a demo as fast as it goes and prints the frames,
 the seconds, the frames a second and the time a frame, as Quake's own
 `timedemo` works them out. Then, for each frame on average, the
-triangles, vertices, primitives and GL calls the renderer sent, and the
-bytes a second a card's link would carry at that rate: the vertices and
-the lightmaps' updates. The textures sent at load are counted apart,
-sent once, and any reloaded during the run are added to the rate.
+triangles, vertices, primitives and GL calls the renderer made, and what
+the pixelboard would be sent for them: its commands' words, of each
+kind, and the bytes a second its link would carry at that rate, the
+commands and the lightmaps' updates. The primitives dropped as off the
+screen, the ones cut at the near plane or at the guard band (2,040
+pixels out, past which PB's 12.4 positions can't reach), and any commands
+that didn't fit a frame are counted too. The textures sent at load are
+counted apart, sent once, and any reloaded during the run are added to
+the rate.
 
 `/SERVER map frames` loads a map with a player in it and runs that many
 frames of a tenth of a second of game time each: the game's code, its

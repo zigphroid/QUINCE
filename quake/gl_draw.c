@@ -22,6 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // vid buffer
 
 #include "quakedef.h"
+#include "pbgl.h"	// QUINCE: GL_Upload8 hands textures to lib/pbgl.c
 
 #define GL_COLOR_INDEX8_EXT     0x80E5
 
@@ -394,9 +395,10 @@ void Draw_Init (void)
 	{
 		scrap_texels = malloc (MAX_SCRAPS * sizeof(*scrap_texels));
 		quince_scaled32 = malloc (QUINCE_UPLOAD_MAX * sizeof(unsigned));
-		quince_scaled8 = malloc (QUINCE_UPLOAD_MAX);
-		quince_trans = malloc (QUINCE_TRANS_MAX * sizeof(unsigned));
-		if (!scrap_texels || !quince_scaled32 || !quince_scaled8 || !quince_trans)
+		// QUINCE (M2): not quince_scaled8 or quince_trans, which only
+		// GL_Upload8's RGBA path and GL_Upload8_EXT used: GL_Upload8 hands
+		// its indices to lib/pbgl.c now, and VID_Is8bit is false
+		if (!scrap_texels || !quince_scaled32)
 			Sys_Error ("Draw_Init: no memory for the texture buffers");
 		memset (scrap_texels, 0, MAX_SCRAPS * sizeof(*scrap_texels));
 	}
@@ -1213,6 +1215,13 @@ unsigned	*trans = quince_trans;	// QUINCE: was static unsigned trans[640*480]
 	int			i, s;
 	qboolean	noalpha;
 	int			p;
+
+	// QUINCE (M2): PB takes the palette indices as they are, and expands
+	// them and builds the mips itself (docs/PB-ASKS.md), so none of id's
+	// RGBA conversion, resampling and mips below runs: lib/pbgl.c resamples
+	// the indices to powers of two and sends them
+	pbgl_upload8 (data, width, height, mipmap, alpha, (int)gl_max_size.value);
+	return;
 
 	s = width*height;
 	if (s > QUINCE_TRANS_MAX)	// QUINCE: trans is smaller than id's, so check it

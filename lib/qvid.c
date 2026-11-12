@@ -1,19 +1,18 @@
-/* lib/qvid.c: QUINCE's video layer for GLQuake over the null GL.
+/* lib/qvid.c: QUINCE's video layer for GLQuake over the GL layer to PB.
  *
- * Our own code (M1, docs/ROADMAP.md). On a PC or a Windows box this is
+ * Our own code (M1, M2: docs/ROADMAP.md). On a PC or a Windows box this is
  * gl_vidnt.c's or gl_vidlinux.c's job: open a window, make a GL context,
- * turn the palette into the 32-bit colours textures are uploaded with.
- * Here there is no window and no context (lib/nullgl.c draws nothing), so
- * what's left is the state the renderer reads: the screen's size, the
- * palette tables, and the few switches GLQuake expects the video layer to
- * own. No kernel calls, so the host build links it too.
+ * find the multitexture extension. Here the GL is lib/pbgl.c, which
+ * writes PB's commands, so what's left is its memory, the state the
+ * renderer reads (the screen's size, the palette), and the switches
+ * GLQuake expects the video layer to own. No kernel calls, so the host
+ * build links it too: the memory is malloc's, the PSRAM pool on the board
+ * (quince/qlibc.c).
  */
 #include "quakedef.h"
-#include "nullgl.h"
+#include "pbgl.h"
 
-/* The size the renderer thinks it draws at. 640x480 is GLQuake's usual
- * window, and what the vertex transform in nullgl.c projects onto; the
- * pixelboard's own size is a later milestone's question. */
+/* The size the renderer draws at: PB's 640x480 (PB-ASKS, decision 2). */
 #define QVID_WIDTH  640
 #define QVID_HEIGHT 480
 
@@ -26,18 +25,55 @@ QPSRAM unsigned char d_15to8table[65536];
 int texture_mode = GL_LINEAR;
 int texture_extension_number = 1;
 float gldepthmin, gldepthmax;
-qboolean gl_mtexable = false;    /* no multitexture: one pass a texture */
+/* Two textures a pixel (PB-ASKS, decision 3): GLQuake draws a wall and its
+ * lightmap in one pass through the SGIS calls (gl_rsurf.c), pointed at
+ * lib/pbgl.c in VID_Init. */
+qboolean gl_mtexable = false;
 qboolean isPermedia = false;
 const char *gl_vendor = "QUINCE";
-const char *gl_renderer = "null GL (counts, draws nothing)";
+const char *gl_renderer = "PB's 3D commands (counted, not yet drawn)";
 const char *gl_version = "1.1";
 const char *gl_extensions = "";
 
 cvar_t gl_ztrick = {"gl_ztrick", "0", false, false, 0, NULL};
 
+/* What lib/pbgl.c works in (lib/pbgl.h). A frame's commands: demo1's
+ * biggest is 77,401 words on the PC, an explosion's particles (each a
+ * list triangle of 30 words), against 16,400 for its average frame
+ * (LOG 2026-11-12, "M2 PR 2"), so 128 K words, 256 KB; a frame past it
+ * loses commands, counted as dropped. The
+ * textures by GL's name: GLQuake numbers them from 1 as it makes them,
+ * about 1,200 for a shareware map. The scratch is a 256x256 texture,
+ * gl_max_size. */
+#define QVID_WORDS    (128u * 1024u)
+#define QVID_TEXTURES 4096u
+#define QVID_SCRATCH  (256u * 256u)
+
+/* Where the commands go: nowhere, until PB has a 3D service. The PC's
+ * QUINCE_PBDUMP sets one (tests/pbdump.c). */
+const struct pbgl_sink *qvid_sink;
+
+static void init_gl(void)
+{
+	static struct pbgl_mem mem;
+	mem.words = malloc(QVID_WORDS * sizeof(uint16_t));
+	mem.nwords = QVID_WORDS;
+	mem.textures = malloc(QVID_TEXTURES * PBGL_TEXTURE_BYTES);
+	mem.max_textures = QVID_TEXTURES;
+	mem.scratch = malloc(QVID_SCRATCH);
+	mem.nscratch = QVID_SCRATCH;
+	if (!mem.words || !mem.textures || !mem.scratch)
+		Sys_Error("VID_Init: no memory for the GL layer");
+	pbgl_init(&mem, QVID_WIDTH, QVID_HEIGHT, qvid_sink);
+	gl_mtexable = true;
+	qglMTexCoord2fSGIS = pbgl_mtexcoord;
+	qglSelectTextureSGIS = pbgl_select_texture;
+}
+
 void VID_SetPalette(unsigned char *palette)
 {
 	int i;
+	pbgl_palette(palette);
 	/* Textures go up as RGBA words, colour index 255 see-through, as the
 	 * other GL layers do it. The 15-bit table is for 8-bit paletted
 	 * cards, which this isn't: it stays zero. */
@@ -73,6 +109,7 @@ void VID_Init(unsigned char *palette)
 	vid.colormap = host_colormap;
 	vid.fullbright = 256 - LittleLong(*((int *)vid.colormap + 2048));
 	vid.recalc_refdef = 1;
+	init_gl();
 	VID_SetPalette(palette);
 }
 
@@ -89,7 +126,7 @@ void GL_BeginRendering(int *x, int *y, int *width, int *height)
 
 void GL_EndRendering(void)
 {
-	nullgl_end_frame();
+	pbgl_end_frame();
 }
 
 /* net_vcr.c (recording a session's network for playback) isn't built. */

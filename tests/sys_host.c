@@ -8,11 +8,15 @@
  *   build/quake_host BASEDIR timedemo DEMO
  *   build/quake_host BASEDIR server MAP FRAMES
  *
- * BASEDIR holds id1/pak0.pak. Prints one line of results (qbench.c).
+ * BASEDIR holds id1/pak0.pak. Prints the results (qbench.c). With
+ * QUINCE_PBDUMP=FILE set, also writes what the GL layer sends PB to FILE
+ * (tests/pbdump.c), for the C model.
  */
 #define _POSIX_C_SOURCE 200809L
 #include "quakedef.h"
 #include "qbench.h"
+#include "pbgl.h"
+#include "pbdump.h"
 #include <errno.h>
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -125,6 +129,8 @@ int main(int argc, char **argv)
 		fprintf(stderr, "usage: quake_host BASEDIR timedemo DEMO | BASEDIR server MAP FRAMES [-v]\n");
 		return 2;
 	}
+	if (getenv("QUINCE_PBDUMP") && *getenv("QUINCE_PBDUMP"))
+		qvid_sink = pbdump_open(getenv("QUINCE_PBDUMP"));
 	parms.basedir = run.basedir;
 	parms.memsize = run.memsize ? run.memsize : HOST_MEM;
 	parms.membase = malloc((size_t)parms.memsize);
