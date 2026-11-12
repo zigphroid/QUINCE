@@ -45,19 +45,25 @@ struct pbgl_counts {
 };
 
 /* Where the layer's output goes. Any of them may be 0. A texture call
- * goes as it happens; a frame's commands at its end, so a texture made or
- * changed during a frame comes before that frame's record. */
+ * goes as it happens. A frame's commands go a window at a time, words
+ * called each time the words buffer fills and once at the frame's end
+ * (each window whole commands), then frame: so a texture made during a
+ * frame comes after the words before it and before the words after it,
+ * and an update GL held (glTexSubImage2D's, coalesced) before the window
+ * that may use it (M4 PR 4). */
 struct pbgl_sink {
 	void (*palette)(const uint8_t *rgb);   /* 768 bytes */
 	void (*teximage)(uint32_t id, uint32_t format, uint32_t flags, uint32_t w,
 	                 uint32_t h, const void *texels);
 	void (*texsub)(uint32_t id, uint32_t format, uint32_t x, uint32_t y, uint32_t w,
 	               uint32_t h, const void *texels);
-	void (*frame)(const uint16_t *words, uint32_t n);
+	void (*words)(const uint16_t *words, uint32_t n);
+	void (*frame)(void);
 };
 
 /* The memory the layer works in, from the caller, since lib/ takes no
- * kernel calls: words for a frame's commands, a table of the textures
+ * kernel calls: words for a window of a frame's commands (at least
+ * PBGL_WORDS_MIN, the biggest command the layer writes), a table of the textures
  * (PBGL_TEXTURE_BYTES each, for GL's names 0 to max_textures - 1; a name
  * past it is drawn as no texture), and scratch for a texture's texels on
  * their way to PB (the biggest texture GLQuake makes, 256x256 under its
@@ -71,6 +77,10 @@ struct pbgl_mem {
 	uint32_t nscratch;
 };
 #define PBGL_TEXTURE_BYTES 2u
+/* The biggest command the layer writes whole: a primitive of 256
+ * vertices (pbgl.c's PRIM_MAX) at 11 words each, after TRIS's 2. A cut
+ * one's inside goes in lists that fit the window it has. */
+#define PBGL_WORDS_MIN     (2u + 256u * 11u)
 
 extern struct pbgl_counts pbgl_total;
 
