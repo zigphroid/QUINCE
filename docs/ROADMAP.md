@@ -42,7 +42,7 @@ the pixelboard is a later milestone.
 - PR 3: the board run, with `id1/pak0.pak` on the card: the timings, the
   counts and the profiles, and what they say about feasibility. Done
   2026-11-12 (LOG): demo1 at 33 fps, e1m1's server at 46 fps, the link
-  at about 3.6 MB/s. Still to come: the same timings with the code cut by
-  THERMO's heat file (`tools/heat.py`, CANNER `-cold`), with the frame
-  loop in the jar and the rest in PSRAM, and GCC's `-O2` build beside
-  them.
+  at about 3.6 MB/s. Then the same timings with the code cut by THERMO's
+  heat file (`make heat`: 129 KB of the program area freed, 3% and 7%
+  slower) and GCC's `-O2` build beside them (`make gcc`: 22% and 12%
+  faster).
