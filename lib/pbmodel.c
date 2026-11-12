@@ -322,6 +322,12 @@ void pbm_depth_range(struct pbm *m, uint32_t near_d, uint32_t far_d)
 
 void pbm_clip(struct pbm *m, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1)
 {
+	if (m->study.scale > 1) {
+		uint32_t k = (uint32_t)m->study.scale;
+		x0 *= k; y0 *= k;
+		x1 = x1 > 0xffffu ? x1 : x1 * k;
+		y1 = y1 > 0xffffu ? y1 : y1 * k;
+	}
 	m->clip[0] = x0 < (uint32_t)m->w ? (int)x0 : m->w;
 	m->clip[1] = y0 < (uint32_t)m->h ? (int)y0 : m->h;
 	m->clip[2] = x1 < (uint32_t)m->w ? (int)x1 : m->w;
@@ -353,18 +359,29 @@ static uint32_t place(int64_t u, uint32_t side, int clamp)
 	return (uint32_t)u & (side - 1);
 }
 
+/* The study's hook on each texel read (lib/pbmodel.h's struct pbm_study),
+ * set while a triangle is drawn. */
+static const struct pbm *hook_m;
+
+static struct rgba read_texel(const struct pbm_texture *t, int l, uint32_t i)
+{
+	if (hook_m && hook_m->study.texel)
+		hook_m->study.texel(hook_m->study.ctx,
+		                    (uint32_t)(t->level[l] - hook_m->pool) + i);
+	return decode(t->keep, t->level[l][i]);
+}
+
 /* The texel at s, t (frac fraction bits) of level l. */
 static struct rgba sample(const struct pbm_texture *t, const struct pbm_bind *b,
                           int l, int64_t s, int64_t t_, int frac)
 {
 	uint32_t w = tex_w(t, l), h = tex_h(t, l);
-	const uint16_t *tx = t->level[l];
 	s = asr(s, l);
 	t_ = asr(t_, l);
 	if (!b->linear) {
 		uint32_t u = place(asr(s, frac), w, b->clamp_s);
 		uint32_t v = place(asr(t_, frac), h, b->clamp_t);
-		return decode(t->keep, tx[v * w + u]);
+		return read_texel(t, l, v * w + u);
 	} else {
 		/* Bilinear: the four texels round the point half a texel up
 		 * and left, weighted by 4 bits of the fraction each way. */
@@ -376,10 +393,10 @@ static struct rgba sample(const struct pbm_texture *t, const struct pbm_bind *b,
 		uint32_t u1 = place(asr(su, frac) + 1, w, b->clamp_s);
 		uint32_t v0 = place(asr(sv, frac), h, b->clamp_t);
 		uint32_t v1 = place(asr(sv, frac) + 1, h, b->clamp_t);
-		struct rgba c00 = decode(t->keep, tx[v0 * w + u0]);
-		struct rgba c10 = decode(t->keep, tx[v0 * w + u1]);
-		struct rgba c01 = decode(t->keep, tx[v1 * w + u0]);
-		struct rgba c11 = decode(t->keep, tx[v1 * w + u1]);
+		struct rgba c00 = read_texel(t, l, v0 * w + u0);
+		struct rgba c10 = read_texel(t, l, v0 * w + u1);
+		struct rgba c01 = read_texel(t, l, v1 * w + u0);
+		struct rgba c11 = read_texel(t, l, v1 * w + u1);
 		struct rgba o;
 #define MIX(f) ((((c00.f * (16 - fu) + c10.f * fu) * (16 - fv)) + \
                  ((c01.f * (16 - fu) + c11.f * fu) * fv) + 128) >> 8)
@@ -392,8 +409,11 @@ static struct rgba sample(const struct pbm_texture *t, const struct pbm_bind *b,
 	}
 }
 
-/* The mip level for a triangle: the largest l with texel area at least
- * 4^l times its pixel area (both in the same units), at most the last. */
+/* The mip level for a triangle: the largest l with twice its texel area
+ * at least 4^l times its pixel area (both in the same units), at most the
+ * last. That is log4 of the texels a pixel, rounded: rounded down, a far
+ * floor read up to 2 texels a pixel and shimmered (LOG 2026-11-12, the
+ * mip study), and the caller passes the texel area doubled. */
 static int pick_level(const struct pbm_texture *t, int64_t tex_area, int64_t px_area)
 {
 	int l = 0;
@@ -402,6 +422,114 @@ static int pick_level(const struct pbm_texture *t, int64_t tex_area, int64_t px_
 	while (l + 1 < t->levels && tex_area >= px_area << (2 * (l + 1)))
 		l++;
 	return l;
+}
+
+/* --- the mip study (lib/pbmodel.h's struct pbm_study) --- */
+
+/* log2 of x > 0, to about 2^-20: the exponent, then the mantissa's bits
+ * by squaring. */
+static double log2d(double x)
+{
+	double r = 0, bit = 1;
+	int i;
+	while (x >= 2) { x /= 2; r += 1; }
+	while (x < 1) { x *= 2; r -= 1; }
+	for (i = 0; i < 20; i++) {
+		x *= x;
+		bit /= 2;
+		if (x >= 2) {
+			x /= 2;
+			r += bit;
+		}
+	}
+	return r;
+}
+
+/* A pixel's level, by the study's choice, for the unit whose
+ * coordinates are s, t (f: their fraction bits). e are the pixel's edge
+ * values, area the triangle's (both in 12.4 squared), v its vertices.
+ * *frac gets the blend towards the next level, 0 to 255, for TRILINEAR. */
+static int study_level(const struct pbm *m, const struct pbm_texture *t,
+                       const struct pbm_vertex *const v[3], const int64_t x[3],
+                       const int64_t y[3], const int64_t e[3], int64_t area,
+                       int unit, int *frac)
+{
+	double ss[3], tt[3], q[3], tex_area, px_area, ratio = 0, lambda;
+	int i, l;
+	*frac = 0;
+	for (i = 0; i < 3; i++) {
+		double k = unit == 0 ? 16.0 : 64.0;
+		ss[i] = (unit == 0 ? v[i]->s : v[i]->s2) / k;
+		tt[i] = (unit == 0 ? v[i]->t : v[i]->t2) / k;
+		q[i] = (double)v[i]->q;
+	}
+	if (m->study.lod == PBM_LOD_Q) {
+		/* Under perspective a pixel's texel area is the triangle's
+		 * texel area over its pixel area, times q0 q1 q2 / q^3, q the
+		 * pixel's (by the screen's own weights). */
+		double qp = 0;
+		tex_area = (ss[1] - ss[0]) * (tt[2] - tt[0]) - (tt[1] - tt[0]) * (ss[2] - ss[0]);
+		if (tex_area < 0)
+			tex_area = -tex_area;
+		px_area = (double)area / 256.0;
+		for (i = 0; i < 3; i++)
+			qp += (double)e[i] / (double)area * q[i];
+		if (qp <= 0)
+			return 0;
+		ratio = tex_area / px_area * (q[0] / qp) * (q[1] / qp) * (q[2] / qp);
+	} else {
+		/* GL's: the larger of the two steps a pixel makes in the
+		 * texture, across and down, squared. s = N / D with N and D
+		 * linear on the screen, so ds = (dN D - N dD) / D^2. */
+		double D = 0, Ns = 0, Nt = 0, Dx = 0, Dy = 0, Nsx = 0, Nsy = 0, Ntx = 0, Nty = 0;
+		double sx, sy, tx, ty, rx, ry;
+		for (i = 0; i < 3; i++) {
+			int a = (i + 1) % 3, b = (i + 2) % 3;
+			/* edge(a, b, p): its steps for a pixel across and down,
+			 * in the 12.4 units e is in. */
+			double ex = -(double)(y[b] - y[a]) * 16, ey = (double)(x[b] - x[a]) * 16;
+			double w = (double)e[i] * q[i];
+			D += w; Ns += w * ss[i]; Nt += w * tt[i];
+			Dx += ex * q[i]; Dy += ey * q[i];
+			Nsx += ex * q[i] * ss[i]; Nsy += ey * q[i] * ss[i];
+			Ntx += ex * q[i] * tt[i]; Nty += ey * q[i] * tt[i];
+		}
+		if (D <= 0)
+			return 0;
+		sx = (Nsx * D - Ns * Dx) / (D * D);
+		sy = (Nsy * D - Ns * Dy) / (D * D);
+		tx = (Ntx * D - Nt * Dx) / (D * D);
+		ty = (Nty * D - Nt * Dy) / (D * D);
+		rx = sx * sx + tx * tx;
+		ry = sy * sy + ty * ty;
+		ratio = rx > ry ? rx : ry;
+	}
+	if (ratio <= 0)
+		return 0;
+	/* Texels a pixel as a power of 2. The single-level modes round it
+	 * half up, as the rule does; TRILINEAR keeps GL's floor and blends
+	 * by the fraction, so it needs no rounding. */
+	lambda = log2d(ratio) / 2 + m->study.bias * 0.5;
+	if (m->study.lod != PBM_LOD_TRILINEAR)
+		lambda += 0.5;
+	if (lambda < 0)
+		return 0;
+	l = (int)lambda;
+	if (l >= t->levels - 1)
+		return t->levels - 1;
+	if (m->study.lod == PBM_LOD_TRILINEAR)
+		*frac = (int)((lambda - l) * 256);
+	return l;
+}
+
+static struct rgba mix(struct rgba a, struct rgba b, int f)
+{
+	struct rgba o;
+	o.r = (uint8_t)((a.r * (256 - f) + b.r * f) >> 8);
+	o.g = (uint8_t)((a.g * (256 - f) + b.g * f) >> 8);
+	o.b = (uint8_t)((a.b * (256 - f) + b.b * f) >> 8);
+	o.a = (uint8_t)((a.a * (256 - f) + b.a * f) >> 8);
+	return o;
 }
 
 /* --- triangles --- */
@@ -434,8 +562,29 @@ static int bound(const struct pbm *m, int unit)
 	return id != 0 && id < PBM_TEX_IDS && m->tex[id].made;
 }
 
+static void triangle(struct pbm *m, const struct pbm_vertex *v0,
+                     const struct pbm_vertex *v1, const struct pbm_vertex *v2);
+
 void pbm_triangle(struct pbm *m, const struct pbm_vertex *v0,
                   const struct pbm_vertex *v1, const struct pbm_vertex *v2)
+{
+	hook_m = m;
+	if (m->study.scale > 1) {
+		/* The study's supersampling: the same triangle, N times the
+		 * size, on a surface N times as wide and high. */
+		struct pbm_vertex a = *v0, b = *v1, c = *v2;
+		a.x *= m->study.scale; a.y *= m->study.scale;
+		b.x *= m->study.scale; b.y *= m->study.scale;
+		c.x *= m->study.scale; c.y *= m->study.scale;
+		triangle(m, &a, &b, &c);
+	} else {
+		triangle(m, v0, v1, v2);
+	}
+	hook_m = 0;
+}
+
+static void triangle(struct pbm *m, const struct pbm_vertex *v0,
+                     const struct pbm_vertex *v1, const struct pbm_vertex *v2)
 {
 	const struct pbm_state *st = &m->state;
 	const struct pbm_vertex *v[3], *first = v0;
@@ -493,11 +642,13 @@ void pbm_triangle(struct pbm *m, const struct pbm_vertex *v0,
 		 * screen's are; unit 1's are 10.6, 16 times finer squared. */
 		if (tex0 && m->unit[0].mipmap)
 			lvl[0] = pick_level(&m->tex[m->unit[0].id],
-			                    edge(v[0]->s, v[0]->t, v[1]->s, v[1]->t, v[2]->s, v[2]->t),
+			                    scale(edge(v[0]->s, v[0]->t, v[1]->s, v[1]->t, v[2]->s, v[2]->t),
+			                          1 + m->study.bias),
 			                    area);
 		if (tex1 && m->unit[1].mipmap)
 			lvl[1] = pick_level(&m->tex[m->unit[1].id],
-			                    edge(v[0]->s2, v[0]->t2, v[1]->s2, v[1]->t2, v[2]->s2, v[2]->t2),
+			                    scale(edge(v[0]->s2, v[0]->t2, v[1]->s2, v[1]->t2, v[2]->s2, v[2]->t2),
+			                          1 + m->study.bias),
 			                    area * 16);
 
 		/* The pixels whose centres the triangle's box holds, on the
@@ -591,10 +742,23 @@ void pbm_triangle(struct pbm *m, const struct pbm_vertex *v0,
 				/* Unit 0: the texel, alone or times the colour. */
 				if (st->tex0) {
 					if (tex0) {
+						const struct pbm_texture *t0 = &m->tex[m->unit[0].id];
+						int l0 = lvl[0], f0 = 0;
 						a_s = MEAN(s);   /* 12.8 texels */
 						a_t = MEAN(t);
-						c = sample(&m->tex[m->unit[0].id], &m->unit[0], lvl[0],
-						           a_s, a_t, 8);
+						if (m->study.lod != PBM_LOD_TRI && m->unit[0].mipmap) {
+							l0 = study_level(m, t0, v, x, y, e, area, 0, &f0);
+							m->study.mip_reads++;
+							m->study.level_moved += l0 != lvl[0];
+						} else if (m->unit[0].mipmap) {
+							m->study.mip_reads++;
+						}
+						struct pbm_bind b0 = m->unit[0];
+						if (m->study.linear0)
+							b0.linear = 1;
+						c = sample(t0, &b0, l0, a_s, a_t, 8);
+						if (f0)
+							c = mix(c, sample(t0, &b0, l0 + 1, a_s, a_t, 8), f0);
 					} else {
 						c.r = c.g = c.b = c.a = 255;
 					}
@@ -611,10 +775,18 @@ void pbm_triangle(struct pbm *m, const struct pbm_vertex *v0,
 				 * (GLQuake keeps 255 - light in its lightmaps). */
 				if (tex1) {
 					struct rgba l;
+					const struct pbm_texture *t1 = &m->tex[m->unit[1].id];
+					int l1 = lvl[1], f1 = 0;
 					a_s2 = MEAN(s2);  /* 10.10 texels */
 					a_t2 = MEAN(t2);
-					l = sample(&m->tex[m->unit[1].id], &m->unit[1], lvl[1],
-					           a_s2, a_t2, 10);
+					if (m->study.lod != PBM_LOD_TRI && m->unit[1].mipmap) {
+						l1 = study_level(m, t1, v, x, y, e, area, 1, &f1);
+						m->study.mip_reads++;
+						m->study.level_moved += l1 != lvl[1];
+					}
+					l = sample(t1, &m->unit[1], l1, a_s2, a_t2, 10);
+					if (f1)
+						l = mix(l, sample(t1, &m->unit[1], l1 + 1, a_s2, a_t2, 10), f1);
 					c.r = c.r * (256 - l.r) >> 8;
 					c.g = c.g * (256 - l.g) >> 8;
 					c.b = c.b * (256 - l.b) >> 8;

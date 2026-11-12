@@ -36,7 +36,7 @@ DUMP_FRAMES = 30   # e1m1's frames written by QUINCE_PBDUMP and read back
 # model's rules, the GL layer or Quake's drawing moves them: look at
 # build/pbframes/e1m1/frame0075.png before taking the new numbers.
 PLAY_FRAMES, PLAY_LAST = 76, 75
-PLAY_ALL, PLAY_LAST_CRC = "5e029c29", "e2347d88"
+PLAY_ALL, PLAY_LAST_CRC = "641e154e", "290e4c6a"
 # id's GL_Init state (lib/qvid.c): the first frame's first STATE has
 # unit 0's texture and the alpha test on (lib/pb3d.h's PB3D_S_TEX0 and
 # PB3D_S_ALPHA_TEST), or the console goes to PB as white quads.

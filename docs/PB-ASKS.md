@@ -222,7 +222,9 @@ wants them otherwise:
   exponent, 12 of mantissa, as Voodoo's w-buffer) so far walls don't fight.
 - **Perspective:** a divide every pixel, one reciprocal shared by every
   attribute, so nothing swims. Software Quake divided every 16 pixels.
-- **Mips:** one level a triangle, from its texel and pixel areas.
+- **Mips:** one level a triangle, from its texel and pixel areas,
+  rounded. Per-pixel levels and trilinear were measured on demo1 and
+  aren't asked for (LOG 2026-11-12, the mip study).
 - **Colour:** 8 bits a channel inside, RGB565 out with no dithering. The
   lightmap multiply is coarse in 565; dithering can come later as a STATE
   bit.
