@@ -541,3 +541,46 @@ primitive, more SRAM), and sending each lightmap update as it comes
   GL layer thread's `lib/pbgl.c` makes float as it replaces the file.
 - `quince/QUINCE.HOT`, M1's board heat file for `make heat`, was taken
   from the double code; the next board run should take a new one.
+
+## 2026-11-12: Quake's frames drawn by the model (PB-ASKS step 2, PR 2)
+
+- **The decoder** (`lib/pbdecode.c`) reads `lib/pb3d.h`'s words only
+  through what the header defines, into the model's calls; its rules are
+  `docs/PB3D.md`'s "Reading the commands". A command the reader refuses
+  stops the frame there, as a gateware reader that loses its place
+  would have to: the alternative, skipping a word and reading on, would
+  draw garbage from the middle of a TRIS. `tests/test_pbmodel.c` holds
+  each field and kind against the model given the same triangles
+  straight (each check failed by a mutation of the decoder).
+- **Two gaps in the GL side, found by looking at the pictures:**
+  - `lib/qvid.c` never made id's `GL_Init` calls (`gl_vidnt.c`), so the
+    console and the loading plaque went to PB untextured, as white quads,
+    until the renderer set the state itself. Now it makes the ones
+    `lib/pbgl.c` reads. `test-quake` checks the first frame's STATE.
+  - The 3D view is `glViewport(0, 115, 640, 365)` above the status bar,
+    but PB drew to the whole surface, so the world and the weapon spilled
+    over the bar, which GLQuake redraws only when it changes: the HUD
+    vanished. Real GL clips to the viewport. **Chosen:** `CLIP`, command
+    20, a clip rectangle PB applies (a Voodoo's `clipLeftRight` and
+    `clipLowYHighY`), sent by `lib/pbgl.c` when the viewport changes.
+    **Alternatives:** cut every triangle at the viewport on the Jam
+    (Sutherland-Hodgman, which `lib/pbgl.c` already does at the guard
+    band), costing the RP2350 a cut for every polygon crossing the
+    view's edge, many a frame; or have GLQuake redraw the status bar
+    every frame (`Sbar_Changed`), which hides the spill but still pays
+    PB's fill for it, and leaves any other smaller viewport wrong.
+    The dump's version is 2.
+- **Frames the same every run.** A dump's timedemo runs on a fixed clock
+  of 1/72 s a frame (`tests/sys_host.c`), since timedemo frames follow
+  the clock (the console's slide, the models between messages), and
+  `quake/*.o` build with `SOURCE_DATE_EPOCH=0`, since `host.c` prints
+  `__TIME__` on the console. e1m1's server benchmark already ran in fixed
+  steps.
+- **What's held:** `make test-quake` draws e1m1's 76 dumped frames and
+  holds the CRC of every frame's CRC and the last frame's, and that none
+  was refused. demo1's 1,020 frames take about 40 seconds, so `make
+  pb-frames` draws them to pictures instead, outside `make test`.
+- **Measured fill** (demo1, a frame): 1.78 screens covered, 1.40 drawn,
+  0.40 blended, against PB-ASKS's guess of overdraw 2 and 20% blended.
+  The budget there is redone with them: about 160 MB/s at 30 fps and 285
+  at 60, from 190 and 350.

@@ -43,7 +43,13 @@ the edge function of v0 to v1 at v2.
   whose dy is below 0, or whose dy is 0 and dx above 0. Two triangles that
   share an edge walk it in opposite directions, so exactly one of them owns
   it. Neither leaves a gap and neither draws a pixel twice.
-- Pixels off the surface are never touched.
+- Pixels off the surface are never touched, nor pixels outside the clip
+  rectangle (`CLIP`: x0 <= px < x1 and y0 <= py < y1, held to the
+  surface; a frame starts with the whole surface). GL's viewport is the
+  rectangle, so GLQuake's 3D view stops above its status bar, as it does
+  on real GL. The Jam still cuts at the near plane and the guard band;
+  the rectangle only narrows which pixels are written. The depth clear
+  takes the whole surface whatever the rectangle.
 
 A strip's odd triangles are taken as (k + 1, k, k + 2), so every triangle
 in a strip winds the same way. Flat shading uses each triangle's first
@@ -166,12 +172,41 @@ In order, at 8 bits a channel:
 6. **The write:** RGB565, each channel's low bits dropped, with no
    dithering (Jacob). The depth is written if `DEPTH_WRITE` is set.
 
+## Reading the commands
+
+`lib/pbdecode.c` turns `lib/pb3d.h`'s words into the model's calls, as
+PB's command reader is to. A frame (the words between `START` and `SHOW`)
+starts from a frame's start: every `STATE` bit 0, no texture on either
+unit, the depth range 0 to 0xFFFF, the whole surface to draw in. Then:
+
+- `DEPTH` clears the depth surface to 0xFFFF if its argument's bit 0 is
+  set, and otherwise does nothing (the depth of the frame before stays).
+- `STATE`, `TEXTURE`, `DEPTHRANGE` and `CLIP` replace what they name
+  until the frame ends or they come again.
+- `TRIS` takes each vertex's fields in the order the format names them,
+  a 32-bit q as two words, the low one first. A field the format leaves
+  out takes q 1.0, s, t, s2 and t2 0, and white, opaque. A grey colour
+  is the word's low byte; an RGBA one is r, g in the first word and b, a
+  in the second, each low byte first.
+- A command `pb3d_cmd_words` doesn't know (an unknown op, an argument
+  with a stray bit, one running past the frame's words) is refused: the
+  commands before it are drawn, it and the rest of the frame are not.
+
+The texture records (`PB3D_REC_TEXIMAGE`, `TEXSUB`, `TEXFREE`) are the
+kernel's calls, not commands: a side that isn't a power of two up to
+1,024, or an unknown format, is refused, and an update must lie inside
+a texture already made.
+
+`tests/pbplay.c` draws a `QUINCE_PBDUMP` file this way, frame after
+frame on one picture, as PB would (the colour isn't cleared between
+frames: GLQuake draws every pixel of its view).
+
 ## What the model counts
 
 Triangles set up, culled or with no area, pixels covered, failing depth,
 failing the alpha test, drawn, and blended (read the picture first). These
-are the fill budget's numbers in `docs/PB-ASKS.md`, which Quake's frames
-will measure in step 2's second PR.
+are the fill budget's numbers in `docs/PB-ASKS.md`, measured on Quake's
+frames by `tests/pbplay.c`.
 
 ## Changing the rules
 

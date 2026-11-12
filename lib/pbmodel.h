@@ -91,6 +91,7 @@ struct pbm {
 	struct pbm_state state;
 	struct pbm_bind unit[2];
 	uint32_t depth_near, depth_far;
+	int clip[4];                /* x0, y0, x1, y1: the pixels drawn */
 	struct pbm_counts counts;
 };
 
@@ -102,7 +103,7 @@ enum { PBM_OK, PBM_E_ID = -1, PBM_E_SIZE = -2, PBM_E_FULL = -3, PBM_E_FORMAT = -
 void pbm_init(struct pbm *m, uint16_t *colour, uint16_t *depth, int w, int h,
               uint16_t *pool, uint32_t pool_words);
 /* A frame's start: state all off, no textures bound, the depth range 0 to
- * 0xFFFF, the counts kept. */
+ * 0xFFFF, the whole surface drawn in, the counts kept. */
 void pbm_frame(struct pbm *m);
 /* r, g, b for each of 256 indices: index textures loaded after it. */
 void pbm_palette(struct pbm *m, const uint8_t *rgb);
@@ -122,6 +123,9 @@ void pbm_textures_reset(struct pbm *m);
 void pbm_set_state(struct pbm *m, const struct pbm_state *s);
 void pbm_bind_texture(struct pbm *m, int unit, const struct pbm_bind *b);
 void pbm_depth_range(struct pbm *m, uint32_t near_d, uint32_t far_d);
+/* Triangles draw only the pixels with x0 <= x < x1 and y0 <= y < y1 (and
+ * on the surface); the clears still take the whole surface. */
+void pbm_clip(struct pbm *m, uint32_t x0, uint32_t y0, uint32_t x1, uint32_t y1);
 /* The whole picture to colour (RGB565), the whole depth buffer to depth. */
 void pbm_clear_colour(struct pbm *m, uint16_t colour);
 void pbm_clear_depth(struct pbm *m, uint16_t depth);

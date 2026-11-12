@@ -51,7 +51,7 @@ static void print_counts(const char *what, int frames, double seconds)
 	printf("%s: GL per frame %.0f tris %.0f verts %.0f prims %.0f gl calls %.0f binds\n",
 	       what, c->tris * per, c->verts * per, c->prims * per, c->calls * per, c->binds * per);
 	printf("%s: PB per frame %.0f words (%.1f KB): %.0f TRIS with %.0f verts and %.0f tris, "
-	       "%.0f STATE, %.0f TEXTURE, %.0f DEPTH and DEPTHRANGE\n",
+	       "%.0f STATE, %.0f TEXTURE, %.0f DEPTH, DEPTHRANGE and CLIP\n",
 	       what, c->words * per, cbytes * per / 1024.0, c->tris_cmds * per, c->sent_verts * per,
 	       c->sent_tris * per, c->state_cmds * per, c->texture_cmds * per, c->other_cmds * per);
 	printf("%s: PB link %.0f KB/s at this rate: commands %.0f KB/s (vertices %.0f), "

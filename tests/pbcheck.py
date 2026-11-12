@@ -11,16 +11,17 @@ palette before any texture, each texture's size (powers of two up to
 1,024) and its texels' bytes, each update inside a texture already made,
 and each frame's words as whole commands: a known command, an argument
 with no stray bits, a TRIS cut short by nothing, a texture bound that was
-made. Prints a line of totals, and the biggest frame; exits 1 on the first
-thing wrong, saying what and where.
+made, a CLIP on the 640x480 surface. Prints a line of totals, and the
+biggest frame; exits 1 on the first thing wrong, saying what and where.
 """
 import struct
 import sys
 
-MAGIC, VERSION = 0x33425051, 1
+MAGIC, VERSION = 0x33425051, 2
+WIDTH, HEIGHT = 640, 480   # lib/qvid.c's surface
 PALETTE, TEXIMAGE, TEXSUB, FRAME, TEXFREE = 1, 2, 3, 4, 5
 INDEX8, RGBA8888, GREY8 = 0, 1, 2
-DEPTH, STATE, TEXTURE, TRIS, DEPTHRANGE = 15, 16, 17, 18, 19
+DEPTH, STATE, TEXTURE, TRIS, DEPTHRANGE, CLIP = 15, 16, 17, 18, 19, 20
 
 
 def vertex_words(fmt):
@@ -67,6 +68,14 @@ def check_frame(words, made, where):
             if arg or i + 2 >= len(words):
                 raise Bad("%s word %d: a bad DEPTHRANGE" % (where, i))
             n = 3
+        elif op == CLIP:
+            if arg or i + 4 >= len(words):
+                raise Bad("%s word %d: a bad CLIP" % (where, i))
+            x0, y0, x1, y1 = words[i + 1:i + 5]
+            if not (x0 <= x1 <= WIDTH and y0 <= y1 <= HEIGHT):
+                raise Bad("%s word %d: CLIP %d, %d to %d, %d isn't on the %dx%d surface"
+                          % (where, i, x0, y0, x1, y1, WIDTH, HEIGHT))
+            n = 5
         elif op == TRIS:
             kind, fmt = arg & 3, arg & 0x7c
             if arg & 0x80 or kind == 3 or arg & 0x60 == 0x60 or i + 1 >= len(words):

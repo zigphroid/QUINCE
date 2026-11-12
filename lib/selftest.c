@@ -243,6 +243,13 @@ static void pb3d_commands(void)
     check_num("a TRIS of none is two words", (long)pb3d_cmd_words(empty, 2), 2);
     check_num("a STATE cut short refused", (long)pb3d_cmd_words(state, 1), 0);
     check_num("and whole, two words", (long)pb3d_cmd_words(state, 2), 2);
+    static const uint16_t clip[] = { 0x1400, 0, 0, 640, 365 }, bad_clip[] = { 0x1401, 0, 0, 1, 1 };
+    pb3d_init(&b, w, 64);
+    pb3d_clip(&b, 0, 0, 640, 365);
+    check_words("CLIP's words", b.w, b.n, clip, 5);
+    check_num("a CLIP is five words", (long)pb3d_cmd_words(clip, 5), 5);
+    check_num("a CLIP cut short refused", (long)pb3d_cmd_words(clip, 4), 0);
+    check_num("a CLIP with an argument refused", (long)pb3d_cmd_words(bad_clip, 5), 0);
 
     // A full buffer: whole commands or none.
     pb3d_init(&b, w, 5);
@@ -518,6 +525,51 @@ static void gl_state(void)
     gl_check("the view weapon's depth range", 0, weapon, sizeof weapon / sizeof weapon[0]);
 }
 
+// GL's viewport as PB's CLIP: y counted from the bottom turned to rows
+// from the top, sent before the TRIS that needs it, and only on a change.
+static void tri(void)
+{
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+}
+
+static void gl_viewport(void)
+{
+    gl_start(1024);
+    ortho();
+    tri();
+    pbgl_end_frame();
+    check_num("the whole surface sends no CLIP", (long)gl_nframe, 2 + 2 + 6);
+    glViewport(0, 115, 640, 365);   // demo1's 3D view, above the status bar
+    ortho();
+    tri();
+    glViewport(0, 0, 640, 480);     // GL_Set2D's, for the HUD
+    tri();
+    static const uint16_t view[] = {
+        0x1000, 0x0800,               // STATE: smooth
+        0x1400, 0, 0, 640, 365,       // CLIP: rows 0 to 364
+        0x1200, 3, 0, 0, 16, 0, 0, 12,  // y: 1 of 480 is 365/480 of a pixel
+        0x1400, 0, 0, 640, 480,       // and back to the whole surface
+    };
+    gl_check("the 3D view's CLIP, then the HUD's", 0, view, sizeof view / sizeof view[0]);
+    tri();
+    pbgl_end_frame();
+    check_num("the next frame starts whole: no CLIP", (long)gl_nframe, 2 + 2 + 6);
+    // A frame that ends with the 3D view's viewport: PB starts the next
+    // one whole, so its first TRIS needs the CLIP again.
+    glViewport(0, 115, 640, 365);
+    tri();
+    pbgl_end_frame();
+    tri();
+    static const uint16_t again[] = { 0x1000, 0x0800, 0x1400, 0, 0, 640, 365 };
+    gl_check("each frame sends its CLIP afresh", 0, again, sizeof again / sizeof again[0]);
+    glViewport(-20, -10, 700, 100); // past the edges: rows 390 to 489, held to 479
+    tri();
+    static const uint16_t held[] = { 0x1000, 0x0800, 0x1400, 0, 390, 640, 480 };
+    gl_check("a viewport held to the surface", 0, held, sizeof held / sizeof held[0]);
+}
+
 static void gl_textures_check(void)
 {
     static const uint8_t three_by_two[] = { 1, 2, 3, 4, 5, 6 };
@@ -768,7 +820,7 @@ static void gl_split(void)
 }
 
 static void (*const checks[])(void) = { greeting, bench_words, pb3d_fixed, pb3d_commands,
-                                         gl_screen, gl_prims, gl_clip, gl_state,
+                                         gl_screen, gl_prims, gl_clip, gl_state, gl_viewport,
                                          gl_textures_check, gl_full, gl_cuts, gl_subs,
                                          gl_split };
 
