@@ -63,6 +63,9 @@ def main():
             if not m or int(m.group(1)) != DEMO1_FRAMES:
                 print("FAIL: demo1 ran %s frames, want %d" % (m and m.group(1), DEMO1_FRAMES))
                 failed += 1
+            if not re.search(r"timedemo: at load, textures \d+ uploads [1-9]", out):
+                print("FAIL: demo1's load-time textures not counted")
+                failed += 1
             out = sim.run("QUINCE /SERVER E1M1 %d" % args.frames,
                           want=[re.compile(r"server: checksum")], wait=1800)
             print("\n".join(l for l in out.splitlines() if l.startswith("server:")))

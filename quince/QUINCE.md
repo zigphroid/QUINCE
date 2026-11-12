@@ -19,7 +19,8 @@ the seconds, the frames a second and the time a frame, as Quake's own
 `timedemo` works them out. Then, for each frame on average, the
 triangles, vertices, primitives and GL calls the renderer sent, and the
 bytes a second a card's link would carry at that rate: the vertices and
-the lightmaps' updates. Textures are counted apart, sent once.
+the lightmaps' updates. The textures sent at load are counted apart,
+sent once, and any reloaded during the run are added to the rate.
 
 `/SERVER map frames` loads a map with a player in it and runs that many
 frames of a tenth of a second of game time each: the game's code, its

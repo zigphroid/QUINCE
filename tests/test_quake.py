@@ -30,6 +30,15 @@ def run(exe, base, *words):
     return out.stdout
 
 
+def check_load(what, out):
+    """The textures sent at load, before the timed window, are counted."""
+    m = re.search(r"^\w+: at load, textures (\d+) uploads (\d+) bytes", out, re.M)
+    if not m or int(m.group(2)) == 0:
+        print("FAIL: %s's load-time textures not counted (%s)" % (what, m and m.group(0)))
+        return 1
+    return 0
+
+
 def main():
     exe, base = sys.argv[1], sys.argv[2]
     failed = 0
@@ -38,7 +47,9 @@ def main():
     if not m or int(m.group(1)) != DEMO1_FRAMES:
         print("FAIL: demo1 ran %s frames, want %d" % (m and m.group(1), DEMO1_FRAMES))
         failed += 1
+    failed += check_load("demo1", demo)
     server = run(exe, base, "server", "E1M1", str(SERVER_FRAMES))
+    failed += check_load("e1m1", server)
     m = re.search(r"^server: totals (\d+) tris (\d+) verts", server, re.M)
     got = (int(m.group(1)), int(m.group(2))) if m else None
     if got != SERVER_TOTALS:

@@ -22,26 +22,43 @@
 #include "nullgl.h"
 #include "qbench.h"
 
+/* The textures uploaded from Host_Init to the timed window's start: what
+ * the PB is sent once, at load (kept by take_load before the reset). */
+static uint32_t load_uploads, load_bytes;
+
+static void take_load(void)
+{
+	load_uploads = nullgl_total.tex_uploads;
+	load_bytes = nullgl_total.tex_bytes;
+	nullgl_reset();
+}
+
 static void print_counts(const char *what, int frames, double seconds)
 {
 	double fps = seconds > 0 ? frames / seconds : 0;
 	double per = frames > 0 ? 1.0 / frames : 0;
 	double vbytes = (double)nullgl_total.verts * NULLGL_VERTEX_BYTES;
-	/* What crosses the PB link while the game runs: the vertices and the
-	 * lightmaps' updates. A texture crosses it once, at load, since the
-	 * PB keeps every one in its own 512 MB (Jacob, 2026-11-12). */
+	/* What crosses the PB link while the game runs: the vertices, the
+	 * lightmaps' updates and any texture reloaded. A texture crosses it
+	 * once, at load, since the PB keeps every one in its own 512 MB
+	 * (Jacob, 2026-11-12). */
 	double vrate = seconds > 0 ? vbytes / seconds : 0;
-	double lrate = seconds > 0 ? nullgl_total.sub_bytes / seconds : 0;
+	double lrate = seconds > 0 ? (nullgl_total.sub_bytes + nullgl_total.tex_bytes) / seconds : 0;
 	printf("%s: %d frames %.2f seconds %.2f fps %.1f ms/frame\n",
 	       what, frames, seconds, fps, frames > 0 ? seconds * 1000.0 / frames : 0.0);
 	printf("%s: per frame %.0f tris %.0f verts %.0f prims %.0f gl calls %.0f binds\n",
 	       what, nullgl_total.tris * per, nullgl_total.verts * per,
 	       nullgl_total.prims * per, nullgl_total.calls * per, nullgl_total.binds * per);
-	printf("%s: PB link %.0f KB/s at this rate: vertices %.0f KB/s, lightmap updates %.0f KB/s\n",
+	printf("%s: PB link %.0f KB/s at this rate: vertices %.0f KB/s, texture updates %.0f KB/s\n",
 	       what, (vrate + lrate) / 1024.0, vrate / 1024.0, lrate / 1024.0);
-	printf("%s: lightmap updates %u, %u bytes; textures %u uploads %u bytes, sent once\n",
-	       what, (unsigned)nullgl_total.sub_uploads, (unsigned)nullgl_total.sub_bytes,
-	       (unsigned)nullgl_total.tex_uploads, (unsigned)nullgl_total.tex_bytes);
+	printf("%s: lightmap updates %u, %u bytes\n",
+	       what, (unsigned)nullgl_total.sub_uploads, (unsigned)nullgl_total.sub_bytes);
+	printf("%s: at load, textures %u uploads %u bytes, sent once\n",
+	       what, (unsigned)load_uploads, (unsigned)load_bytes);
+	/* A texture uploaded inside the window is one Quake's cache let go
+	 * and loaded again, which a tight hunk costs: link traffic too. */
+	printf("%s: during the run, textures %u uploads %u bytes (reloaded)\n",
+	       what, (unsigned)nullgl_total.tex_uploads, (unsigned)nullgl_total.tex_bytes);
 	printf("%s: totals %u tris %u verts %u lightmap bytes %u texture bytes\n", what,
 	       (unsigned)nullgl_total.tris, (unsigned)nullgl_total.verts,
 	       (unsigned)nullgl_total.sub_bytes, (unsigned)nullgl_total.tex_bytes);
@@ -58,7 +75,7 @@ static void run_timedemo(struct qbench_run *run, double (*clock)(void))
 		old = now;
 		if (cls.timedemo && !started) {
 			started = 1;
-			nullgl_reset();
+			take_load();
 		} else if (started && !cls.timedemo)
 			break;
 		/* By the clock, not by host_framecount, which a demo that never
@@ -80,7 +97,7 @@ static void run_server(struct qbench_run *run, double (*clock)(void))
 			Sys_Error("map %s never finished loading", run->name);
 		Host_Frame(0.1f);
 	}
-	nullgl_reset();
+	take_load();
 	start = clock();
 	for (i = 0; i < run->frames; i++)
 		Host_Frame(0.1f);

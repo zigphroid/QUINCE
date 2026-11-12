@@ -134,10 +134,10 @@ void Sys_LowFPPrecision(void) { }
 void Sys_HighFPPrecision(void) { }
 void Sys_MakeCodeWriteable(unsigned long start, unsigned long len) { (void)start; (void)len; }
 
-/* The hunk comes from the PSRAM pool: quakedef.h's MINIMUM_MEMORY (5.5
- * MB) unless /MEM says otherwise, in KB. The rest of the pool, about 1.5
- * MB, is the textures', the lightmaps' and the models' (QUINCE: in id's
- * files). */
+/* The hunk comes from the PSRAM pool: quakedef.h's MINIMUM_MEMORY (5.75
+ * MB) unless /MEM says otherwise, in KB. The rest of the pool, about 1.25
+ * MB, is the texture buffers', the lightmaps' and the model slots'
+ * (QUINCE: in id's files; LOG 2026-11-12). */
 #define BOARD_MEM MINIMUM_MEMORY
 
 /* QUINCE.c's main calls this for /TIMEDEMO and /SERVER, with the words
