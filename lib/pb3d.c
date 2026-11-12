@@ -49,6 +49,9 @@ uint32_t pb3d_fix_q(float q)
 	v = q * 2147483648.0f;
 	if (v >= 4294967040.0f)  /* the largest float under 2^32 */
 		return 0xffffffffu;
+	/* Not v + 0.5: for v in [2^23, 2^24) a float's step is 1, so the sum
+	 * is a tie, rounded to even, and an odd v would come out one high.
+	 * roundf rounds v itself (VRINTA). */
 	return (uint32_t)__builtin_roundf(v);
 }
 

@@ -105,7 +105,8 @@ until the Jam is free.
 Planned 2026-11-12 (Jacob, all recommendations). M2's board run had our
 own GL layer at 47% of the program and 23 ms of demo1's frame, most of
 it in four small functions (LOG 2026-11-12). M4 makes them cheap without
-changing what PB is sent, but for a rounding slip the work found.
+changing what PB is sent, but for q's rounding, which was a step high
+for odd values past 2^23 and is now right.
 
 - PR 1: `outcode_of` as compares, the guard band's tests only off the
   screen; `fix` through `roundf`'s one FPU instruction; the checksum two

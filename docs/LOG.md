@@ -670,10 +670,15 @@ Jacob took every recommendation. M2's board run had our own GL layer at
   edge.
 - **`fix`** (5.1%, and `pb3d_fix_12_4` 1.7%) added a half and cut, with
   four branches. It is now `roundf`, one `VRINTA` on the M33, which
-  rounds halves away from zero as the format says. The old way was
-  wrong just under a half step: 0.49999997 + 0.5 is 1.0 in float, so it
-  rounded up. That moves 1.7% of e1m1's words by one step (none by
-  more), so the checksum moved; a selftest holds the case.
+  rounds halves away from zero as the format says. The old way, adding
+  a half and cutting, was wrong in two places. The one that moves words
+  is q's: where q times 2^31 is between 2^23 and 2^24 a float's step is
+  1, so v + 0.5 is a tie, which rounds to even, and every odd v went up
+  one. That is 1.7% of e1m1's words (48,160, and 259,775 of demo1's),
+  each a q's low word one step down, so the checksum moved. The other,
+  0.49999997 + 0.5 being 1.0 in float, moves none of the two demos'
+  words but was as wrong. A selftest holds each case (found by the
+  review, which also added the guard band's edge checks).
 - **The checksum** (`pbgl_end_frame`, 4.8%) hashes two words a step,
   half the multiplies. Jacob's choice of three: two words a step, a
   switch that turns it off for timed runs, or leaving it. Only the
