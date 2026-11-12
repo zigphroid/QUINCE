@@ -214,7 +214,9 @@ $(BUILD)/pbplay: tests/pbplay.c tests/png.c tests/png.h $(PBMODEL) $(PBMODEL_H) 
 # multiply-add (-ffp-contract=off), as CANNER fuses nothing; and math.h's
 # functions are the SDK's own (sdk/lib/math.c, with softfp.c's packing),
 # linked ahead of -lm, so sinf and the rest give the board's last bit too
-# (but asin, which only mirrors call, and the board takes from qlibc.c).
+# (but asin, which only mirrors call, and ceil, from QuakeC's builtin and
+# gl_model.c's surface extents: exact, so glibc's can't differ; the board
+# takes both from qlibc.c).
 # -fno-builtin keeps GCC from swapping those calls for its own, as the
 # board's -ffreestanding does: without it a sin and a cos of one angle
 # became a call to glibc's sincos (AngleVectors and seven others).

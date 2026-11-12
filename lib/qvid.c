@@ -91,9 +91,10 @@ void VID_SetPalette(unsigned char *palette)
 {
 	int i;
 	pbgl_palette(palette);
-	/* Textures go up as RGBA words, colour index 255 see-through, as the
-	 * other GL layers do it. The 15-bit table is for 8-bit paletted
-	 * cards, which this isn't: it stays zero. */
+	/* d_8to24table is for GLQuake's own glTexImage2D uploads, as RGBA
+	 * words with index 255 see-through, as the other GL layers do it;
+	 * pbgl turns those back into indices. The 15-bit table is for 8-bit
+	 * paletted cards, which this isn't: it stays zero. */
 	for (i = 0; i < 256; i++) {
 		unsigned r = palette[i * 3], g = palette[i * 3 + 1], b = palette[i * 3 + 2];
 		d_8to24table[i] = (255u << 24) | (b << 16) | (g << 8) | r;
