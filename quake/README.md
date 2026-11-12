@@ -16,6 +16,14 @@ They are the one exception to CLAUDE.md's hard rule 1 (Jacob, 2026-11-11,
   software one (`r_*`, `d_*`), for comparison. id's `sys_null.c`,
   `vid_null.c`, `snd_null.c`, `cd_null.c`, `in_null.c` and `net_none.c`
   are the starting points for QUINCE's own.
+- **Seven headers came in that nothing here builds:** `asm_draw.h`,
+  `asm_i386.h`, `quakeasm.h`, `d_ifacea.h`, `block8.h` and `block16.h`
+  (the x86 assembly's) and `vgamodes.h` (DOS's VGA modes; its
+  `vregset.h` stayed out). Only the left-out `.s` files and DOS layer
+  include them. They stay, so this directory stays as it was imported
+  (Jacob, 2026-11-12). So does the absence of `net_dgrm.c`/`.h`, the
+  datagram layer every real network driver sits under: M1's network is
+  the loopback alone, and a milestone that wants a real one brings it in.
 - **This commit is id's bytes, unchanged.** Every later change to a file
   here is marked in the file with a `QUINCE:` comment that says what and
   why, so `git diff` against this commit and a grep for `QUINCE:` both

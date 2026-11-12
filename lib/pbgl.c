@@ -873,7 +873,9 @@ static GLenum prim_mode;
 /* Which planes a vertex is outside of. Every plane is one coordinate
  * against w (remake_planes), so each test is a compare, or a multiply and
  * a compare for the guard band's, not a dot product of four: the same
- * sums as plane[i] . v, since the terms left out are exact zeros. M2's
+ * sums as plane[i] . v for finite coordinates, since the terms left out
+ * are exact zeros (an infinite y or z made the old 0 * inf a NaN, so every
+ * test failed; the compares look only at the plane's own coordinate). M2's
  * board run had the dot products at 17% of the program (LOG 2026-11-12).
  * A vertex on the screen is inside the guard band too, which is wider
  * (guard_wider), so the guard's four tests are made only off it. */

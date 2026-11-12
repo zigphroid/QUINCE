@@ -55,7 +55,8 @@ enum {
  * mode, so the command names none. Every frame that tests or writes depth
  * sends one before its first TRIS; without a clear, the depth of the
  * frame before is kept (GLQuake clears it every frame: its gl_ztrick,
- * which saved the clear on 1990s cards, is off). */
+ * which saved the clear on 1990s cards, is off). The clear writes 0xFFFF,
+ * the farthest depth. */
 #define PB3D_DEPTH_CLEAR  0x01u
 
 /* STATE, word 1. What GL calls state is all here but the textures, the
@@ -67,13 +68,17 @@ enum {
 #define PB3D_S_DEPTH_ALWAYS 0x0000u  /*   every pixel passes */
 #define PB3D_S_DEPTH_LEQUAL 0x0001u  /*   passes if nearer or the same */
 #define PB3D_S_DEPTH_GEQUAL 0x0002u  /*   passes if farther or the same */
-#define PB3D_S_DEPTH_WRITE  0x0004u  /* a pixel that passes writes its depth */
+#define PB3D_S_DEPTH_WRITE  0x0004u  /* a pixel that passes the depth test, and
+                                      * isn't dropped by the alpha test, writes
+                                      * its depth */
 #define PB3D_S_BLEND_MASK   0x0018u  /* how a pixel meets the picture: */
 #define PB3D_S_BLEND_OFF    0x0000u  /*   replaces it */
 #define PB3D_S_BLEND_ALPHA  0x0008u  /*   src a + dst (1 - a): water, particles, the tint */
 #define PB3D_S_BLEND_MULINV 0x0010u  /*   dst (1 - src): GLQuake's lightmap pass */
 #define PB3D_S_BLEND_ADD    0x0018u  /*   src + dst: dynamic light flashes */
-#define PB3D_S_ALPHA_TEST   0x0020u  /* drop a pixel whose texel is see-through */
+#define PB3D_S_ALPHA_TEST   0x0020u  /* drop a pixel whose alpha, after MODULATE,
+                                      * is below 170 (GL's GREATER 0.666): a
+                                      * see-through texel, or a low vertex alpha */
 #define PB3D_S_MODULATE     0x0040u  /* unit 0's texel times the vertex colour;
                                       * 0 is the texel alone (GL_REPLACE) */
 #define PB3D_S_TEX0         0x0080u  /* unit 0 is on; 0 is the colour alone */
