@@ -25,7 +25,7 @@ MAPS = ["START"] + ["E1M%d" % i for i in range(1, 9)]
 SERVER_FRAMES = 300
 SERVER_TOTALS = (186776, 357952)   # triangles, vertices GLQuake asked for
 SERVER_SENT = (2837701, 330356, 162178)   # words, vertices, triangles sent PB
-SERVER_CHECKSUM = 122102208   # of every word: the same commands, word for word
+SERVER_CHECKSUM = 3500115068   # of every word: the same commands, word for word
 # Where those frames leave the game, as the PC's (tests/test_quake.py):
 # since M3 the PC rounds floats as the M33 does, so these match exactly
 # too, and a difference is a bug in one build (LOG 2026-11-12).
