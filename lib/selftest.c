@@ -5,6 +5,7 @@
 #include "quince_core.h"
 #include "qbench.h"
 #include "nullgl.h"
+#include "pb3d.h"
 #include "GL/gl.h"
 
 static void (*report)(const char *what, const char *got, const char *want);
@@ -175,7 +176,160 @@ static void null_gl(void)
     nullgl_reset();
 }
 
-static void (*const checks[])(void) = { greeting, bench_words, null_gl };
+// PB's 3D commands (lib/pb3d.c): the words they are, as the C model
+// (lib/pbmodel.c) and later PB will read them.
+static void check_words(const char *what, const uint16_t *got, uint32_t n,
+                        const uint16_t *want, uint32_t m)
+{
+    char g[24], w[24];
+    uint32_t i = 0;
+    ran++;
+    while (i < n && i < m && got[i] == want[i])
+        i++;
+    if (i == n && i == m)
+        return;
+    failed++;
+    // Where they part: the word's place and the two values, or the lengths.
+    if (i < n && i < m) {
+        num(g, (long)got[i] + 100000L * (long)(i + 1));
+        num(w, (long)want[i] + 100000L * (long)(i + 1));
+    } else {
+        num(g, (long)n);
+        num(w, (long)m);
+    }
+    report(what, g, w);
+}
+
+static void pb3d_fixed(void)
+{
+    volatile float zero = 0.0f;   // so no compiler folds 0 / 0 away
+    uint32_t q;
+    check_num("12.4: one pixel", pb3d_fix_12_4(1.0f), 16);
+    check_num("12.4: a half step rounds away from 0", pb3d_fix_12_4(0.03125f), 1);
+    check_num("12.4: and below 0", pb3d_fix_12_4(-1.03125f), -17);
+    check_num("12.4: just under a half step", pb3d_fix_12_4(0.03f), 0);
+    check_num("12.4: held at the guard band's right", pb3d_fix_12_4(3000.0f), 32767);
+    check_num("12.4: and its left", pb3d_fix_12_4(-3000.0f), -32768);
+    check_num("12.4: NaN is 0", pb3d_fix_12_4(zero / zero), 0);
+    check_num("10.6: a texel and a half", pb3d_fix_10_6(1.5f), 96);
+    check_num("10.6: held at 512", pb3d_fix_10_6(600.0f), 32767);
+    q = pb3d_fix_q(1.0f);
+    check_num("q: 1.0 at the near plane, high half", (long)(q >> 16), 0x8000);
+    check_num("q: and low half", (long)(q & 0xffffu), 0);
+    q = pb3d_fix_q(0.25f);
+    check_num("q: a quarter", (long)(q >> 16), 0x2000);
+    check_num("q: 0 is 0", (long)pb3d_fix_q(0.0f), 0);
+    check_num("q: behind the eye is 0", (long)pb3d_fix_q(-1.0f), 0);
+    q = pb3d_fix_q(3.0f);
+    check_num("q: held at the top, high half", (long)(q >> 16), 0xffff);
+    check_num("q: and low half", (long)(q & 0xffffu), 0xffff);
+}
+
+static void pb3d_commands(void)
+{
+    static uint16_t w[64];
+    struct pb3d_buf b;
+    struct pb3d_vertex v[3] = {
+        { 10.0f, 20.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0, 0, 0, 0 },
+        { 30.5f, 20.0f, 0.5f, 64.0f, 0.0f, 4.0f, 0.0f, 0, 0, 0, 0 },
+        { -5.0f, 40.25f, 0.25f, 0.0f, 32.0f, 0.0f, 2.5f, 0, 0, 0, 0 },
+    };
+    // A world fan: depth cleared, the state, both textures, three vertices.
+    static const uint16_t world[] = {
+        0x0f01,                     // DEPTH, clear
+        0x1000, 0x01c5,             // STATE: lequal, write, modulate, both units
+        0x1100, 7, 0x0008,          // TEXTURE 0: id 7, mipmapped
+        0x1101, 300, 0x0007,        // TEXTURE 1: id 300, clamped, bilinear
+        0x121e, 3,                  // TRIS: fan, q | st | st2
+        160, 320, 0x0000, 0x8000, 0, 0, 0, 0,
+        488, 320, 0x0000, 0x4000, 1024, 0, 256, 0,
+        0xffb0, 644, 0x0000, 0x2000, 0, 512, 0, 160,
+    };
+    // A model's strip vertex, grey, and a particle's list, RGBA.
+    static const uint16_t model[] = {
+        0x122d, 3,                  // TRIS: strip, q | st | grey
+        16, 16, 0, 0x8000, 0, 0, 200,
+        16, 16, 0, 0x8000, 0, 0, 200,
+        16, 16, 0, 0x8000, 0, 0, 200,
+        0x1300, 0x0100, 0xfe00,     // DEPTHRANGE: 0x100 to 0xfe00
+        0x124c, 3,                  // TRIS: list, q | st | rgba
+        16, 16, 0, 0x8000, 0, 0, 0x2211, 0x4433,
+        16, 16, 0, 0x8000, 0, 0, 0x2211, 0x4433,
+        16, 16, 0, 0x8000, 0, 0, 0x2211, 0x4433,
+    };
+    struct pb3d_vertex one = { 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 200, 0, 0, 0 };
+    struct pb3d_vertex col = { 1.0f, 1.0f, 1.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0x11, 0x22, 0x33, 0x44 };
+
+    pb3d_init(&b, w, 64);
+    pb3d_depth(&b, 1);
+    pb3d_state(&b, PB3D_S_DEPTH_LEQUAL | PB3D_S_DEPTH_WRITE | PB3D_S_MODULATE |
+                   PB3D_S_TEX0 | PB3D_S_TEX1);
+    pb3d_texture(&b, 0, 7, PB3D_T_MIPMAP);
+    pb3d_texture(&b, 1, 300, PB3D_T_CLAMP_S | PB3D_T_CLAMP_T | PB3D_T_LINEAR);
+    check_num("a world fan opens", pb3d_tris(&b, PB3D_KIND_FAN,
+                                             PB3D_F_Q | PB3D_F_ST | PB3D_F_ST2, 3), 0);
+    for (int i = 0; i < 3; i++)
+        pb3d_vertex(&b, &v[i]);
+    check_words("a world fan's words", b.w, b.n, world, sizeof world / sizeof world[0]);
+    check_num("nothing dropped", (long)b.dropped, 0);
+    check_num("each word read back as one command",
+              (long)(pb3d_cmd_words(w, b.n) + pb3d_cmd_words(w + 1, b.n - 1) +
+                     pb3d_cmd_words(w + 3, b.n - 3) + pb3d_cmd_words(w + 6, b.n - 6) +
+                     pb3d_cmd_words(w + 9, b.n - 9)),
+              (long)b.n);
+
+    pb3d_clear(&b);
+    pb3d_tris(&b, PB3D_KIND_STRIP, PB3D_F_Q | PB3D_F_ST | PB3D_F_GREY, 3);
+    for (int i = 0; i < 3; i++)
+        pb3d_vertex(&b, &one);
+    pb3d_depthrange(&b, 0x100, 0xfe00);
+    pb3d_tris(&b, PB3D_KIND_LIST, PB3D_F_Q | PB3D_F_ST | PB3D_F_RGBA, 3);
+    for (int i = 0; i < 3; i++)
+        pb3d_vertex(&b, &col);
+    check_words("grey and RGBA vertices", b.w, b.n, model, sizeof model / sizeof model[0]);
+
+    check_num("a world vertex is 8 words", PB3D_VERTEX_WORDS(PB3D_F_Q | PB3D_F_ST | PB3D_F_ST2), 8);
+    check_num("a model's is 7", PB3D_VERTEX_WORDS(PB3D_F_Q | PB3D_F_ST | PB3D_F_GREY), 7);
+    check_num("a HUD picture's is 4", PB3D_VERTEX_WORDS(PB3D_F_ST), 4);
+    check_num("a flat colour's is 4", PB3D_VERTEX_WORDS(PB3D_F_RGBA), 4);
+
+    // Commands the reader refuses.
+    static const uint16_t bad_op[] = { 0x0e00 }, bad_kind[] = { 0x1203, 0 },
+        bad_colour[] = { 0x1260, 0 }, short_tris[] = { 0x1208, 1, 0, 0, 0, 0 },
+        bad_unit[] = { 0x1102, 1, 0 }, bad_depth[] = { 0x0f02 }, empty[] = { 0x1208, 0 },
+        state[] = { 0x1000, 0 };
+    check_num("POLYLINE isn't ours", (long)pb3d_cmd_words(bad_op, 1), 0);
+    check_num("kind 3 refused", (long)pb3d_cmd_words(bad_kind, 2), 0);
+    check_num("colour 0x60 refused", (long)pb3d_cmd_words(bad_colour, 2), 0);
+    check_num("a TRIS cut short refused", (long)pb3d_cmd_words(short_tris, 5), 0);
+    check_num("and whole, taken", (long)pb3d_cmd_words(short_tris, 6), 6);
+    check_num("unit 2 refused", (long)pb3d_cmd_words(bad_unit, 3), 0);
+    check_num("a DEPTH bit past clear refused", (long)pb3d_cmd_words(bad_depth, 1), 0);
+    check_num("a TRIS of none is two words", (long)pb3d_cmd_words(empty, 2), 2);
+    check_num("a STATE cut short refused", (long)pb3d_cmd_words(state, 1), 0);
+    check_num("and whole, two words", (long)pb3d_cmd_words(state, 2), 2);
+
+    // A full buffer: whole commands or none.
+    pb3d_init(&b, w, 5);
+    pb3d_state(&b, 0);
+    pb3d_texture(&b, 0, 1, 0);
+    pb3d_depth(&b, 0);
+    check_num("a command past the end is dropped", (long)b.dropped, 1);
+    check_num("and the buffer holds the two that fit", (long)b.n, 5);
+    pb3d_init(&b, w, 64);
+    check_num("a TRIS of two refused", pb3d_tris(&b, PB3D_KIND_FAN, PB3D_F_ST, 2), -1);
+    pb3d_vertex(&b, &one);
+    check_num("and its vertices write nothing", (long)b.n, 0);
+    check_num("a TRIS too big for the room refused",
+              pb3d_tris(&b, PB3D_KIND_LIST, PB3D_F_ST, 20), -1);
+    check_num("so two dropped, nothing written", (long)(b.dropped * 100 + b.n), 200);
+    pb3d_tris(&b, PB3D_KIND_FAN, PB3D_F_ST, 3);
+    pb3d_state(&b, 0);
+    check_num("a command inside an open TRIS is dropped", (long)b.dropped, 3);
+}
+
+static void (*const checks[])(void) = { greeting, bench_words, null_gl, pb3d_fixed,
+                                         pb3d_commands };
 
 int quince_selftest(void (*fail)(const char *what, const char *got, const char *want),
                     int *count)

@@ -49,7 +49,7 @@ SRC    := quince/$(NAME).c
 # The core and the checks: no kernel calls, so they build on the host too.
 # The null GL and the benchmark's words are here, so the checks cover them
 # without the pak.
-CORE   := lib/quince_core.c lib/selftest.c lib/nullgl.c lib/qbargs.c
+CORE   := lib/quince_core.c lib/selftest.c lib/nullgl.c lib/qbargs.c lib/pb3d.c
 # Quake (M1): id's files, QUINCE's null GL and benchmark (lib/), the
 # board's system layer and the C library pieces the SDK hasn't got
 # (quince/). The PC build below takes the same QUAKE_SRC and QUAKE_LIB.
