@@ -9,6 +9,31 @@ milestone.
 Scaffolded by pectinos's `make new-app` at bafa5bf: `QUINCE.JAM` builds,
 its host test and `/SELFTEST` pass, `make sim-smoke` runs it on SIMMER.
 
-## M1: (to plan)
+## M1: Quake with nothing drawn, timed on the board
 
-What QUINCE should first do, and how we'll know it does.
+Planned 2026-11-11. Can the RP2350 run Quake's game and the CPU's share of
+its renderer, before anything is drawn? id's source (`quake/`) built by
+CANNER with GLQuake's renderer (`gl_*`) over a null GL layer: every `gl*`
+call draws nothing, but the layer transforms each vertex to the screen
+(the work a Glide-style card, as the pixelboard is to be, leaves to the
+CPU) and counts the triangles, vertices and texture bytes a card would
+have been sent. Sound and CD are stubs, the network loopback only, and the
+hunk a `mem_alloc` block in PSRAM. Two timings on the board, each with
+THERMO's profile:
+
+1. `timedemo demo1`: the client side (demo playback and the renderer's
+   CPU work).
+2. A server benchmark: e1m1 loaded and a fixed number of server frames run,
+   which times QuakeC and the physics that a demo skips.
+
+Beside the timings, M1 reports the triangles and vertices per frame and
+the bytes per second the PB link would have to carry at that frame rate.
+A GCC `-O2` build is timed beside CANNER's, for measuring only. Drawing on
+the pixelboard is a later milestone.
+
+- PR 1: id's source in `quake/`, unchanged (both renderers), and the
+  licence (GPL-2.0 or later) and rule 1's exception for it.
+- PR 2: the null-GL build, on the PC first (a timedemo against `pak0.pak`
+  when `QUINCE_PAK` names one, else skipped), then CANNER's, run on SIMMER.
+- PR 3: the board run, with `id1/pak0.pak` on the card: the timings, the
+  counts and the profiles, and what they say about feasibility.

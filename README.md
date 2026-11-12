@@ -19,3 +19,10 @@ make submit     # ask for it in the store, for anyone's GROCER FETCH
 
 `GETTING-STARTED.md` has the setup from nothing; `CLAUDE.md` is how
 Claude works on it; `docs/ROADMAP.md` is where it's going.
+
+## Licence
+
+GPL-2.0-or-later (`LICENSE`), because QUINCE ports id Software's GPL
+Quake source, which is in `quake/` (`quake/README.md` says where it came
+from and how changes to it are marked). Quake's game data isn't here: it
+comes from your own copy of Quake (the shareware `pak0.pak` is enough).

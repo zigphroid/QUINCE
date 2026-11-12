@@ -3,7 +3,10 @@
 QUINCE.JAM is a program for PectinOS, the DOS-like operating system for
 the Adafruit Fruit Jam (RP2350). It's Jacob's, in its own repo, built
 against a pectinos checkout (`PECTIN_ROOT`). What it does: Quake, ported to PectinOS.
-(fill in a paragraph as soon as there is a plan, then keep it current).
+It ports id Software's GPL Quake source (the WinQuake tree, `quake/`) to
+the RP2350 and the pixelboard. Milestone 1 builds it with a renderer that
+draws nothing and times it on the board, to find out whether the CPU and
+the PSRAM behind the XIP cache can run Quake at all (`docs/ROADMAP.md`).
 
 This is a **learning project**. Getting a working program matters, but
 Jacob understanding *why* it works matters more: what the SDK and the
@@ -83,6 +86,11 @@ touches:
    copied code. Reading references (standards, RFCs, datasheets, other
    programs' source) is encouraged; copying isn't. When code follows a
    reference closely, say so in a comment and name the source.
+   **The one exception is id Software's Quake source** (GPL, 1999), which
+   QUINCE ports: it lives in `quake/`, brought in unchanged at a named
+   commit, and every change to it is marked `QUINCE:` in the file
+   (`quake/README.md`; Jacob, 2026-11-11). Our own code stays outside
+   `quake/`, and the repo is GPL-2.0-or-later to match.
 2. **CANNER builds the program.** Keep every source inside CANNER's subset
    (`$PECTIN_ROOT/apps/canner/README.md`'s refusal table): no inline
    assembly, no bit-fields, no statement expressions, no
