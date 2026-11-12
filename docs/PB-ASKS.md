@@ -232,6 +232,7 @@ can hold it back is flow control.
 | The compact vertex, two passes | 3,950 | 16 | 66 (3 KB of headers) | 2.2 | 4.0 |
 | The compact vertex, two textures a pixel | about 2,750 (inferred) | 16 | 47 | 1.6 | 2.8 |
 | M2 as measured on the PC: one pass, cut and culled, every command | 2,412 | 12.7 on average | 32 | 1.1 | 1.9 |
+| M2 on the board (CANNER, M3's floats; 590 KB/s at its own 21.8 fps) | 1,838 | 14.1 on average | 27 | 0.89 | 1.6 |
 
 The third row assumed the world is about 60% of the vertices and the
 lightmap pass sends it twice (inferred). The last is what the GL layer
@@ -282,7 +283,10 @@ Risks, largest first:
    bursts.
 4. **The Jam's time.** M1 is 30 ms a frame for demo1 with nothing drawn.
    Clipping, packing and the copy are added, texture work goes. 30 fps is
-   the first target; 60 needs option B or C.
+   the first target; 60 needs option B or C. Measured since (M2 PR 3, LOG
+   2026-11-12): with the GL layer and M3's floats, 45.8 ms in CANNER's
+   build and 38.1 in GCC's, about 23 ms of it making the commands, so
+   30 fps needs that cost cut first.
 
 To start now, since they don't wait on the command format: the DSP check,
 flow control, and the RGB565 and depth surfaces on `pbshow3`. The command
