@@ -243,3 +243,51 @@ CPU doesn't, so PB takes the work that is per-pixel and load-time, and
 what is cheapest to build comes first. The plan names the one real limit
 on the link, flow control over I2C (about 4 MB/s, inferred), and asks
 pectinos for a deep queue or a faster bus.
+
+## 2026-11-12: the triangle engine's rules (PB-ASKS step 2, PR 1)
+
+QUINCE's C model of PB's triangle engine (`lib/pbmodel.c`) is the spec PB
+draws to. Its rules are in `docs/PB3D.md`. Jacob took all five
+recommendations of the plan:
+- **Perspective:** a divide every pixel, rather than every 8 with straight
+  steps between. Each vertex weighs its edge function times its q, and one
+  reciprocal of the weights' sum serves every attribute, with no divides
+  at setup. A divide every 8 pixels saves PB the reciprocal unit, but adds
+  a second way of stepping and can swim.
+- **Depth:** a 16-bit float of q (4 bits of exponent, 12 of mantissa), as
+  Voodoo's w-buffer, rather than linear z, which spends nearly all its
+  precision near the eye over Quake's 4 to 4,096 units.
+- **The mip level:** one per triangle, from its texel and pixel areas,
+  rather than per pixel, which costs more multipliers. The scene shows the
+  cost: a long wall gets one level end to end, and its far end shimmers.
+  If Quake's frames show it too, per pixel is the change to make.
+- **Colour:** 8 bits a channel inside and RGB565 out, with no dithering
+  yet.
+- **The lightmap:** GLQuake's 1x, with software Quake's 2x left as a later
+  STATE bit.
+
+The model's own choices, each one a rule PB has to keep:
+- **The top-left rule** for pixels on an edge, so a shared edge is drawn
+  once.
+- **Colour is perspective-correct** like the texture coordinates, since
+  the same reciprocal makes it free. Gouraud in screen space would need a
+  second divide.
+- **Textures with see-through texels are kept as ARGB1555,** and the rest
+  as RGB565. 565 has no bit to spare, and a colour key breaks under mip
+  averaging. Only HUD pictures, sprites and the sky's top layer lose a bit
+  of green.
+- **Mips are made from the level above as stored,** not from the palette's
+  8 bits, so PB can build them in place. A mip texel is see-through if two
+  or more of its four are (GLQuake's alpha test passes three of four).
+- **Weights are 1/256** (w(x) = x + x/128), so alpha 0 and 255 give exactly
+  the picture and exactly the source.
+- **Exact integer rules,** with the widths said: 64-bit edge functions
+  (35 bits in the guard band), weights cut to 40 bits, reciprocals as
+  floors. Floats would leave the gateware no way to match bit for bit.
+
+The model isn't in QUINCE.JAM, since PB draws, not the Jam. Its checks are
+a host test (`tests/test_pbmodel.c`), and `make` compiles it with CANNER
+so it stays inside the subset pectinos can take. The checks were tried
+against a dozen rules broken on purpose in the model, and each break
+failed at least one.
+
