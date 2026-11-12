@@ -13,8 +13,9 @@ They are the one exception to CLAUDE.md's hard rule 1 (Jacob, 2026-11-11,
   `cd_` and `net_` files for those), the assembly (`.s`) and the project
   files were left out. Both renderers are here: GLQuake's (`gl_*`), which
   is the one the pixelboard's Glide-style acceleration would run, and the
-  software one (`r_*`, `d_*`), for comparison. id's `sys_null.c`, `vid_null.c`, `snd_null.c`, `cd_null.c`,
-  `in_null.c` and `net_none.c` are the starting points for QUINCE's own.
+  software one (`r_*`, `d_*`), for comparison. id's `sys_null.c`,
+  `vid_null.c`, `snd_null.c`, `cd_null.c`, `in_null.c` and `net_none.c`
+  are the starting points for QUINCE's own.
 - **This commit is id's bytes, unchanged.** Every later change to a file
   here is marked in the file with a `QUINCE:` comment that says what and
   why, so `git diff` against this commit and a grep for `QUINCE:` both

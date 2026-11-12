@@ -18,17 +18,27 @@ copied code") gets one named exception: `quake/`, brought in unchanged
 from `github.com/id-Software/Quake` at `bf4ac42`, every later change marked
 `QUINCE:` in the file. The repo is relicensed from MIT to GPL-2.0-or-later
 (id's terms), which settles #2. Alternatives: Quakespasm or another later
-port (OpenGL only and much more code), or a Quake of our own (not a port).
-Only the portable files came in; the DOS, Windows, Linux and Solaris
-layers and the x86 assembly stayed out (`quake/README.md`). GLQuake's
-renderer (`gl_*`) came in beside the software one: the pixelboard is to
-give Glide-style 3D acceleration (Jacob, in chat), and a card like that
-takes the triangles but leaves the BSP walk, the visibility and the model
-vertices to the CPU, so GLQuake's renderer is the one whose CPU share
-QUINCE has to afford.
+port (much more code, and further from the renderer id wrote), or a Quake
+of our own (not a port). Only the portable files came in; the DOS,
+Windows, Linux and Solaris layers and the x86 assembly stayed out
+(`quake/README.md`).
 
 M1 times two things, not one: `timedemo demo1` alone flatters a build
 that draws nothing (playback is mostly message parsing), so a server
 benchmark on e1m1 times QuakeC and the physics too. A GCC `-O2` build is
 measured beside CANNER's to separate the compiler's share of the time.
 The game data (`pak0.pak`) never goes in the repo.
+
+## 2026-11-12: M1 times GLQuake's renderer over a null GL layer
+
+Jacob, in chat: the pixelboard is to give Glide-style 3D acceleration, and
+on the decision card he chose GLQuake's renderer over a null GL layer for
+M1, not no renderer at all. A Glide-style card takes screen-space
+triangles; the BSP and PVS walk, the polygon lists, the models' vertices,
+their transform to the screen and the sending of them all stay on the
+RP2350. Leaving the renderer out would time none of that and overstate
+the frame rate. So `gl_*` came into `quake/` beside the software renderer,
+and the null GL layer transforms each vertex and counts the triangles,
+vertices and texture bytes, which gives M1 two more answers: triangles per
+frame, and the bytes per second the PB link would need. The alternative,
+no renderer, was quicker to build but answers less.
