@@ -1,7 +1,8 @@
 # What QUINCE asks of PB
 
 What Quake needs from the pixelboard's 3D, sized from M1's board run
-(`docs/ROADMAP.md`, LOG 2026-11-12). Jacob took every recommendation
+(`docs/ROADMAP.md`; LOG 2026-11-12, "M1's board run", which
+PR #8 adds). Jacob took every recommendation
 here on 2026-11-12 ("All recs"). How PB meets these asks is pectinos's
 work and its own plan: QUINCE asks and tests, and never patches pectinos
 (CLAUDE.md, rule 3). Figures marked *inferred* are estimates still to
@@ -21,7 +22,7 @@ game, the BSP walk and the transforms.
 | Fans, strips and lists, vertices shared within one | about 1.9 vertices a triangle today | M1: 3,950 / 2,100 |
 | A compact vertex: 16 bytes for a world vertex | 4 MB/s at 60 fps (2.8 with two textures a pixel), against 6.5 MB/s at today's 28 bytes | "Link and memory", below |
 | Two textures a pixel: wall times lightmap | one pass over the world instead of two | GLQuake's `gl_mtexable` path, `gl_rsurf.c` |
-| Textures sent once as 8-bit indices; PB expands them and builds the mips | about 2.5 MB at load instead of 12-13 MB; the Jam's 8% of mip and resample time gone | M1: 952 uploads, 13 MB with mips |
+| Textures sent once as 8-bit indices; PB expands them and builds the mips | about 2.5 MB at load instead of 12-13 MB; the Jam's mip and resample work gone (about 10% of the timedemo's time, all at load) | M1: 952 uploads, 13 MB with mips |
 | Partial texture updates (lightmaps) | 75-330 KB a run, 128x128 blocks of a byte a texel | M1's `sub_bytes`, `BLOCK_WIDTH` 128 |
 | 640x480 RGB565, shown at x1.5 on 720p | 307,200 pixels; the scan-out mode exists | PB.md, `fb_scan` mode 2 |
 | A 16-bit depth buffer, with the depth tests Quake uses | less-equal, greater-equal, depth mask, depth range | `gl_rmain.c` |
@@ -68,7 +69,7 @@ the board.
 
 | Option | Jam's work a vertex | PB's gateware | Link a frame (demo1) | Cost and risk |
 | --- | --- | --- | --- | --- |
-| **A. The Jam transforms (Glide's split)** | 4x4 matrix, divide, clip to the near plane | Triangle setup, raster | about 63 KB | The 13% the vertex path took in M1 stays on the Jam, plus clipping (not measured yet) |
+| **A. The Jam transforms (Glide's split)** | 4x4 matrix, divide, clip to the near plane | Triangle setup, raster | about 63 KB | The vertex transform's 15% of M1's timedemo stays on the Jam, plus clipping (not measured yet) |
 | B. PB transforms | none: object-space vertices and a matrix | A, plus a matrix unit, the divide, and clipping that makes new vertices | about 50 KB | Clipping in gateware is the hard part; needs the 60K's DSP blocks |
 | C. B, with the world resident on PB | a list of visible surfaces, a few bytes each | B, plus walking surface lists in PB's memory | a few KB | The most Jam time saved; moves a piece of Quake's renderer into gateware |
 
@@ -140,7 +141,8 @@ over 50-70 KB (inferred; step 1 times it).
 **Wall, model and HUD textures** go as they are in the pak, a byte a
 texel. GLQuake turns each into 32-bit RGBA on the CPU (`GL_Upload8`),
 resamples it to a power of two and builds its mips (`GL_MipMap`,
-`GL_ResampleTexture`): M1's 13 MB and 8% of load time. As indices they
+`GL_ResampleTexture`): M1's 13 MB, and about 10% of the timedemo's time (23% of
+the short server run), all of it at load. As indices they
 are about 2.5 MB (13 MB / 4 bytes / 4/3 for the mips; inferred). PB:
 - expands each texel through the palette the Jam sent once, into a texel
   format of its own (RGB565 is the obvious one; pectinos's choice);
@@ -156,7 +158,7 @@ The Jam frees each texture's pixels once sent. The hunk is 5.75 MB of the
 **Lightmaps** stay a byte a texel: 128x128 blocks (`GL_LUMINANCE`,
 `BLOCK_WIDTH` 128), at most 20 (`MAX_LIGHTMAPS`, LOG 2026-11-12), 320 KB,
 always on PB. Dynamic lights change a band of rows in a block,
-`glTexSubImage2D`: 75-330 KB a run in M1, a few KB a second. PB needs:
+`glTexSubImage2D`: 75-330 KB a run in M1: 2 KB/s in demo1, 50 KB/s in e1m1. PB needs:
 - a partial update: a rectangle of rows into an existing texture, the
   address worked out by the kernel from the id;
 - no mips;
@@ -247,7 +249,7 @@ figures), against 2.8 MB/s needed. Either fix is enough:
 | Gateware | Texture upload: expand through a palette, mark index 255, build mips | None |
 | Gateware | A deep command queue in the DDR3 (or the I2C at 1 MHz) | 7,144 words in block RAM |
 | Kernel | A 3D service: a command list checked a primitive at a time; texture ids (make, upload, update a rectangle, free) from a texture pool | AH=14h's 2D list; surfaces by id (API 60) |
-| Kernel | A 640x480 RGB565 drawn mode, and `video_info` saying the 3D service is there | DESIGN section 6 names "whether there is a 3D service" as still to add |
+| Kernel | A 640x480 RGB565 drawn mode, and `video_info` saying the 3D service is there | pectinos DESIGN section 17 ("Future", "Stock Fruit Jam and PB&J") names "whether there is a 3D service" as still to add |
 | Tools | A C model of the triangle engine, byte for byte with the gateware | `drawmodel.c`, for 2D |
 
 Risks, largest first:

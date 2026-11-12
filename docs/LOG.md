@@ -133,12 +133,13 @@ them and builds the mips. It is all new `DRAW` commands on today's link.
 QUINCE writes the triangle engine's C model first, as the spec that runs.
 
 Alternatives: transforms on PB (B), or PB holding the world and walking
-it (C). Both save more of the Jam's time (the vertex path was 13% in
-M1), but need a matrix unit and clipping in gateware, and the 60K's DSP
-blocks are untried; B or C is decided after A's board timings. A second
+it (C). Both save more of the Jam's time (the vertex transform was
+about 15% of M1's timedemo), but need a matrix unit and clipping in
+gateware, and the 60K's DSP blocks are untried; B or C is decided after A's board timings. A second
 blended lightmap pass needs no second texture unit, but it sends the
 world twice and reads the picture back. RGBA uploads keep PB simpler, but
-cost 13 MB and the Jam's 8% of load time, against about 2.5 MB.
+cost 13 MB and the Jam's load-time work (about 10% of the
+timedemo), against about 2.5 MB.
 
 Why: M1 says the link has room (4 MB/s against 37.9 MB/s) and the Jam's
 CPU doesn't, so PB takes the work that is per-pixel and load-time, and

@@ -53,4 +53,4 @@ depth and two textures a pixel. QUINCE's steps come first and need no new
 gateware: the real GL layer, still drawing nothing, timed on the board,
 then a C model of the triangle engine drawing demo1's frames on the PC.
 PB's side (flat triangles, then textures, then lightmaps) is pectinos's
-work, asked for in an issue there. Each step is planned in chat first.
+work, to be asked for in an issue there once Jacob hands it over. Each step is planned in chat first.
