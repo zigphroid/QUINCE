@@ -100,27 +100,31 @@ its clear, state and primitives, `SHOW`. The kernel writes `START`,
 a PB address. Textures are ids the kernel hands out, as a program's
 surfaces are (API 60).
 
-**New commands** (numbers past `POLYLINE`; a first cut for pectinos to
-shape):
+**New commands** (numbers past `POLYLINE`, 15 to 19). Their words,
+bits and the vertex layouts are `lib/pb3d.h`, the one place they are
+defined: the GL layer writes them (`lib/pb3d.c`) and the C model reads
+them. They are QUINCE's proposal, for pectinos to take over or reshape.
 
 | Command | Carries | Why |
 | --- | --- | --- |
-| `DEPTH` | the depth surface, and clear it or not | One depth clear a frame instead of `gl_ztrick` |
-| `STATE` | one word of mode bits: depth test (always, less-equal, greater-equal), depth write, blend (off, alpha, multiply-inverse, add), alpha test, combine (replace, modulate), second texture on or off, cull | Quake changes state between primitives, so it must be small |
+| `DEPTH` | clear the depth surface or not (the kernel names it) | One depth clear a frame instead of `gl_ztrick` |
+| `STATE` | one word of mode bits: depth test (always, less-equal, greater-equal), depth write, blend (off, alpha, multiply-inverse, add), alpha test, combine (replace, modulate), each texture unit on or off, cull, smooth shading | Quake changes state between primitives, so it must be small |
 | `TEXTURE` | the texture id for unit 0 or 1, its wrap and filter | about 35 binds a frame |
 | `TRIS` | kind (fan, strip, list), the vertex format, n vertices | 790 primitives a frame in demo1, about 5 vertices each |
+| `DEPTHRANGE` | near and far, in the stored depth's units | The view weapon at 0 to 0.3 of the range, in front of the world. Kept out of `STATE` so `STATE` stays one word |
 
-**The vertex**, fixed point, its format in `TRIS`'s argument byte:
+**The vertex**, fixed point, its fields chosen by the format bits in
+`TRIS`'s argument byte:
 
 | Field | Bytes | Form |
 | --- | --- | --- |
 | x, y | 4 | signed 12.4 screen pixels: a guard band of plus or minus 2,048 |
-| q (1/w) | 4 | unsigned fixed point, 1.0 at the near plane; depth comes from it too |
-| s, t | 4 | signed 10.6 texels; the Jam takes whole texture sizes off a polygon's coordinates so they stay small, and PB repeats |
-| s2, t2 (lightmap) | 4 | as s, t; world surfaces only |
-| colour | 0, 1 or 4 | none (the world), a grey level (models: Quake lights them in grey), or RGBA (particles, the screen tint) |
+| q (1/w) | 4 | near / w, unsigned 1.31: 1.0 at the near plane; depth comes from it too |
+| s, t | 4 | signed 12.4 texels; the Jam takes whole texture sizes off a polygon's coordinates so they stay small, and PB repeats. 12.4, not 10.6, because GLQuake allows surfaces 512 texels across (`gl_model.c`), which overflows 10.6's 512 even after that |
+| s2, t2 (lightmap) | 4 | signed 10.6 texels; world surfaces only |
+| colour | 0, 2 or 4 | none (the world), a grey level in a word (models: Quake lights them in grey), or RGBA (particles, the screen tint) |
 
-A world vertex is 16 bytes, a model vertex 13, a HUD vertex 8 (no q).
+A world vertex is 16 bytes, a model vertex 14, a HUD vertex 8 (no q).
 M1's guess in `lib/nullgl.h` is 28.
 
 **What the kernel checks.** For drawn mode `pbdrawq_check` reads every
@@ -145,6 +149,8 @@ the short server run), all of it at load. As indices they
 are about 2.5 MB (13 MB / 4 bytes / 4/3 for the mips; inferred). PB:
 - expands each texel through the palette the Jam sent once, into a texel
   format of its own (RGB565 is the obvious one; pectinos's choice);
+- takes the few textures that aren't palette colours (the particle dot)
+  as 32-bit RGBA, alpha under 128 see-through (`lib/pb3d.h`);
 - keeps index 255 as see-through, for the HUD's pictures, sprites and the
   sky's top layer;
 - builds the mips by averaging 2x2 blocks, as `GL_MipMap` does, at load;
