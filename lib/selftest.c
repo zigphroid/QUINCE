@@ -749,6 +749,23 @@ static void gl_full(void)
     glEnd();
     pbgl_end_frame();
     check_num("and before the words after it", (long)(gl_nwin == 2 && gl_tex_seq < gl_win_seq), 1);
+
+    // So does an update sent at once (not from x 0: not held).
+    gl_start(1024);
+    glBindTexture(GL_TEXTURE_2D, 2);
+    glTexImage2D(GL_TEXTURE_2D, 0, 1, 2, 2, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, texels);
+    ortho();
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 1, 0, 1, 1, GL_LUMINANCE, GL_UNSIGNED_BYTE, texels);
+    check_num("an update sent at once mid-frame after the words before it",
+              (long)(gl_nsubs == 1 && gl_nwin == 1 && gl_win_seq < gl_sub_seq), 1);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    pbgl_end_frame();
+    check_num("and before the words after it", (long)(gl_nwin == 2 && gl_sub_seq < gl_win_seq), 1);
 }
 
 // Where the kept frame's TRIS number k starts, or -1: read back command
