@@ -90,7 +90,7 @@ CANNER_FLAGS ?=
 # or build/heat/ or build/gcc/'s (below).
 QUINCE_JAM ?= $(BUILD)/$(NAME).JAM
 
-.PHONY: FORCE all app heat gcc test quake-host test-quake sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
+.PHONY: FORCE all app heat gcc test quake-host test-quake test-builtins sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
 all: app
 app: $(BUILD)/$(NAME).JAM
 
@@ -125,8 +125,23 @@ page-check:
 # runs on the board; host-only ones go in tests/.
 HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
             -fno-omit-frame-pointer
-test: $(BUILD)/test_quince test-quake
+test: $(BUILD)/test_quince test-quake test-builtins
 	$(BUILD)/test_quince
+
+# quince/libc/math.h's FPU built-ins (M2, LOG 2026-11-12): CANNER compiles
+# tests/fpu_builtins.c through it, with the SDK's math.c beside it as in
+# the real build, and any q_ function that calls sqrtf, fabsf, floorf or
+# ceilf instead of making the instruction fails it. The state and checksum
+# can't catch that: math.c's sqrtf is correctly rounded too, only slower.
+test-builtins: tests/fpu_builtins.c quince/libc/math.h $(CANNER) Makefile
+	@mkdir -p $(BUILD)
+	$(CANNER) -I quince/libc -I $(SDK) -S tests/fpu_builtins.c $(filter %/math.c %/softfp.c,$(LIB)) \
+	    > $(BUILD)/fpu_builtins.s
+	@awk '/^[A-Za-z_][A-Za-z0-9_.]*:$$/ { fn = substr($$1, 1, length($$1) - 1) } \
+	    fn ~ /^q_/ && /\tb(l|\.w)?\t/ { print "test-builtins: FAIL: " fn " calls " $$2; bad = 1 } \
+	    END { exit bad }' $(BUILD)/fpu_builtins.s
+	@echo "test-builtins: sqrtf, fabsf, floorf and ceilf are FPU instructions"
+
 
 $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 	@mkdir -p $(BUILD)

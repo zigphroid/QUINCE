@@ -89,9 +89,11 @@ static void run_timedemo(struct qbench_run *run, double (*clock)(void))
 }
 
 /* The server's state, as a hash: each entity in use, by its number, its
- * origin and angles as the network quantizes them (MSG_WriteCoord sends
- * eighths of a unit, MSG_WriteAngle 256ths of a turn: common.c), its
- * frame and its health. After a fixed run it says whether two builds
+ * origin in eighths of a unit (as MSG_WriteCoord sends it, common.c), its
+ * angles in 256ths of a turn (finer than MSG_WriteAngle, which drops the
+ * fraction of a degree first), its frame and its health. After a fixed
+ * run it says whether two builds
+
  * played the same game, which the triangle counts only roughly do: the PC
  * and CANNER's build on SIMMER must agree exactly (M2, LOG 2026-11-12;
  * tools/simbench.py), since the PC rounds floats as the board does. FNV-1a

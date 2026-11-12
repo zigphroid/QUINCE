@@ -293,9 +293,11 @@ QUINCE builds.
   made no difference to it yet, but PR 2's `sinf` and `cosf` will
   depend on it. `asin` (mirrors only) is still glibc's.
 - **`/SERVER` prints the game's state**: an FNV-1a hash of each entity in
-  use, its origin and angles as the network quantizes them (eighths of
-  a unit, 256ths of a turn: `MSG_WriteCoord`, `MSG_WriteAngle`), its
-  frame and its health. `make test-quake` and `make sim-bench` both hold
+  use, its origin in eighths of a unit (as `MSG_WriteCoord` sends it),
+  its angles in 256ths of a turn (finer than `MSG_WriteAngle`, which
+  drops the fraction of a degree first), its frame and its health.
+  `make test-quake` and `make sim-bench` both hold
+
   e1m1's 300 frames to `c8c17318, 164 entities` and checksum
   -3592846848, beside the triangle totals; the PC, CANNER's build and
   GCC's all print them. Alternatives: the triangle totals alone, which
@@ -303,4 +305,11 @@ QUINCE builds.
   differs; a dump of every entity, compared by a script, which says more
   about where two runs part, but which a hash and the PC's own dump can
   do when that's needed.
+- **`make test-builtins`** keeps the `math.h` fix: CANNER compiles
+  `tests/fpu_builtins.c` through `quince/libc/math.h`, with the SDK's
+  `math.c` beside it as in the real build, and fails if `sqrtf`,
+  `fabsf`, `floorf` or `ceilf` is a call. The state can't catch it,
+  since `math.c`'s `sqrtf` is correctly rounded too, only slower.
+  Checked: with the built-ins taken out of the header, all four fail.
+
 

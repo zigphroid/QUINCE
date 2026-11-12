@@ -25,8 +25,10 @@ sent once, and any reloaded during the run are added to the rate.
 `/SERVER map frames` loads a map with a player in it and runs that many
 frames of a tenth of a second of game time each: the game's code, its
 physics and the renderer. It prints the same lines, and then `state`:
-a hash of where every entity ended up (its origin and angles as the
-network sends them, its frame and its health) and how many there are.
+a hash of where every entity ended up (its origin in eighths of a unit,
+its angles in 256ths of a turn, its frame and its health) and how many
+there are.
+
 Two builds that print the same state played the same game.
 
 Quake's files come from `J:\LARDER\QUINCE`: copy `PAK0.PAK` from your own
