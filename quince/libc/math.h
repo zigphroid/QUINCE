@@ -9,7 +9,7 @@
  * spells them (sdk/math.h, "The ones the FPU does in one instruction").
  * -ffreestanding stops GCC knowing the names, and CANNER only makes the
  * instruction for the built-in, so without these a sqrtf was a call to
- * sdk/lib/math.c's integer sqrtf: 885 samples of GCC's demo1 (M2, LOG
+ * sdk/lib/math.c's integer sqrtf: 885 samples of GCC's demo1 (M3, LOG
  * 2026-11-12). The host build (no __arm__) calls the C library's.
  */
 #ifndef QUINCE_MATH_H

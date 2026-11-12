@@ -25,7 +25,7 @@ MAPS = ["START"] + ["E1M%d" % i for i in range(1, 9)]
 SERVER_FRAMES = 300
 SERVER_TOTALS = (330776, 650152)   # triangles, vertices
 # Where those frames leave the game, and the null GL's checksum, as the
-# PC's (tests/test_quake.py): since M2 the PC rounds floats as the M33
+# PC's (tests/test_quake.py): since M3 the PC rounds floats as the M33
 # does, so these match exactly too, and a difference is a bug in one build
 # (LOG 2026-11-12).
 SERVER_STATE = "c8c17318, 164 entities"

@@ -94,7 +94,7 @@ static void run_timedemo(struct qbench_run *run, double (*clock)(void))
  * fraction of a degree first), its frame and its health. After a fixed
  * run it says whether two builds
  * played the same game, which the triangle counts only roughly do: the PC
- * and CANNER's build on SIMMER must agree exactly (M2, LOG 2026-11-12;
+ * and CANNER's build on SIMMER must agree exactly (M3, LOG 2026-11-12;
  * tools/simbench.py), since the PC rounds floats as the board does. FNV-1a
  * over 32-bit words (Fowler, Noll and Vo's hash, from its description). */
 static uint32_t hash_word(uint32_t h, int32_t w)

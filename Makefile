@@ -49,7 +49,7 @@ SRC    := quince/$(NAME).c
 # The core and the checks: no kernel calls, so they build on the host too.
 # The null GL and the benchmark's words are here, so the checks cover them
 # without the pak.
-CORE   := lib/quince_core.c lib/selftest.c lib/nullgl.c lib/qbargs.c
+CORE   := lib/quince_core.c lib/selftest.c lib/nullgl.c lib/qbargs.c lib/pb3d.c
 # Quake (M1): id's files, QUINCE's null GL and benchmark (lib/), the
 # board's system layer and the C library pieces the SDK hasn't got
 # (quince/). The PC build below takes the same QUAKE_SRC and QUAKE_LIB.
@@ -128,7 +128,7 @@ HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
 test: $(BUILD)/test_quince test-quake test-builtins
 	$(BUILD)/test_quince
 
-# quince/libc/math.h's FPU built-ins (M2, LOG 2026-11-12): CANNER compiles
+# quince/libc/math.h's FPU built-ins (M3, LOG 2026-11-12): CANNER compiles
 # tests/fpu_builtins.c through it, with the SDK's math.c beside it as in
 # the real build, and any q_ function that calls sqrtf, fabsf, floorf or
 # ceilf instead of making the instruction fails it. The state and checksum
@@ -155,7 +155,7 @@ $(BUILD)/test_quince: tests/test_quince.c $(CORE) $(wildcard lib/*.h) Makefile
 # enums as small as their values (-fshort-enums), as arm-none-eabi has them
 # (GCC and CANNER alike: quake/modelgen.h says what that cost). id's files
 # are old C: gnu89, common symbols, and their warnings left alone.
-# Its floating point is the board's, bit for bit (M2, LOG 2026-11-12): SSE
+# Its floating point is the board's, bit for bit (M3, LOG 2026-11-12): SSE
 # (-msse2 -mfpmath=sse) rounds each float and double operation to its own
 # width, as the M33's FPU and softfp.c do, where -m32's default x87 keeps
 # them in 80 bits until they are stored; nothing is fused into a

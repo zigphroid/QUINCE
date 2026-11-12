@@ -47,13 +47,33 @@ the pixelboard is a later milestone.
   slower) and GCC's `-O2` build beside them (`make gcc`: 22% and 12%
   faster).
 
-## M2: Quake's hot math in float
+## M2: the GL layer to PB, still drawing nothing
+
+Planned 2026-11-12 (`docs/PB-ASKS.md`, step 1; Jacob, all
+recommendations). M1's null GL grows into the real layer: it writes the
+commands PB would be sent, exactly, so PB-ASKS's inferred byte counts
+become measured ones. PB's 3D service doesn't exist yet, so the board
+counts the commands and drops them; the PC can write them to a file for
+the C model to draw.
+
+- PR 1: the wire format (`lib/pb3d.h`: the new `DRAW` commands, the
+  vertex layouts, the dump's records) and its encoder (`lib/pb3d.c`),
+  held to exact words by the shared checks.
+- PR 2: `lib/pbgl.c` in place of `lib/nullgl.c`: fans, strips and lists,
+  clipping at the near plane and the guard band, state sent only when it
+  changes, wall and lightmap in one pass, and textures as 8-bit indices
+  through a `QUINCE:` change in `GL_Upload8`. `QUINCE_PBDUMP` writes the
+  stream on the PC. Checked on the PC and on SIMMER.
+- PR 3: the board run, beside M1's 30.9 ms a frame, once the boards are
+  free.
+
+## M3: Quake's hot math in float
 
 Planned 2026-11-12 (LOG; Jacob, all recommendations). M1's profile
 found doubles in 27% of GCC's timedemo instructions and 40% of CANNER's:
 Quake's vectors are float, but its double constants and its calls to
 `sqrt`, `sin` and the rest turn float sums into softfp calls, since the
-M33's FPU is single precision only. M2 makes the hot code float, and
+M33's FPU is single precision only. M3 makes the hot code float, and
 checks that the game still plays the same way on the PC and on SIMMER.
 Measured with SIMMER's instruction counts; the board's timing waits
 until the Jam is free.

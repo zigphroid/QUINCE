@@ -244,7 +244,42 @@ what is cheapest to build comes first. The plan names the one real limit
 on the link, flow control over I2C (about 4 MB/s, inferred), and asks
 pectinos for a deep queue or a faster bus.
 
-## 2026-11-12: M2, Quake's hot math in float (the plan)
+## 2026-11-12: PB's wire format (M2 PR 1)
+
+Jacob took every recommendation of the M2 plan (the GL layer to PB, still
+drawing nothing): `GL_Upload8` hands Quake's 8-bit textures to our layer
+through one `QUINCE:` change, unit 0's texel coordinates are 12.4, and
+`lib/nullgl.c` is replaced, not kept beside the new layer. PR 1 writes
+the format down as `lib/pb3d.h`, with an encoder and exact-word checks,
+before the GL layer, so the C model's thread can read the stream
+through the header while the GL layer is still being built.
+
+Changed from `docs/PB-ASKS.md`'s first cut, agreed with the C model's
+thread:
+- s, t are 12.4, not 10.6. GLQuake allows surfaces 512 texels across
+  (`gl_model.c`), and after the Jam takes whole texture sizes off, a
+  coordinate can reach about 768, past 10.6's 512. 12.4 holds 2,048, and
+  a sixteenth of a texel is plenty for point-sampled walls (the model
+  interpolates s q and t q). Lightmaps stay 10.6: 128 wide, and bilinear
+  wants the fraction.
+- The depth range is its own command, `DEPTHRANGE` (near and far in the
+  stored depth's units), not bits of `STATE`. Scaling q on the Jam would
+  move the weapon in front but bend its perspective; PB maps the depth
+  it makes from q instead. It changes about twice a frame, so it stays
+  out of `STATE`'s one word.
+- A model's grey colour takes a word, so its vertex is 14 bytes, not 13:
+  the commands are 16-bit words.
+- Textures have a format byte: 8-bit indices, a grey byte (lightmaps),
+  or 32-bit RGBA for the few that aren't palette colours (the particle
+  dot). PB or the model turns RGBA into its own texels.
+
+Alternatives: 10.6 with the Jam splitting wide polygons (Jam time, more
+vertices); the weapon's depth by a scale on q alone (no offset, so it
+can't put the weapon in front of a wall it is inside). The numbers 15 to
+19 are QUINCE's proposal; pectinos owns PB's command numbers and may
+change them when it builds the 3D service.
+
+## 2026-11-12: M3, Quake's hot math in float (the plan)
 
 Jacob took every recommendation. M1's profile (SIMMER, `-icount`,
 THERMO, project files `quince/canner-vs-gcc/`) had doubles in 27% of
@@ -270,7 +305,7 @@ QUINCE builds.
   physics after collisions is chaotic, so small differences may grow.
 - **Two PRs**: ours first (below), then id's files.
 
-## 2026-11-12: M2 PR 1, our side of the float work
+## 2026-11-12: M3 PR 1, our side of the float work
 
 - **`quince/libc/math.h` was missing the SDK's built-ins.** The SDK's
   `math.h` spells `sqrtf`, `fabsf`, `floorf` and `ceilf` as

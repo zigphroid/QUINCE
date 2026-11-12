@@ -18,7 +18,7 @@ DEMO1_FRAMES = 969
 SERVER_FRAMES = 300
 SERVER_TOTALS = (330776, 650152)   # triangles, vertices
 # ...and where those frames leave the game (lib/qbench.c's print_state)
-# and the null GL's sum of the screen positions it was sent. Since M2 the
+# and the null GL's sum of the screen positions it was sent. Since M3 the
 # PC rounds floats as the board does (the Makefile's QHOST_CC), so CANNER's
 # build on SIMMER must print these too (tools/simbench.py).
 SERVER_STATE = "c8c17318, 164 entities"
