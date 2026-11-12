@@ -41,7 +41,7 @@ int16_t pb3d_fix_10_6(float v)
 /* q is 0 or more (behind the near plane the GL layer has clipped), so
  * the 1.31 value is unsigned. A float holds 24 bits, so the low bits of
  * a big q are 0; PB's depth takes 16 of them and its perspective fewer. */
-uint32_t pb3d_fix_q(float q)
+static uint32_t fix_q(float q)
 {
 	float v;
 	if (!(q == q) || q <= 0.0f)
@@ -53,6 +53,11 @@ uint32_t pb3d_fix_q(float q)
 	 * is a tie, rounded to even, and an odd v would come out one high.
 	 * roundf rounds v itself (VRINTA). */
 	return (uint32_t)__builtin_roundf(v);
+}
+
+uint32_t pb3d_fix_q(float q)
+{
+	return fix_q(q);
 }
 
 /* --- the length of a command --- */
@@ -138,12 +143,6 @@ static void put(struct pb3d_buf *b, uint32_t v)
 	b->w[b->n++] = (uint16_t)v;
 }
 
-static void put32(struct pb3d_buf *b, uint32_t v)
-{
-	put(b, v & 0xffffu);
-	put(b, v >> 16);
-}
-
 void pb3d_depth(struct pb3d_buf *b, int clear)
 {
 	if (room(b, PB3D_DEPTH_WORDS))
@@ -207,28 +206,46 @@ int pb3d_tris(struct pb3d_buf *b, uint32_t kind, uint32_t format, uint32_t n)
 	return 0;
 }
 
-void pb3d_vertex(struct pb3d_buf *b, const struct pb3d_vertex *v)
+/* Each word goes through o, a local pointer, and b->n is written once:
+ * through b, each word was a load and a store of n (the compiler can't
+ * tell the words from the struct). M4's board run had pb3d_vertex at 13%
+ * of demo1 (LOG 2026-11-12). */
+void pb3d_vertex_of(struct pb3d_buf *b, float x, float y, float q, float s, float t,
+                    float s2, float t2, uint32_t colour)
 {
 	uint32_t f = b->tris_format;
+	uint16_t *o;
 	if (b->tris_left == 0)
 		return;   /* no TRIS open: its pb3d_tris failed, or n are done */
-	put(b, fix16(v->x, 16.0f));
-	put(b, fix16(v->y, 16.0f));
-	if (f & PB3D_F_Q)
-		put32(b, pb3d_fix_q(v->q));
+	o = b->w + b->n;
+	*o++ = fix16(x, 16.0f);
+	*o++ = fix16(y, 16.0f);
+	if (f & PB3D_F_Q) {
+		uint32_t v = fix_q(q);
+		*o++ = (uint16_t)(v & 0xffffu);
+		*o++ = (uint16_t)(v >> 16);
+	}
 	if (f & PB3D_F_ST) {
-		put(b, fix16(v->s, 16.0f));
-		put(b, fix16(v->t, 16.0f));
+		*o++ = fix16(s, 16.0f);
+		*o++ = fix16(t, 16.0f);
 	}
 	if (f & PB3D_F_ST2) {
-		put(b, fix16(v->s2, 64.0f));
-		put(b, fix16(v->t2, 64.0f));
+		*o++ = fix16(s2, 64.0f);
+		*o++ = fix16(t2, 64.0f);
 	}
 	if ((f & PB3D_F_COLOUR_MASK) == PB3D_F_GREY)
-		put(b, v->r);
+		*o++ = (uint16_t)(colour & 0xffu);
 	else if ((f & PB3D_F_COLOUR_MASK) == PB3D_F_RGBA) {
-		put(b, (uint32_t)v->r | (uint32_t)v->g << 8);
-		put(b, (uint32_t)v->b | (uint32_t)v->a << 8);
+		*o++ = (uint16_t)(colour & 0xffffu);
+		*o++ = (uint16_t)(colour >> 16);
 	}
+	b->n = (uint32_t)(o - b->w);
 	b->tris_left--;
+}
+
+void pb3d_vertex(struct pb3d_buf *b, const struct pb3d_vertex *v)
+{
+	pb3d_vertex_of(b, v->x, v->y, v->q, v->s, v->t, v->s2, v->t2,
+	               (uint32_t)v->r | (uint32_t)v->g << 8 | (uint32_t)v->b << 16 |
+	                   (uint32_t)v->a << 24);
 }

@@ -791,3 +791,43 @@ recommendation on the five choices in them:
 
 #6, the millisecond clock, is an SDK gap: it goes to zigphroid/pectinos
 as an issue asking for a microsecond clock.
+
+## 2026-11-12: M4 PR 3, where the frame goes now, and one pass a vertex
+
+THERMO at 4 kHz on main 705e4ae's CANNER build, on the Jam (bafa5bf),
+shares of the program's own samples in demo1 (the kernel and interrupts
+16%): `pb3d_vertex` 13.2%, `vertex` 11.8%, `words_sum` 5.1%,
+`R_RecursiveWorldNode` 4.6%, `outcode_of` 4.4%, `R_DrawSequentialPoly`
+4.2%, `GL_DrawAliasFrame` 3.8%, `project` 3.3%, `flush` 2.5%. e1m1's
+server run has `pb3d_vertex` first too (9.3%). Plain timing the same
+boot: 38.2 and 28.9 ms a frame. The two runs' heat files, summed, are
+the new `quince/QUINCE.HOT` (477 functions; the 64 KB budget keeps 249).
+The run was before the change below, so its counts for `pb3d_vertex`
+and `project` are carried by hand to `pb3d_vertex_of` and `send_vertex`,
+which do that work now; without that, `make heat` cut the two hottest
+send functions cold (review 1). The next THERMO run replaces the file.
+
+- **The heat build is slower than the plain one** on this run: 39.5
+  against 38.2 ms (demo1) and 30.7 against 28.9 (e1m1), as M1's was by
+  3-7%. The plain build fits SRAM whole, so moving code to PSRAM can only
+  cost; the heat cut pays when a program doesn't fit. Not looked into
+  further.
+- **The send, in one pass.** `project` wrote a `struct pb3d_vertex`,
+  then `pb3d_vertex` read it back and wrote each word through the
+  buffer's struct, a load and a store of its count a word (CANNER can't
+  tell the words from the count). Now `send_vertex` works out only the
+  fields the format sends and hands them to `pb3d_vertex_of` in
+  registers (s0-s6, the hard-float convention), which writes through a
+  local pointer and sets the count once; `pb3d_fix_q`'s body is inlined
+  there. `pb3d_vertex` stays, a wrapper, for the checks. PB is sent the
+  same words: the gate's checksum is unchanged.
+- On SIMMER (CANNER, against main 705e4ae, one at a time): demo1 21.9 to
+  21.2 ms (-3%), e1m1 9.9 to 9.7 (-2%). Smaller than THERMO's share
+  suggests, which hints that on the board the cost is in memory: the
+  frame's words are on the PSRAM heap (inferred, not measured).
+- **On the board** (bafa5bf, one boot, against main 705e4ae): CANNER's
+  demo1 38.3 to 37.9 ms (-1%), e1m1 28.9 to 28.6 (-1%); GCC's build of
+  this PR 32.6 and 24.7. Gate held in all three. A sixth of the
+  program's samples bought 1%, so what those samples were waiting on is
+  mostly not the instructions this PR took out: the stores of the
+  frame's 27 KB of words into PSRAM are the likely cost (inferred).

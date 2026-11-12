@@ -1004,25 +1004,27 @@ static void choose_format(uint32_t s, struct sendfmt *f)
 		f->format |= grey ? PB3D_F_GREY : PB3D_F_RGBA;
 }
 
-/* A clip-space vertex onto the surface, for pb3d_vertex. */
-static void project(const struct vert *v, const struct sendfmt *f, struct pb3d_vertex *o)
-{
-	float iw = v->w != 0.0f ? 1.0f / v->w : 0.0f;
-	o->x = ax * (v->x * iw) + bx;
-	o->y = by - ay * (v->y * iw);
-	o->q = near_z * iw;
-	o->s = (v->s - f->s0) * f->sw;
-	o->t = (v->t - f->t0) * f->th;
-	o->s2 = v->s2 * f->s2w;
-	o->t2 = v->t2 * f->t2h;
-	o->r = v->r; o->g = v->g; o->b = v->b; o->a = v->a;
-}
-
+/* A clip-space vertex onto the surface, straight into PB's words: only
+ * the fields the format sends are worked out (M4 PR 3; this and
+ * pb3d_vertex were 16% of demo1 in M4's board run, LOG 2026-11-12). */
 static void send_vertex(const struct vert *v, const struct sendfmt *f)
 {
-	struct pb3d_vertex o;
-	project(v, f, &o);
-	pb3d_vertex(&buf, &o);
+	uint32_t fm = f->format;
+	float iw = v->w != 0.0f ? 1.0f / v->w : 0.0f;
+	float q = 0.0f, s = 0.0f, t = 0.0f, s2 = 0.0f, t2 = 0.0f;
+	if (fm & PB3D_F_Q)
+		q = near_z * iw;
+	if (fm & PB3D_F_ST) {
+		s = (v->s - f->s0) * f->sw;
+		t = (v->t - f->t0) * f->th;
+	}
+	if (fm & PB3D_F_ST2) {
+		s2 = v->s2 * f->s2w;
+		t2 = v->t2 * f->t2h;
+	}
+	pb3d_vertex_of(&buf, ax * (v->x * iw) + bx, by - ay * (v->y * iw), q, s, t, s2, t2,
+	               (uint32_t)v->r | (uint32_t)v->g << 8 | (uint32_t)v->b << 16 |
+	                   (uint32_t)v->a << 24);
 }
 
 static int open_tris(uint32_t kind, const struct sendfmt *f, uint32_t n)

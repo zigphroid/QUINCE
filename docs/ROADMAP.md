@@ -115,6 +115,9 @@ for odd values past 2^23 and is now right.
 - PR 2: the board run's write-up, and GCC's build made to fit the
   program area again (the selftest's 4 KB to PSRAM; `make gcc` checks
   it now).
+- PR 3: a THERMO run on main's board build and a new heat file, then the
+  per-vertex send in one pass (`send_vertex` into `pb3d_vertex_of`, no
+  struct between them, the words through a local pointer).
 
 ## Later: drawing on the pixelboard
 
