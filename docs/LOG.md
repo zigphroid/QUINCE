@@ -750,8 +750,12 @@ with it (08790a2, #30); ms a frame, demo1 then e1m1:
   past the 384,768 HEADSPACE gives with nothing resident. Review 1's
   guard-band checks were the last 2 KB. The fix: the selftest's two 2 KB
   frame buffers go in PSRAM (`.pbss`, as `lib/qproto.h`'s QPSRAM), which
-  leaves GCC's build (on main with #29) 5.3 KB spare. And `make gcc` now
-  fails a build over `PROGRAM_SPAN`, so this shows on the PC.
+  leaves GCC's build (on main with #29) 4.7 KB spare. And `make gcc` now
+  lays the .JAM out as the loader's `top_down` does (a 512-byte
+  allowance for the start block, the stack's start on 32, the .bss's
+  end on 8) inside `PROGRAM_SPAN`, and fails one that wouldn't load,
+  so this shows on the PC: the largest stack it takes now is 21,184
+  bytes. A new `STACK` makes the .JAM again, and checks it.
   Alternatives: a smaller stack (16 KB is the rule, CLAUDE.md), or a
   heat cut for GCC's build too (a bigger change, for when the code
   grows). CANNER's build keeps its cold code out by the heat file and
