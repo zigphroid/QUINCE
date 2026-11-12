@@ -44,9 +44,9 @@ cvar_t	m_side = {"m_side","0.8", true};
 client_static_t	cls;
 client_state_t	cl;
 // FIXME: put these on hunk?
-efrag_t			cl_efrags[MAX_EFRAGS];
-entity_t		cl_entities[MAX_EDICTS];
-entity_t		cl_static_entities[MAX_STATIC_ENTITIES];
+QPSRAM efrag_t			cl_efrags[MAX_EFRAGS];	// QUINCE: in PSRAM (lib/qproto.h)
+QPSRAM entity_t		cl_entities[MAX_EDICTS];	// QUINCE: in PSRAM (lib/qproto.h)
+QPSRAM entity_t		cl_static_entities[MAX_STATIC_ENTITIES];	// QUINCE: in PSRAM (lib/qproto.h)
 lightstyle_t	cl_lightstyle[MAX_LIGHTSTYLES];
 dlight_t		cl_dlights[MAX_DLIGHTS];
 
@@ -174,7 +174,7 @@ An svc_signonnum has been received, perform a client side setup
 */
 void CL_SignonReply (void)
 {
-	char 	str[8192];
+	static QPSRAM	char 	str[8192];	// QUINCE: static in PSRAM, not on the 16 KB stack (lib/qproto.h)
 
 Con_DPrintf ("CL_SignonReply: %i\n", cls.signon);
 

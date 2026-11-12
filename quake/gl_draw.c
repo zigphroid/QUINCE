@@ -28,7 +28,9 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 extern unsigned char d_15to8table[65536];
 
 cvar_t		gl_nobind = {"gl_nobind", "0"};
-cvar_t		gl_max_size = {"gl_max_size", "1024"};
+// QUINCE: 256, a Glide card's largest texture, not 1024: the upload buffers
+// below are sized for it, and they live in PSRAM (lib/qproto.h)
+cvar_t		gl_max_size = {"gl_max_size", "256"};
 cvar_t		gl_picmip = {"gl_picmip", "0"};
 
 byte		*draw_chars;				// 8*8 graphic characters
@@ -66,7 +68,7 @@ typedef struct
 } gltexture_t;
 
 #define	MAX_GLTEXTURES	1024
-gltexture_t	gltextures[MAX_GLTEXTURES];
+QPSRAM gltexture_t	gltextures[MAX_GLTEXTURES];	// QUINCE: in PSRAM (lib/qproto.h)
 int			numgltextures;
 
 
@@ -101,7 +103,16 @@ void GL_Bind (int texnum)
 #define	BLOCK_HEIGHT	256
 
 int			scrap_allocated[MAX_SCRAPS][BLOCK_WIDTH];
-byte		scrap_texels[MAX_SCRAPS][BLOCK_WIDTH*BLOCK_HEIGHT*4];
+// QUINCE: from the PSRAM pool in Draw_Init, not 512 KB of static memory
+byte		(*scrap_texels)[BLOCK_WIDTH*BLOCK_HEIGHT];	// QUINCE: and a byte a texel, not 4:
+							// the scrap holds palette indices (Scrap_AllocBlock's callers, GL_Upload8)
+// QUINCE: GL_Upload32's, GL_Upload8_EXT's and GL_Upload8's buffers, the same way
+#define QUINCE_UPLOAD_MAX	(256*256)
+#define QUINCE_TRANS_MAX	(256*256)	// the scrap's size, the biggest it's given (the console's
+					// background is 320x200, a little less)
+unsigned	*quince_scaled32;	// R_TranslatePlayerSkin's too (gl_rmisc.c)
+static unsigned	*quince_trans;
+static unsigned char *quince_scaled8;
 qboolean	scrap_dirty;
 int			scrap_texnum;
 
@@ -173,7 +184,7 @@ typedef struct cachepic_s
 } cachepic_t;
 
 #define	MAX_CACHED_PICS		128
-cachepic_t	menu_cachepics[MAX_CACHED_PICS];
+QPSRAM cachepic_t	menu_cachepics[MAX_CACHED_PICS];	// QUINCE: in PSRAM (lib/qproto.h)
 int			menu_numcachepics;
 
 byte		menuplyr_pixels[4096];
@@ -376,6 +387,19 @@ void Draw_Init (void)
 	int		start;
 	byte	*ncdata;
 	int		f, fstep;
+
+	// QUINCE: the scrap and the upload buffers, from the PSRAM pool (malloc
+	// is mem_alloc on the board: quince/qlibc.c) instead of static memory
+	if (!scrap_texels)
+	{
+		scrap_texels = malloc (MAX_SCRAPS * sizeof(*scrap_texels));
+		quince_scaled32 = malloc (QUINCE_UPLOAD_MAX * sizeof(unsigned));
+		quince_scaled8 = malloc (QUINCE_UPLOAD_MAX);
+		quince_trans = malloc (QUINCE_TRANS_MAX * sizeof(unsigned));
+		if (!scrap_texels || !quince_scaled32 || !quince_scaled8 || !quince_trans)
+			Sys_Error ("Draw_Init: no memory for the texture buffers");
+		memset (scrap_texels, 0, MAX_SCRAPS * sizeof(*scrap_texels));
+	}
 
 
 	Cvar_RegisterVariable (&gl_nobind);
@@ -658,7 +682,8 @@ Only used for the player color selection menu
 void Draw_TransPicTranslate (int x, int y, qpic_t *pic, byte *translation)
 {
 	int				v, u, c;
-	unsigned		trans[64*64], *dest;
+	static QPSRAM unsigned	trans[64*64];	// QUINCE: static in PSRAM, not on the 16 KB stack (lib/qproto.h)
+	unsigned	*dest;
 	byte			*src;
 	int				p;
 
@@ -1004,7 +1029,7 @@ GL_Upload32
 void GL_Upload32 (unsigned *data, int width, int height,  qboolean mipmap, qboolean alpha)
 {
 	int			samples;
-static	unsigned	scaled[1024*512];	// [512*256];
+unsigned	*scaled = quince_scaled32;	// QUINCE: was static unsigned scaled[1024*512]
 	int			scaled_width, scaled_height;
 
 	for (scaled_width = 1 ; scaled_width < width ; scaled_width<<=1)
@@ -1020,7 +1045,7 @@ static	unsigned	scaled[1024*512];	// [512*256];
 	if (scaled_height > gl_max_size.value)
 		scaled_height = gl_max_size.value;
 
-	if (scaled_width * scaled_height > sizeof(scaled)/4)
+	if (scaled_width * scaled_height > QUINCE_UPLOAD_MAX)	// QUINCE: was sizeof(scaled)/4
 		Sys_Error ("GL_LoadTexture: too big");
 
 	samples = alpha ? gl_alpha_format : gl_solid_format;
@@ -1093,7 +1118,7 @@ void GL_Upload8_EXT (byte *data, int width, int height,  qboolean mipmap, qboole
 	int			p;
 	static unsigned j;
 	int			samples;
-    static	unsigned char scaled[1024*512];	// [512*256];
+	unsigned char *scaled = quince_scaled8;	// QUINCE: was static unsigned char scaled[1024*512]
 	int			scaled_width, scaled_height;
 
 	s = width*height;
@@ -1124,7 +1149,7 @@ void GL_Upload8_EXT (byte *data, int width, int height,  qboolean mipmap, qboole
 	if (scaled_height > gl_max_size.value)
 		scaled_height = gl_max_size.value;
 
-	if (scaled_width * scaled_height > sizeof(scaled))
+	if (scaled_width * scaled_height > QUINCE_UPLOAD_MAX)	// QUINCE: was sizeof(scaled)
 		Sys_Error ("GL_LoadTexture: too big");
 
 	samples = 1; // alpha ? gl_alpha_format : gl_solid_format;
@@ -1184,12 +1209,14 @@ GL_Upload8
 */
 void GL_Upload8 (byte *data, int width, int height,  qboolean mipmap, qboolean alpha)
 {
-static	unsigned	trans[640*480];		// FIXME, temporary
+unsigned	*trans = quince_trans;	// QUINCE: was static unsigned trans[640*480]
 	int			i, s;
 	qboolean	noalpha;
 	int			p;
 
 	s = width*height;
+	if (s > QUINCE_TRANS_MAX)	// QUINCE: trans is smaller than id's, so check it
+		Sys_Error ("GL_Upload8: %dx%d is too big", width, height);
 	// if there are no transparent pixels, make it a 3 component
 	// texture even if it was specified as otherwise
 	if (alpha)

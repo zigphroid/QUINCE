@@ -22,7 +22,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 #include "quakedef.h"
 
 int			num_temp_entities;
-entity_t	cl_temp_entities[MAX_TEMP_ENTITIES];
+QPSRAM entity_t	cl_temp_entities[MAX_TEMP_ENTITIES];	// QUINCE: in PSRAM (lib/qproto.h)
 beam_t		cl_beams[MAX_BEAMS];
 
 sfx_t			*cl_sfx_wizhit;

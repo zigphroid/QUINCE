@@ -27,13 +27,19 @@ THERMO's profile:
    which times QuakeC and the physics that a demo skips.
 
 Beside the timings, M1 reports the triangles and vertices per frame and
-the bytes per second the PB link would have to carry at that frame rate.
+the bytes per second the PB link would have to carry at that frame rate:
+the vertices and the lightmaps' updates, with the textures apart, sent
+once (the PB keeps them all in its 512 MB).
 A GCC `-O2` build is timed beside CANNER's, for measuring only. Drawing on
 the pixelboard is a later milestone.
 
 - PR 1: id's source in `quake/`, unchanged (both renderers), and the
   licence (GPL-2.0 or later) and rule 1's exception for it.
-- PR 2: the null-GL build, on the PC first (a timedemo against `pak0.pak`
-  when `QUINCE_PAK` names one, else skipped), then CANNER's, run on SIMMER.
+- PR 2: the null-GL build, on the PC first (`make test-quake`, against
+  `pak0.pak` when `QUINCE_PAK` names one, else skipped), then CANNER's,
+  run on SIMMER (`make sim-bench`), with Quake's memory fitted to the
+  board's (LOG 2026-11-12).
 - PR 3: the board run, with `id1/pak0.pak` on the card: the timings, the
-  counts and the profiles, and what they say about feasibility.
+  counts and the profiles, and what they say about feasibility. Then the
+  same timings with the code cut by THERMO's heat file (`tools/heat.py`,
+  CANNER `-cold`): the frame loop in the jar, the rest in PSRAM.

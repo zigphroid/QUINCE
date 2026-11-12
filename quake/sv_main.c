@@ -21,7 +21,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 
 #include "quakedef.h"
 
-server_t		sv;
+QPSRAM server_t		sv;	// QUINCE: in PSRAM (lib/qproto.h)
 server_static_t	svs;
 
 char	localmodels[MAX_MODELS][5];			// inline model names for precache

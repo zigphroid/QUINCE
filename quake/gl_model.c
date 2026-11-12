@@ -34,8 +34,11 @@ model_t *Mod_LoadModel (model_t *mod, qboolean crash);
 
 byte	mod_novis[MAX_MAP_LEAFS/8];
 
-#define	MAX_MOD_KNOWN	512
-model_t	mod_known[MAX_MOD_KNOWN];
+// QUINCE: 256, not 512, as id's own model.c: each brush model's parts take a
+// slot too (e1m3 needs more than 128), and each is a model_t in PSRAM
+#define	MAX_MOD_KNOWN	256
+// QUINCE: from the PSRAM pool in Mod_Init, not 210 KB of static memory
+model_t	*mod_known;
 int		mod_numknown;
 
 cvar_t gl_subdivide_size = {"gl_subdivide_size", "128", true};
@@ -49,6 +52,11 @@ void Mod_Init (void)
 {
 	Cvar_RegisterVariable (&gl_subdivide_size);
 	memset (mod_novis, 0xff, sizeof(mod_novis));
+	// QUINCE: mod_known's memory (see its declaration)
+	mod_known = malloc (MAX_MOD_KNOWN * sizeof(model_t));
+	if (!mod_known)
+		Sys_Error ("Mod_Init: no memory for the models");
+	memset (mod_known, 0, MAX_MOD_KNOWN * sizeof(model_t));
 }
 
 /*
@@ -1233,8 +1241,8 @@ ALIAS MODELS
 
 aliashdr_t	*pheader;
 
-stvert_t	stverts[MAXALIASVERTS];
-mtriangle_t	triangles[MAXALIASTRIS];
+QPSRAM stvert_t	stverts[MAXALIASVERTS];	// QUINCE: in PSRAM (lib/qproto.h)
+QPSRAM mtriangle_t	triangles[MAXALIASTRIS];	// QUINCE: in PSRAM (lib/qproto.h)
 
 // a pose is a single set of vertexes.  a frame may be
 // an animating sequence of poses
@@ -1360,7 +1368,7 @@ extern unsigned d_8to24table[];
 void Mod_FloodFillSkin( byte *skin, int skinwidth, int skinheight )
 {
 	byte				fillcolor = *skin; // assume this is the pixel to fill
-	floodfill_t			fifo[FLOODFILL_FIFO_SIZE];
+	static QPSRAM	floodfill_t			fifo[FLOODFILL_FIFO_SIZE];	// QUINCE: static in PSRAM, not on the 16 KB stack (lib/qproto.h)
 	int					inpt = 0, outpt = 0;
 	int					filledcolor = -1;
 	int					i;

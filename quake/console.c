@@ -153,7 +153,7 @@ If the line width has changed, reformat the buffer.
 void Con_CheckResize (void)
 {
 	int		i, j, width, oldwidth, oldtotallines, numlines, numchars;
-	char	tbuf[CON_TEXTSIZE];
+	static QPSRAM	char	tbuf[CON_TEXTSIZE];	// QUINCE: static in PSRAM, not on the 16 KB stack (lib/qproto.h)
 
 	width = (vid.width >> 3) - 2;
 
@@ -356,12 +356,15 @@ void Con_DebugLog(char *file, char *fmt, ...)
     static char data[1024];
     int fd;
     
+#ifndef __CANNER__	// QUINCE: no -condebug log on the board: PectinOS's open() takes no
+			// O_ flags or mode (quince/libc/fcntl.h); M1 needs no log there
     va_start(argptr, fmt);
     vsprintf(data, fmt, argptr);
     va_end(argptr);
     fd = open(file, O_WRONLY | O_CREAT | O_APPEND, 0666);
     write(fd, data, strlen(data));
     close(fd);
+#endif
 }
 
 

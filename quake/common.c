@@ -1624,7 +1624,7 @@ pack_t *COM_LoadPackFile (char *packfile)
 	int                             numpackfiles;
 	pack_t                  *pack;
 	int                             packhandle;
-	dpackfile_t             info[MAX_FILES_IN_PACK];
+	dpackfile_t             *info;	// QUINCE: was info[MAX_FILES_IN_PACK] on the stack (128 KB)
 	unsigned short          crc;
 
 	if (Sys_FileOpenRead (packfile, &packhandle) == -1)
@@ -1649,6 +1649,9 @@ pack_t *COM_LoadPackFile (char *packfile)
 
 	newfiles = Hunk_AllocName (numpackfiles * sizeof(packfile_t), "packfile");
 
+	info = malloc (MAX_FILES_IN_PACK * sizeof(dpackfile_t));	// QUINCE: see its declaration
+	if (!info)
+		Sys_Error ("%s: no memory for its directory", packfile);
 	Sys_FileSeek (packhandle, header.dirofs);
 	Sys_FileRead (packhandle, (void *)info, header.dirlen);
 
@@ -1674,6 +1677,7 @@ pack_t *COM_LoadPackFile (char *packfile)
 	pack->files = newfiles;
 	
 	Con_Printf ("Added packfile %s (%i files)\n", packfile, numpackfiles);
+	free (info);	// QUINCE
 	return pack;
 }
 

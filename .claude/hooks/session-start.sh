@@ -80,6 +80,14 @@ fi
 make -C "$root" canner build/host/verbusage build/host/prefcheck build/host/jarcard >&2
 echo "session-start: PECTIN_ROOT=$root ($(git -C "$root" rev-parse --short HEAD)), CANNER built" >&2
 
+# A 32-bit C library, for `make test-quake`'s PC build of Quake (-m32: it
+# keeps pointers in ints). Its failure costs test-quake, which then skips
+# saying why, not the session.
+if command -v apt-get >/dev/null 2>&1 && ! dpkg -s gcc-multilib >/dev/null 2>&1; then
+  { apt-get update -q && DEBIAN_FRONTEND=noninteractive apt-get install -y -q gcc-multilib; } >&2 \
+    || echo "session-start: no gcc-multilib, so make test-quake will skip" >&2
+fi
+
 # SIMMER, for `make sim-smoke`: Arm's GCC for its kernel, QEMU's build
 # packages ($PECTIN_ROOT/docs/SIMMER.md), then QEMU with PectinOS's machine
 # (several minutes, once: the container cache keeps it) and the kernel. A

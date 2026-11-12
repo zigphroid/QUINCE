@@ -174,10 +174,17 @@ you only for what needs a person.
 | `quince/QUINCE.c` | the program: the screen, the files, the board's side |
 | `quince/QUINCE.VRB` | its argument template (what the shell accepts) |
 | `quince/QUINCE.md` | its COOKBOOK page (`COOKBOOK QUINCE` on the board) |
+| `quince/sys_quince.c` | Quake's system layer on the board: files, the clock, the hunk, `/TIMEDEMO` and `/SERVER` |
+| `quince/qlibc.c`, `quince/libc/` | the C library pieces Quake needs that the SDK hasn't got (`FILE`, `sprintf`, `malloc` on `mem_alloc`) |
+| `quake/` | id Software's Quake source, GPL, with QUINCE's changes marked `QUINCE:` (`quake/README.md`) |
 | `lib/` | the part worth testing: no kernel calls, so it builds on the host too |
+| `lib/nullgl.c`, `lib/GL/` | the null GL under GLQuake's renderer: it transforms and counts, and draws nothing |
+| `lib/qbench.c`, `lib/qbargs.c` | the two benchmarks, and their words |
 | `lib/selftest.c` | the checks, run by `make test` and by `QUINCE /SELFTEST` |
-| `tests/` | the host test's runner, and later host-only checks and fixtures |
+| `tests/` | the host test's runner, and host-only checks |
+| `tests/sys_host.c`, `tests/test_quake.py` | `make test-quake`: Quake on the PC (32-bit, `-m32`), against `QUINCE_PAK` |
 | `tools/simsmoke.py` | `make sim-smoke`: SIMMER, driven by pectinos's `simdrive.py` |
+| `tools/simbench.py` | `make sim-bench`: the benchmarks on SIMMER, against `QUINCE_PAK` |
 | `tools/PICKJAM.BAT` | the board's side of `make dist`, copied into `dist/` |
 | `dist/` | `make dist`'s output, committed: what the board's `PICKJAM` fetches |
 | `docs/ROADMAP.md`, `docs/LOG.md` | the milestones, and the decisions with their reasons |

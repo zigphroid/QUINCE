@@ -1,2 +1,4 @@
 QUINCE NAME/W +KEYS -- Say hello on the screen (to a jar, if no name is given)
+QUINCE /TIMEDEMO/S/A DEMO/W/A /MEM/N /V/S +READS -- Time a Quake demo with nothing drawn
+QUINCE /SERVER/S/A MAP/W/A FRAMES/N/A /MEM/N /V/S +READS -- Time Quake's game frames on a map
 QUINCE /SELFTEST/S/A +READS -- Run the host test's checks here, on CANNER's code

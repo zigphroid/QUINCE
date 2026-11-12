@@ -27,7 +27,7 @@ key up events are sent even if in console mode
 
 
 #define		MAXCMDLINE	256
-char	key_lines[32][MAXCMDLINE];
+QPSRAM char	key_lines[32][MAXCMDLINE];	// QUINCE: in PSRAM (lib/qproto.h)
 int		key_linepos;
 int		shift_down=false;
 int		key_lastpress;

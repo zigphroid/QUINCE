@@ -49,6 +49,10 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // must match definition in spritegn.h
 #ifndef SYNCTYPE_T
 #define SYNCTYPE_T
+// QUINCE: the fields of the file formats below that were enums are ints.
+// On arm-none-eabi an enum is as small as its values (1 byte here: GCC's
+// default, and CANNER's), but the files hold 4 bytes, so with the enum
+// every skin and frame after the first was read 3 bytes short.
 typedef enum {ST_SYNC=0, ST_RAND } synctype_t;
 #endif
 
@@ -69,7 +73,7 @@ typedef struct {
 	int			numverts;
 	int			numtris;
 	int			numframes;
-	synctype_t	synctype;
+	int			synctype;	// QUINCE: synctype_t; see below
 	int			flags;
 	float		size;
 } mdl_t;
@@ -122,11 +126,11 @@ typedef struct {
 } daliasskininterval_t;
 
 typedef struct {
-	aliasframetype_t	type;
+	int					type;	// QUINCE: aliasframetype_t; see below
 } daliasframetype_t;
 
 typedef struct {
-	aliasskintype_t	type;
+	int				type;	// QUINCE: aliasskintype_t; see below
 } daliasskintype_t;
 
 #define IDPOLYHEADER	(('O'<<24)+('P'<<16)+('D'<<8)+'I')

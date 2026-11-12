@@ -120,6 +120,38 @@ static int selftest(void)
     return 0;
 }
 
+// M1's timings (docs/ROADMAP.md): Quake over the null GL, in
+// quince/sys_quince.c and lib/qbench.c. Quake's files are in QUINCE's
+// LARDER jar, as the store's programs keep theirs: J:\LARDER\QUINCE\ID1\PAK0.PAK.
+#define QUAKE_BASEDIR "J:\\LARDER\\QUINCE"
+
+int quince_bench(int argc, char **argv);
+
+static int bench(const struct pectin_args *a)
+{
+    static char frames[12], mem[12];
+    char *words[8];
+    int n = 0;
+    words[n++] = QUAKE_BASEDIR;
+    if (pectin_arg_set(a, "TIMEDEMO")) {
+        words[n++] = "timedemo";
+        words[n++] = (char *)pectin_arg_str(a, "DEMO");
+    } else {
+        words[n++] = "server";
+        words[n++] = (char *)pectin_arg_str(a, "MAP");
+        snprintf(frames, sizeof frames, "%d", (int)pectin_arg_num(a, "FRAMES", 0));
+        words[n++] = frames;
+    }
+    if (pectin_arg_num(a, "MEM", 0) > 0) {
+        snprintf(mem, sizeof mem, "%d", (int)pectin_arg_num(a, "MEM", 0));
+        words[n++] = "-mem";
+        words[n++] = mem;
+    }
+    if (pectin_arg_set(a, "V"))
+        words[n++] = "-v";
+    return quince_bench(n, words);
+}
+
 // The line, parsed against QUINCE.VRB by the shell before main runs.
 // Static, not on the stack: every big buffer belongs out of it.
 static uint32_t argbuf[64];
@@ -131,6 +163,8 @@ int main(void)
         return 2;                       // built without its template
     if (pectin_arg_set(a, "SELFTEST"))
         return selftest();
+    if (pectin_arg_set(a, "TIMEDEMO") || pectin_arg_set(a, "SERVER"))
+        return bench(a);
     who = pectin_arg_str(a, "NAME");
     screen();
     return 0;
