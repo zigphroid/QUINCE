@@ -59,9 +59,10 @@ static void print_counts(const char *what, int frames, double seconds)
 	       what, (crate + lrate) / 1024.0, crate / 1024.0,
 	       seconds > 0 ? c->vertex_words * 2.0 / seconds / 1024.0 : 0.0, lrate / 1024.0);
 	printf("%s: culled %u primitives, cut %u into %u fans, split %u, dropped %u commands, "
-	       "biggest frame %u words\n",
+	       "ignored %u calls, biggest frame %u words\n",
 	       what, (unsigned)c->culled, (unsigned)c->clipped, (unsigned)c->clip_tris,
-	       (unsigned)c->split, (unsigned)c->dropped, (unsigned)c->max_frame_words);
+	       (unsigned)c->split, (unsigned)c->dropped, (unsigned)c->ignored,
+	       (unsigned)c->max_frame_words);
 	printf("%s: lightmap updates %u, %u bytes (GLQuake made %u)\n",
 	       what, (unsigned)c->sub_uploads, (unsigned)c->sub_bytes, (unsigned)c->sub_calls);
 	printf("%s: at load, textures %u uploads %u bytes (%u as RGBA), sent once\n",

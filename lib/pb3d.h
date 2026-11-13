@@ -96,8 +96,10 @@ enum {
 #define PB3D_S_CULL_CW      0x0200u  /*   clockwise ones */
 #define PB3D_S_CULL_CCW     0x0400u  /*   counter-clockwise ones */
 #define PB3D_S_SMOOTH       0x0800u  /* colour shaded across the triangle (Gouraud);
-                                      * 0 takes each triangle's first vertex's, in
-                                      * TRIS's order below (GL_FLAT) */
+                                      * 0 takes each triangle's last vertex's
+                                      * (k + 2 of a strip or fan's triangle k),
+                                      * as GL 1.1's GL_FLAT does for lists,
+                                      * strips and fans (section 2.13.7) */
 #define PB3D_S_ALL          0x0fffu
 
 /* TEXTURE: arg is the unit, 0 (the wall, model or picture) or 1 (the

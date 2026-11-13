@@ -41,7 +41,9 @@ struct pbgl_counts {
 	uint32_t sub_calls;    /* glTexSubImage2D: GLQuake's lightmap updates */
 	uint32_t sub_uploads;  /* the updates sent: a band of rows per block a frame */
 	uint32_t sub_bytes;    /* their bytes */
-	uint32_t ignored;      /* uploads the layer drops: mips, which PB builds */
+	uint32_t ignored;      /* calls the layer drops: mip uploads, which PB builds;
+	                        * textures, and updates to them, named past
+	                        * max_textures; and pushes past the matrix stack's 8 */
 };
 
 /* Where the layer's output goes. Any of them may be 0. A frame's
@@ -64,9 +66,10 @@ struct pbgl_sink {
 
 /* The memory the layer works in, from the caller, since lib/ takes no
  * kernel calls: words for a window of a frame's commands (at least
- * PBGL_WORDS_MIN, the biggest command the layer writes), a table of the textures
- * (PBGL_TEXTURE_BYTES each, for GL's names 0 to max_textures - 1; a name
- * past it is drawn as no texture), and scratch for a texture's texels on
+ * PBGL_WORDS_MIN, the biggest command the layer writes), a table of the
+ * textures (PBGL_TEXTURE_BYTES each, for GL's names 0 to max_textures - 1;
+ * a texture made with a name past it isn't sent, and is counted in
+ * ignored, and binding it draws no texture), and scratch for a texture's texels on
  * their way to PB (the biggest texture GLQuake makes, 256x256 under its
  * gl_max_size). */
 struct pbgl_mem {

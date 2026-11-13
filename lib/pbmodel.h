@@ -43,7 +43,7 @@ struct pbm_state {
 	int modulate;       /* unit 0's texel times the vertex colour; 0, the texel */
 	int tex1;           /* unit 1 on: darken by its grey (the lightmap) */
 	int cull;           /* PBM_CULL_* */
-	int smooth;         /* colour across the triangle; 0, its first vertex's */
+	int smooth;         /* colour across the triangle; 0, its last vertex's */
 };
 
 /* Texture formats (lib/pb3d.h's PB3D_TEX_*), and how they are kept. */

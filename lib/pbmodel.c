@@ -588,7 +588,7 @@ static void triangle(struct pbm *m, const struct pbm_vertex *v0,
                      const struct pbm_vertex *v1, const struct pbm_vertex *v2)
 {
 	const struct pbm_state *st = &m->state;
-	const struct pbm_vertex *v[3], *first = v0;
+	const struct pbm_vertex *v[3], *last = v2;   /* GL's flat colour, before any swap */
 	int64_t area, x[3], y[3];
 	int64_t minx, maxx, miny, maxy;
 	int px0, px1, py0, py1, px, py, i, es, qs, lvl[2] = { 0, 0 };
@@ -746,10 +746,10 @@ static void triangle(struct pbm *m, const struct pbm_vertex *v0,
 					vc.b = clamp255(asr(MEAN(b), 4));
 					vc.a = clamp255(asr(MEAN(a), 4));
 				} else {
-					vc.r = first->r;
-					vc.g = first->g;
-					vc.b = first->b;
-					vc.a = first->a;
+					vc.r = last->r;
+					vc.g = last->g;
+					vc.b = last->b;
+					vc.a = last->a;
 				}
 
 				/* Unit 0: the texel, alone or times the colour. */
