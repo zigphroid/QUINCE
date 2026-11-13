@@ -27,7 +27,7 @@ pixels out, past which PB's 12.4 positions can't reach) into at least
 one fan, any commands too big for the GL layer's 8 KB window of words,
 and the GL calls it ignored (mip levels, which PB builds itself; a
 texture, or an update to one, named past its table; a push past the
-matrix stack) are counted too. The textures sent at load are
+matrix stack; a depth range with far below near) are counted too. The textures sent at load are
 counted apart, sent once, and any reloaded during the run are added to
 the rate.
 

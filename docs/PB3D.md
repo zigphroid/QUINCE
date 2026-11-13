@@ -95,7 +95,8 @@ uses the same R.
   below. Against the vertices' q as cut to 16 bits (`>> qs`, which
   floors), a pixel a step off is as often nearer as farther. The bias
   is cut, not gone: a constant q on a step's edge (0.5, say) still lands
-  a step farther about one pixel in 20, never nearer, because Sd's
+  a step farther about one pixel in 20, almost never nearer (a review's
+  wider random run had 962 nearer to 251,093 farther), because Sd's
   rounding falls under it half the time; until #21, when every step
   rounded down, it was about one in 7. Against the q sent, before
   `>> qs`, depth is still farther more often than nearer. A triangle
