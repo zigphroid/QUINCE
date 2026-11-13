@@ -860,3 +860,52 @@ Alternatives:
 - Keep the floors and say "about" in PB3D.md. That leaves the bias.
 - Interpolate depth from the full S. Its product with RA still fits in
   64 bits, but it needs a wider multiplier per pixel.
+
+## 2026-11-12: M4 PR 4, the frame's words through a window in SRAM
+
+**Decision (Jacob, option A).** The GL layer writes a frame's PB
+commands into a 4 K-word (8 KB) static buffer, in SRAM on the board,
+and hands it to the sink each time a command doesn't fit
+(`pb3d_buf.full`), then once at the frame's end. Before, the whole
+frame, up to 128 K words, was in a 256 KB block from the PSRAM pool.
+
+- **Why.** PR 3's board run hinted that the words' stores into PSRAM
+  were the cost, and a measurement settled it: the same heat build of
+  0c819b8 with the words buffer in SRAM instead (an experiment, kept off
+  main) ran demo1 39.1 to 34.0 ms a frame (-13%) and e1m1 30.6 to 27.2
+  (-11%) on the board. PSRAM behind the XIP cache takes writes slowly,
+  and a frame is 30-50 KB of them.
+- **The alternatives.** B: the heat build (code to PSRAM) to free
+  144 KB of SRAM for the whole frame's buffer, which costs the 3-7% the
+  heat cut costs. C: leave it, for PB's real command path to settle. A
+  is what that path will want anyway: PB takes a stream, so a window
+  handed on as it fills is how commands will reach it.
+- **What changes for a sink.** `frame(words, n)` became `words(w, n)`,
+  each a window of whole commands, and `frame()` at the end. The PC's
+  dump gathers the windows, so its file is the same; the selftest checks
+  a frame through a 30-word window comes in two windows of whole
+  commands with the same words and checksum, and that only a command
+  bigger than the window is dropped. The checksum carries a window's odd
+  last word to the next, so it is the whole frame's: the gate's
+  3500115068 is unchanged.
+- **Held updates.** A held lightmap update (`glTexSubImage2D`'s, coalesced)
+  is sent before each window, not only before the frame, since PB will
+  draw a window as it arrives and the window may use it. The shareware
+  runs send the same lightmap bytes (the gate's totals).
+- **The biggest command.** A primitive is at most 256 vertices of 11
+  words, 2,818 (`PBGL_WORDS_MIN`; `qvid.c` checks its window holds it).
+  A cut strip or fan of 256 could make an inside list of 254 triangles,
+  more than that, so the inside now goes in lists that fit the window.
+- **The SRAM.** 8 KB more `.bss` put GCC's build 4.4 KB past the program
+  area, so three statics went to PSRAM: `menuplyr_pixels` (4 KB, the
+  menu's player picture), `scrap_allocated` (2 KB, used at load) and
+  qlibc's `fmt_buf` (4 KB, a printf's). GCC's build still fits, with
+  less margin than before: 3,752 bytes spare in the cloud against 4,800,
+  by the Makefile's own check, since its code, in SRAM too, grew about
+  3 KB (the new checks, `flush`'s split, the ordered texture calls)
+  as its `.bss` fell 2 KB (review 1). On the Mac's GCC, whose code was
+  2.9 KB bigger, about 1.7 KB (inferred).
+- **Texture calls in order.** A texture made, or an update sent at once,
+  first hands on the window's words so far, so the stream keeps GL's
+  order (review 1). Such calls come at load: none in the timed runs.
+

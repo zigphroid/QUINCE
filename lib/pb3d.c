@@ -119,6 +119,7 @@ void pb3d_init(struct pb3d_buf *b, uint16_t *words, uint32_t cap)
 	b->w = words;
 	b->cap = cap;
 	b->dropped = 0;
+	b->full = 0;
 	pb3d_clear(b);
 }
 
@@ -131,11 +132,21 @@ void pb3d_clear(struct pb3d_buf *b)
 }
 
 /* Room for k more words, or count the command dropped. A command is
- * written whole or not at all, so a reader never meets half of one. */
+ * written whole or not at all, so a reader never meets half of one:
+ * when it doesn't fit, full hands on the words before it, and it starts
+ * the next window. Never inside a TRIS, whose words were reserved whole
+ * when it opened. */
 static int room(struct pb3d_buf *b, uint32_t k)
 {
-	if (b->tris_left == 0 && b->cap - b->n >= k)
-		return 1;
+	if (b->tris_left == 0) {
+		if (b->cap - b->n >= k)
+			return 1;
+		if (b->full && k <= b->cap) {
+			b->full(b);
+			if (b->cap - b->n >= k)
+				return 1;
+		}
+	}
 	b->dropped++;
 	return 0;
 }

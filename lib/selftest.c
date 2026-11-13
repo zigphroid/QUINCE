@@ -315,11 +315,33 @@ static uint8_t gl_textures[16 * PBGL_TEXTURE_BYTES], gl_scratch[256], gl_tex[256
 static uint32_t gl_seq, gl_tex_seq, gl_nsubs, gl_sub_seq;
 static uint32_t gl_nframe, gl_tex_id, gl_tex_format, gl_tex_flags, gl_tex_w, gl_tex_h;
 
-static void gl_keep_frame(const uint16_t *w, uint32_t n)
+// The frame comes a window at a time: gl_nwin counts them and gl_win
+// gathers them until the frame ends, when gl_nframe says how many words
+// it had. gl_bad_win counts windows that end inside a command.
+static uint32_t gl_win, gl_nwin, gl_bad_win, gl_win_seq;
+
+static void gl_keep_words(const uint16_t *w, uint32_t n)
 {
-    gl_nframe = n;
-    for (uint32_t i = 0; i < n && i < 1024; i++)
-        gl_frame[i] = w[i];
+    uint32_t i = 0;
+    while (i < n) {
+        uint32_t k = pb3d_cmd_words(w + i, n - i);
+        if (k == 0) {
+            gl_bad_win++;
+            break;
+        }
+        i += k;
+    }
+    gl_nwin++;
+    gl_win_seq = ++gl_seq;
+    for (i = 0; i < n && gl_win + i < 1024; i++)
+        gl_frame[gl_win + i] = w[i];
+    gl_win += n;
+}
+
+static void gl_keep_frame(void)
+{
+    gl_nframe = gl_win;
+    gl_win = 0;
 }
 
 static void gl_keep_tex(uint32_t id, uint32_t format, uint32_t flags, uint32_t w, uint32_t h,
@@ -355,7 +377,8 @@ static void gl_keep_sub(uint32_t id, uint32_t format, uint32_t x, uint32_t y, ui
     gl_sub_last = t[w * h - 1];
 }
 
-static const struct pbgl_sink gl_sink = { 0, gl_keep_tex, gl_keep_sub, gl_keep_frame };
+static const struct pbgl_sink gl_sink = { 0, gl_keep_tex, gl_keep_sub, gl_keep_words,
+                                          gl_keep_frame };
 
 static void gl_start(uint32_t nwords)
 {
@@ -369,6 +392,7 @@ static void gl_start(uint32_t nwords)
     pbgl_init(&m, 640, 480, &gl_sink);
     gl_nframe = 0;
     gl_nsubs = 0;
+    gl_win = gl_nwin = gl_bad_win = 0;
 }
 
 // The frame's words from word k, against want's n.
@@ -684,18 +708,87 @@ static void gl_textures_check(void)
     check_num("mipmapped textures say so", (long)gl_frame[4], PB3D_T_MIPMAP);
 }
 
-static void gl_full(void)
+// A frame bigger than the words window (M4 PR 4): it goes on in
+// windows of whole commands, and sums as the same frame through a big
+// window does. Only a command bigger than the window is dropped. Here a
+// DEPTH is 1 word, a STATE 2 and an untextured white triangle 2 + 3 * 2,
+// so the first window is odd, and its last word pairs with the next's
+// first in the sum.
+static void gl_tris4(int big)
 {
-    gl_start(30);
     ortho();
+    glClear(GL_DEPTH_BUFFER_BIT);
     for (int k = 0; k < 4; k++) {
         glBegin(GL_TRIANGLES);
-        glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+        glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f((float)k, 1);
+        glEnd();
+    }
+    if (big) {   // a fan of 15, 2 + 15 * 2 words: more than 30
+        glBegin(GL_TRIANGLE_FAN);
+        for (int k = 0; k < 15; k++)
+            glVertex2f((float)k, (float)(k * k));
         glEnd();
     }
     pbgl_end_frame();
-    check_num("a frame past its words drops whole commands", (long)pbgl_total.dropped, 1);
-    check_num("and keeps the rest", (long)gl_nframe, 2 + 8 * 3);
+}
+
+static void gl_full(void)
+{
+    uint32_t sum, words;
+    gl_start(1024);
+    gl_tris4(0);
+    sum = pbgl_checksum();
+    words = gl_nframe;
+    check_num("a frame of 35 words", (long)words, 1 + 2 + 4 * 8);
+    gl_start(30);
+    gl_tris4(0);
+    check_num("through a window of 30 goes in two", (long)gl_nwin, 2);
+    check_num("each of whole commands", (long)gl_bad_win, 0);
+    check_num("all of it", (long)gl_nframe, (long)words);
+    check_num("counted as the frame's", (long)pbgl_total.words, (long)words);
+    check_num("its biggest frame the whole frame, not a window",
+              (long)pbgl_total.max_frame_words, (long)words);
+    check_num("none dropped", (long)pbgl_total.dropped, 0);
+    check_num("and sums as one frame", (long)(pbgl_checksum() == sum), 1);
+    gl_start(30);
+    gl_tris4(1);
+    check_num("a command bigger than the window is dropped", (long)pbgl_total.dropped, 1);
+    check_num("and the rest kept", (long)gl_nframe, (long)words);
+
+    // A texture made mid-frame goes after the words before it, which go
+    // on first as a window of their own, and before the words after it.
+    static const uint8_t texels[4] = { 1, 2, 3, 4 };
+    gl_start(1024);
+    ortho();
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    glBindTexture(GL_TEXTURE_2D, 2);
+    glTexImage2D(GL_TEXTURE_2D, 0, 1, 2, 2, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, texels);
+    check_num("a texture made mid-frame after the words before it",
+              (long)(gl_nwin == 1 && gl_win_seq < gl_tex_seq), 1);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    pbgl_end_frame();
+    check_num("and before the words after it", (long)(gl_nwin == 2 && gl_tex_seq < gl_win_seq), 1);
+
+    // So does an update sent at once (not from x 0: not held).
+    gl_start(1024);
+    glBindTexture(GL_TEXTURE_2D, 2);
+    glTexImage2D(GL_TEXTURE_2D, 0, 1, 2, 2, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, texels);
+    ortho();
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 1, 0, 1, 1, GL_LUMINANCE, GL_UNSIGNED_BYTE, texels);
+    check_num("an update sent at once mid-frame after the words before it",
+              (long)(gl_nsubs == 1 && gl_nwin == 1 && gl_win_seq < gl_sub_seq), 1);
+    glBegin(GL_TRIANGLES);
+    glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f(0, 1);
+    glEnd();
+    pbgl_end_frame();
+    check_num("and before the words after it", (long)(gl_nwin == 2 && gl_sub_seq < gl_win_seq), 1);
 }
 
 // Where the kept frame's TRIS number k starts, or -1: read back command
@@ -712,6 +805,35 @@ static long gl_find_tris(uint32_t k)
         i += n;
     }
     return -1;
+}
+
+static void gl_full_cut(void)
+{
+    // A cut primitive's inside goes in lists that fit the window: six
+    // triangles inside and one past the guard band, through 30 words, are
+    // a list of four (2 + 12 * 2 words) and one of two, then the cut fan.
+    for (int big = 1; big >= 0; big--) {
+        gl_start(big ? 1024 : 30);
+        ortho();
+        glBegin(GL_TRIANGLES);
+        for (int k = 0; k < 6; k++) {
+            glVertex2f((float)k, 0); glVertex2f((float)k + 1, 0); glVertex2f((float)k, 1);
+        }
+        glVertex2f(0, 0); glVertex2f(4080, 0); glVertex2f(0, 100);
+        glEnd();
+        pbgl_end_frame();
+        long a = gl_find_tris(0), b = gl_find_tris(1), c = gl_find_tris(2);
+        if (big) {
+            check_num("a cut list's inside, whole when it fits",
+                      a < 0 ? -1 : (long)gl_frame[a + 1], 18);
+            check_num("then the fan", b < 0 ? -1 : (long)(gl_frame[b] & 3u), PB3D_KIND_FAN);
+        } else {
+            check_num("in four triangles", a < 0 ? -1 : (long)gl_frame[a + 1], 12);
+            check_num("and two", b < 0 ? -1 : (long)gl_frame[b + 1], 6);
+            check_num("then the fan", c < 0 ? -1 : (long)(gl_frame[c] & 3u), PB3D_KIND_FAN);
+            check_num("with none dropped", (long)pbgl_total.dropped, 0);
+        }
+    }
 }
 
 // The kept frame's words from at, against want's m (no words if at is -1).
@@ -934,6 +1056,22 @@ static void gl_subs(void)
               (long)(gl_nsubs == 2 && gl_sub_seq < gl_tex_seq), 1);
     pbgl_end_frame();
     check_num("and not again at the frame's end", (long)gl_nsubs, 2);
+    // A held update goes before a window handed on mid-frame, which may
+    // use it (M4 PR 4): four triangles through 30 words spill one.
+    gl_start(30);
+    glBindTexture(GL_TEXTURE_2D, 3);
+    glTexImage2D(GL_TEXTURE_2D, 0, 1, 4, 8, 0, GL_LUMINANCE, GL_UNSIGNED_BYTE, lightmap);
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 2, 4, 1, GL_LUMINANCE, GL_UNSIGNED_BYTE, lightmap + 8);
+    ortho();
+    for (int k = 0; k < 4; k++) {
+        glBegin(GL_TRIANGLES);
+        glVertex2f(0, 0); glVertex2f(1, 0); glVertex2f((float)k, 1);
+        glEnd();
+    }
+    check_num("a window handed on mid-frame",
+              (long)(gl_nwin == 1 && gl_nsubs == 1 && gl_sub_seq < gl_win_seq), 1);
+    pbgl_end_frame();
+    check_num("and the update not sent again", (long)gl_nsubs, 1);
 }
 
 static void gl_split(void)
@@ -963,8 +1101,8 @@ static void gl_split(void)
 
 static void (*const checks[])(void) = { greeting, bench_words, pb3d_fixed, pb3d_commands,
                                          gl_screen, gl_prims, gl_clip, gl_state, gl_viewport,
-                                         gl_textures_check, gl_full, gl_cuts, gl_guard, gl_subs,
-                                         gl_split };
+                                         gl_textures_check, gl_full, gl_full_cut, gl_cuts,
+                                         gl_guard, gl_subs, gl_split };
 
 int quince_selftest(void (*fail)(const char *what, const char *got, const char *want),
                     int *count)

@@ -2,10 +2,12 @@
  * written to a file for the C model to draw (lib/pb3d.h, "the dump").
  *
  * Our own code (M2 PR 2). A sink for lib/pbgl.c: each call a record, in
- * the order the calls come. Little-endian, as the PC and the board are.
+ * the order the calls come, but a frame's windows of words, which are
+ * one record at its end. Little-endian, as the PC and the board are.
  */
 #include <stdio.h>
 #include <stdlib.h>
+#include <string.h>
 #include "pbgl.h"
 #include "pb3d.h"
 #include "pbdump.h"
@@ -78,15 +80,38 @@ static void texsub(uint32_t id, uint32_t format, uint32_t x, uint32_t y, uint32_
 	pad(n);
 }
 
-static void frame(const uint16_t *words, uint32_t n)
+/* The frame comes a window at a time (M4 PR 4) and the file keeps a
+ * record a frame, so the windows are gathered here until it ends. */
+static uint16_t *fw;
+static uint32_t fn, fcap;
+
+static void words(const uint16_t *w, uint32_t n)
 {
-	uint32_t i;
-	record(PB3D_REC_FRAME, n * 2);
-	for (i = 0; i < n; i++)
-		put16(words[i]);
+	if (fn + n > fcap) {
+		uint32_t cap = fcap ? fcap : 16384u;
+		while (cap < fn + n)
+			cap *= 2;
+		fw = realloc(fw, cap * sizeof *fw);
+		if (!fw) {
+			fprintf(stderr, "QUINCE_PBDUMP: no memory for a frame\n");
+			exit(1);
+		}
+		fcap = cap;
+	}
+	memcpy(fw + fn, w, n * sizeof *w);
+	fn += n;
 }
 
-static const struct pbgl_sink dump_sink = { palette, teximage, texsub, frame };
+static void frame(void)
+{
+	uint32_t i;
+	record(PB3D_REC_FRAME, fn * 2);
+	for (i = 0; i < fn; i++)
+		put16(fw[i]);
+	fn = 0;
+}
+
+static const struct pbgl_sink dump_sink = { palette, teximage, texsub, words, frame };
 
 static void close_dump(void)
 {

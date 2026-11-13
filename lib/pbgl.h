@@ -2,8 +2,8 @@
  * counts, and where its commands go.
  *
  * Our own code (M2, docs/ROADMAP.md; docs/PB-ASKS.md step 1). The layer
- * takes GLQuake's GL calls and writes PB's 3D commands (lib/pb3d.h) a
- * frame at a time. PB's 3D service doesn't exist yet, so on the board the
+ * takes GLQuake's GL calls and writes PB's 3D commands (lib/pb3d.h),
+ * handed on a window at a time (M4 PR 4). PB's 3D service doesn't exist yet, so on the board the
  * commands are counted and dropped; on the PC a sink can keep them
  * (tests/pbdump.c writes them to a file for the C model).
  */
@@ -32,7 +32,7 @@ struct pbgl_counts {
 	uint32_t culled;       /* primitives wholly off the screen or behind the eye */
 	uint32_t clipped;      /* primitives cut at the near plane or the guard band */
 	uint32_t clip_tris;    /* triangles those cuts made, sent as fans */
-	uint32_t dropped;      /* commands that didn't fit the frame's buffer */
+	uint32_t dropped;      /* commands bigger than the words window */
 	uint32_t split;        /* primitives too long for one, sent as several */
 	uint32_t max_frame_words; /* the biggest frame */
 	uint32_t tex_uploads;  /* textures made: sent once, at load */
@@ -44,20 +44,27 @@ struct pbgl_counts {
 	uint32_t ignored;      /* uploads the layer drops: mips, which PB builds */
 };
 
-/* Where the layer's output goes. Any of them may be 0. A texture call
- * goes as it happens; a frame's commands at its end, so a texture made or
- * changed during a frame comes before that frame's record. */
+/* Where the layer's output goes. Any of them may be 0. A frame's
+ * commands go a window at a time: words each time the words buffer
+ * fills, and once at the frame's end (each window whole commands, never
+ * empty), then frame (M4 PR 4). A texture made, or an update sent at
+ * once, goes after the words GL had before it, which go first as a
+ * window of their own, and before the words after it. An update GL held
+ * (glTexSubImage2D's full-width bands, coalesced) goes just before the
+ * next window, which may use it. */
 struct pbgl_sink {
 	void (*palette)(const uint8_t *rgb);   /* 768 bytes */
 	void (*teximage)(uint32_t id, uint32_t format, uint32_t flags, uint32_t w,
 	                 uint32_t h, const void *texels);
 	void (*texsub)(uint32_t id, uint32_t format, uint32_t x, uint32_t y, uint32_t w,
 	               uint32_t h, const void *texels);
-	void (*frame)(const uint16_t *words, uint32_t n);
+	void (*words)(const uint16_t *words, uint32_t n);
+	void (*frame)(void);
 };
 
 /* The memory the layer works in, from the caller, since lib/ takes no
- * kernel calls: words for a frame's commands, a table of the textures
+ * kernel calls: words for a window of a frame's commands (at least
+ * PBGL_WORDS_MIN, the biggest command the layer writes), a table of the textures
  * (PBGL_TEXTURE_BYTES each, for GL's names 0 to max_textures - 1; a name
  * past it is drawn as no texture), and scratch for a texture's texels on
  * their way to PB (the biggest texture GLQuake makes, 256x256 under its
@@ -71,6 +78,10 @@ struct pbgl_mem {
 	uint32_t nscratch;
 };
 #define PBGL_TEXTURE_BYTES 2u
+/* The biggest command the layer writes whole: a primitive of 256
+ * vertices (pbgl.c's PRIM_MAX) at 11 words each, after TRIS's 2. A cut
+ * one's inside goes in lists that fit the window it has. */
+#define PBGL_WORDS_MIN     (2u + 256u * 11u)
 
 extern struct pbgl_counts pbgl_total;
 

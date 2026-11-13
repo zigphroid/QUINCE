@@ -269,9 +269,11 @@ int fflush(FILE *f)
 }
 
 /* Quake's longest formatted line is a console line (MAXPRINTMSG, 4096 in
- * console.c) or a save file's; 4 KB of buffer for the static ones. */
+ * console.c) or a save file's; 4 KB of buffer for the static ones. In
+ * PSRAM, as lib/qproto.h's QPSRAM: a printf a frame at most, against the
+ * SRAM the GL layer's words window needs (M4 PR 4). */
 #define FMT_MAX 4096
-static char fmt_buf[FMT_MAX];
+static __attribute__((section(".pbss"))) char fmt_buf[FMT_MAX];
 
 int vfprintf(FILE *f, const char *fmt, va_list ap)
 {

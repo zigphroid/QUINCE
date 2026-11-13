@@ -103,7 +103,7 @@ void GL_Bind (int texnum)
 #define	BLOCK_WIDTH		256
 #define	BLOCK_HEIGHT	256
 
-int			scrap_allocated[MAX_SCRAPS][BLOCK_WIDTH];
+QPSRAM int			scrap_allocated[MAX_SCRAPS][BLOCK_WIDTH];	// QUINCE: in PSRAM, used at load only (lib/qproto.h)
 // QUINCE: from the PSRAM pool in Draw_Init, not 512 KB of static memory
 byte		(*scrap_texels)[BLOCK_WIDTH*BLOCK_HEIGHT];	// QUINCE: and a byte a texel, not 4:
 							// the scrap holds palette indices (Scrap_AllocBlock's callers, GL_Upload8)
@@ -188,7 +188,7 @@ typedef struct cachepic_s
 QPSRAM cachepic_t	menu_cachepics[MAX_CACHED_PICS];	// QUINCE: in PSRAM (lib/qproto.h)
 int			menu_numcachepics;
 
-byte		menuplyr_pixels[4096];
+QPSRAM byte		menuplyr_pixels[4096];	// QUINCE: in PSRAM, the menu's only (lib/qproto.h)
 
 int		pic_texels;
 int		pic_count;
