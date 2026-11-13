@@ -42,8 +42,8 @@ struct pbgl_counts {
 	uint32_t sub_uploads;  /* the updates sent: a band of rows per block a frame */
 	uint32_t sub_bytes;    /* their bytes */
 	uint32_t ignored;      /* calls the layer drops: mip uploads, which PB builds;
-	                        * textures named past max_textures; and pushes past
-	                        * the matrix stack's 8 */
+	                        * textures, and updates to them, named past
+	                        * max_textures; and pushes past the matrix stack's 8 */
 };
 
 /* Where the layer's output goes. Any of them may be 0. A frame's

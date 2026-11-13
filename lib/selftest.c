@@ -1162,6 +1162,25 @@ static void gl_flat(void)
     glEnd();
     pbgl_end_frame();
     check_num("smooth: each vertex its own", gl_tris_all(0, red), 0);
+    // Textured and modulated, the colour is drawn, so a flat polygon's
+    // vertices still all take its first's.
+    glShadeModel(GL_FLAT);
+    glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_MODULATE);
+    glEnable(GL_TEXTURE_2D);
+    glBegin(GL_POLYGON);
+    glColor4ubv(red); glTexCoord2f(0, 0); glVertex2f(10, 10);
+    glColor4ubv(green); glTexCoord2f(1, 0); glVertex2f(50, 10);
+    glColor4ubv(blue); glTexCoord2f(1, 1); glVertex2f(50, 50);
+    glEnd();
+    pbgl_end_frame();
+    {
+        long at = gl_find_tris(0);
+        check_num("flat, modulated: the polygon is textured",
+                  at >= 0 && (PB3D_ARG(gl_frame[at]) & PB3D_F_ST) ? 1 : 0, 1);
+    }
+    check_num("flat, modulated: every vertex its first's", gl_tris_all(0, red), 1);
+    glDisable(GL_TEXTURE_2D);
+    glShadeModel(GL_SMOOTH);
 
     // A primitive whose only crossing triangle is wholly off the screen
     // sends no fan, so it isn't counted as clipped.
@@ -1184,12 +1203,24 @@ static void gl_flat(void)
     pbgl_upload8(px, 2, 2, 0, 0, 256);
     check_num("a texture past the table isn't sent", (long)(gl_tex_seq == seq), 1);
     check_num("and is counted", (long)pbgl_total.ignored, 1);
+    // Nor is an update to it: PB never made it.
+    glTexSubImage2D(GL_TEXTURE_2D, 0, 0, 0, 2, 2, GL_LUMINANCE, GL_UNSIGNED_BYTE, px);
+    pbgl_end_frame();
+    check_num("an update past the table isn't sent", (long)gl_nsubs, 0);
+    check_num("and is counted too", (long)pbgl_total.ignored, 2);
     glMatrixMode(GL_MODELVIEW);
     for (int i = 0; i < 8; i++)
         glPushMatrix();
-    check_num("a push past the stack's 8 is counted", (long)pbgl_total.ignored, 2);
+    check_num("a push past the stack's 8 is counted", (long)pbgl_total.ignored, 3);
     for (int i = 0; i < 7; i++)
         glPopMatrix();
+    glMatrixMode(GL_PROJECTION);
+    for (int i = 0; i < 8; i++)
+        glPushMatrix();
+    check_num("and the projection stack's", (long)pbgl_total.ignored, 4);
+    for (int i = 0; i < 7; i++)
+        glPopMatrix();
+    glMatrixMode(GL_MODELVIEW);
 }
 
 static void (*const checks[])(void) = { greeting, bench_words, pb3d_fixed, pb3d_commands,

@@ -147,6 +147,7 @@ HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
             -fno-omit-frame-pointer
 test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins test-float test-builds
 	$(BUILD)/test_quince
+	$(PYTHON) tests/pbcheck.py --self-test
 	@mkdir -p $(BUILD)/pbmodel
 	$(BUILD)/test_pbmodel $(BUILD)/pbmodel/scene.png
 

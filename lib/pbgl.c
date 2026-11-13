@@ -575,8 +575,14 @@ void glTexSubImage2D(GLenum target, GLint level, GLint x, GLint y, GLsizei w, GL
 		pbgl_total.ignored++;
 		return;
 	}
+	if (!ti) {
+		/* A name past the table: tex_made didn't send the texture, so
+		 * an update to it would be for one PB never made (#24). */
+		pbgl_total.ignored++;
+		return;
+	}
 	pbgl_total.sub_calls++;
-	if (x != 0 || !ti || !(ti[1] & TI_KNOWN) || (uint32_t)w != 1u << (ti[0] & 15u)) {
+	if (x != 0 || !(ti[1] & TI_KNOWN) || (uint32_t)w != 1u << (ti[0] & 15u)) {
 		spill(&buf);   /* after the words before it, as tex_made */
 		send_sub(id, format, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h, px);
 		return;
