@@ -122,7 +122,8 @@ for odd values past 2^23 and is now right.
   handed to the sink each time it fills, instead of the whole frame in
   the PSRAM pool (Jacob, option A); the room for it from three statics
   moved to PSRAM (the menu's picture, a load-time table and printf's
-  buffer).
+  buffer). Done (#47): on the board CANNER's demo1 is 37.8 to 32.9
+  ms a frame (-13%) and e1m1 28.7 to 25.3; GCC's 27.7 and 21.4.
 
 ## Later: drawing on the pixelboard
 
