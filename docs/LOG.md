@@ -832,6 +832,35 @@ send functions cold (review 1). The next THERMO run replaces the file.
   mostly not the instructions this PR took out: the stores of the
   frame's 27 KB of words into PSRAM are the likely cost (inferred).
 
+## 2026-11-12: the model's depth rounds to nearest (#21)
+
+Later issues PR 3 changes one of PB3D.md's rules. Under the old rule, q
+at a pixel rounded down at all three of its steps: S's 16 bits, RA's
+reciprocal and the last shift. So a triangle of constant q 0.5 stored
+4096, where `pbm_depth_of_q` puts q 0.5 at 4095. Now RA rounds up, and
+the 16-bit sum and the last shift round to nearest.
+
+Rounding the last shift alone, the issue's first suggestion, wasn't
+enough. RA's floor left q 0.5 at 0x3FFFFFFF, and the shift can't undo
+that. `depth_test`'s two checks are now exact, not within 1.
+
+Pictures do move, a little. The scene's CRC and the 76 e1m1 frames
+`test-quake` draws through the model are unchanged, but on the demo
+dumps about 40% of frames do (demo1 418 of 1,020, demo2 344 of 1,033,
+demo3 534 of 1,143): 1 to 4 pixels each in the frames the review
+sampled, at most 33 in a channel. A constant q on a step's edge still lands a step farther
+about one pixel in 20 (one in 7 before), so the bias is cut, not gone
+(PB3D.md's depth rule). `test_pbmodel`'s `depth_rounding` holds it:
+random triangles, a pixel a step off as often nearer as farther.
+
+The cost to PB: one add each for the sum's and the shift's rounding,
+plus a different constant in RA's divide, which runs once a triangle.
+
+Alternatives:
+- Keep the floors and say "about" in PB3D.md. That leaves the bias.
+- Interpolate depth from the full S. Its product with RA still fits in
+  64 bits, but it needs a wider multiplier per pixel.
+
 ## 2026-11-12: M4 PR 4, the frame's words through a window in SRAM
 
 **Decision (Jacob, option A).** The GL layer writes a frame's PB

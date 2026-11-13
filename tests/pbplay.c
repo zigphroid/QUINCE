@@ -21,11 +21,13 @@
 // picks how a pixel's level is chosen, -bias H adds H half levels to it
 // (-1 rounds down, where the rule rounds), -linear reads unit 0
 // bilinear, and -scale N draws N times as wide and high, each picture
-// written the mean of each N x N block (a supersampled reference); -raw DIR writes each named frame as DIR/frameNNNN.rgb (8
-// bits a channel) and .dep (the 16-bit depth, at 1x only). The totals then
-// say how many reads changed level, the texels each frame read, and the
-// misses of an 8 KB direct-mapped texture cache of 32-byte lines (16
-// texels in a row of a level, as the pool holds them): a stand-in for PB's.
+// written the mean of each N x N block (a supersampled reference); -raw
+// DIR writes each named frame as DIR/frameNNNN.rgb (8 bits a channel) and
+// .dep (the 16-bit depth, at 1x only). With any of the first four, the
+// totals then say how many reads changed level, the texels each frame
+// read, and the misses of an 8 KB direct-mapped texture cache of 32-byte
+// lines (16 texels in a row of a level, as the pool holds them): a
+// stand-in for PB's.
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -147,7 +149,7 @@ int main(int argc, char **argv)
         else if (!strcmp(argv[i], "-linear"))
             linear0 = study = 1;
         else if (!strcmp(argv[i], "-bias") && i + 1 < argc)
-            bias = atoi(argv[++i]);
+            bias = atoi(argv[++i]), study = 1;
         else if (!strcmp(argv[i], "-scale") && i + 1 < argc)
             sc = atoi(argv[++i]);
         else if (!strcmp(argv[i], "-lod") && i + 1 < argc) {
@@ -167,7 +169,8 @@ int main(int argc, char **argv)
     depth = malloc(sizeof *depth * W * H * sc * sc);
     seen = calloc(POOL_WORDS / 8, 1);
     if (!path || !pool || !colour || !depth || !seen) {
-        fprintf(stderr, "usage: pbplay DUMP [-o DIR] [-only] [-lod tri|q|exact|tri3] [-scale N] [-raw DIR] [FRAME...]\n");
+        fprintf(stderr, "usage: pbplay DUMP [-o DIR] [-only] [-lod tri|q|exact|tri3] [-bias H] [-linear]"
+                " [-scale N] [-raw DIR] [FRAME...]\n");
         return 2;
     }
     f = fopen(path, "rb");
@@ -194,8 +197,16 @@ int main(int argc, char **argv)
         int e = 0;
         if (padded > cap) {
             cap = padded;
-            rec = realloc(rec, cap);
-            words = realloc(words, cap);
+            uint8_t *r = realloc(rec, cap);
+            uint16_t *w = r ? realloc(words, cap) : 0;
+            if (r)
+                rec = r;
+            if (!w) {
+                fprintf(stderr, "pbplay: Headspace exceeded. (a %lu-byte record)\n", (unsigned long)padded);
+                bad = 1;
+                break;
+            }
+            words = w;
         }
         if (fread(rec, 1, padded, f) != padded) {
             fprintf(stderr, "pbplay: the dump ends inside a record\n");

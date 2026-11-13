@@ -275,6 +275,29 @@ static void pb3d_commands(void)
     pb3d_tris(&b, PB3D_KIND_FAN, PB3D_F_ST, 3);
     pb3d_state(&b, 0);
     check_num("a command inside an open TRIS is dropped", (long)b.dropped, 3);
+    // A TRIS opened inside it takes the open one back out (#15): the
+    // buffer holds the new one whole, and the vertices go to it.
+    pb3d_vertex(&b, &one);
+    check_num("a TRIS opened inside another",
+              pb3d_tris(&b, PB3D_KIND_LIST, PB3D_F_ST, 3), 0);
+    for (int i = 0; i < 3; i++)
+        pb3d_vertex(&b, &one);
+    check_num("takes the open one out, counted", (long)b.dropped, 4);
+    check_num("and the buffer holds the new one alone",
+              (long)(pb3d_cmd_words(b.w, b.n) * 100 + b.n), 1414);
+    check_num("as a list", (long)PB3D_ARG(b.w[0]) & PB3D_KIND_MASK, PB3D_KIND_LIST);
+
+    // Values the format leaves undefined are refused (#16): depth test 3,
+    // and a depth range with far below near; the encoder won't write them.
+    static const uint16_t depth3[] = { 0x1000, 3 }, backwards[] = { 0x1300, 0x200, 0x100 },
+        flat[] = { 0x1300, 0x100, 0x100 };
+    check_num("STATE with depth test 3 refused", (long)pb3d_cmd_words(depth3, 2), 0);
+    check_num("DEPTHRANGE far below near refused", (long)pb3d_cmd_words(backwards, 3), 0);
+    check_num("far at near taken", (long)pb3d_cmd_words(flat, 3), 3);
+    pb3d_init(&b, w, 64);
+    pb3d_state(&b, 3);
+    pb3d_depthrange(&b, 0x200, 0x100);
+    check_num("the encoder writes neither, and counts both", (long)(b.dropped * 100 + b.n), 200);
 }
 
 // The GL layer (lib/pbgl.c): what PB is sent for GL calls, read back

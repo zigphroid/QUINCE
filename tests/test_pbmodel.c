@@ -516,8 +516,7 @@ static void depth_test(void)
     pbm_draw(&m, PBM_LIST, nv, 3);
     check("LEQUAL: the near one over the far", colour[5 * 16 + 5], near_c);
     // Within a step: q at a pixel is good to about S16's 16 bits.
-    check("its depth written", labs((long)depth[5 * 16 + 5] -
-                                    (long)pbm_depth_of_q(0x40000000u)) <= 1, 1);
+    check("its depth written", depth[5 * 16 + 5], pbm_depth_of_q(0x40000000u));
     pbm_draw(&m, PBM_LIST, fv, 3);
     check("LEQUAL: the far one after it fails", colour[5 * 16 + 5], near_c);
     pbm_draw(&m, PBM_LIST, nv, 3);
@@ -551,7 +550,122 @@ static void depth_test(void)
     pbm_draw(&m, PBM_LIST, fv, 3);
     check("the weapon over the wall", colour[5 * 16 + 5], far_c);
     check("its depth scaled", labs((long)depth[5 * 16 + 5] -
-                                   (long)((pbm_depth_of_q(0x10000000u) * 0x4ccdu) >> 16)) <= 1, 1);
+                                   (long)((pbm_depth_of_q(0x10000000u) * 0x4ccdu) >> 16)) <= 0, 1);
+}
+
+// Depth rounds to nearest (#21), held on random triangles at 64x64: the
+// edge values are then exact (es is 0), so a pixel's q is exactly
+// sum(e_i q_i) 2^qs / area from the q's cut to 16 bits, and its depth is
+// that q rounded to nearest. The model's 16-bit sum still rounds, so a
+// few pixels land a step off, but as often nearer as farther; floor the
+// sum or the last shift and they go farther. (Constant q stays biased:
+// on a step's edge the 16-bit sum lands under it about half the time.)
+static int64_t edge_of(const struct pbm_vertex *a, const struct pbm_vertex *b,
+                       int64_t px, int64_t py)
+{
+    return (int64_t)(b->x - a->x) * (py - a->y) - (int64_t)(b->y - a->y) * (px - a->x);
+}
+
+static void depth_rounding(void)
+{
+    struct pbm_state s = state();
+    struct pbm_vertex v[3];
+    long farther = 0, nearer = 0, pixels = 0, cfar = 0, cnear = 0, cpixels = 0;
+    long sfar = 0, snear = 0, spixels = 0;
+    int n, i, px, py;
+
+    model(64, 64);
+    s.depth_func = PBM_DEPTH_ALWAYS;
+    s.depth_write = 1;
+    pbm_set_state(&m, &s);
+    lcg = 2111;
+    for (n = 0; n < 2000; n++) {
+        int constant = n % 4 == 0, small = n % 4 == 1;
+        uint32_t qmax = 0, qc = (uint32_t)(rnd(32768) + 32768) << rnd(16);
+        int qs;
+        int64_t area;
+        for (i = 0; i < 3; i++) {
+            memset(&v[i], 0, sizeof v[i]);
+            v[i].x = rnd(64 * 16);
+            v[i].y = rnd(64 * 16);
+            v[i].q = constant ? qc : (uint32_t)(rnd(32768) + 32768) << rnd(small ? 2 : 16);
+            if (v[i].q > qmax)
+                qmax = v[i].q;
+        }
+        area = edge_of(&v[0], &v[1], v[2].x, v[2].y);
+        if (area == 0)
+            continue;
+        for (qs = 0; (qmax >> qs) > 0xffffu; qs++)
+            ;
+        pbm_draw(&m, PBM_LIST, v, 3);
+        for (py = 0; py < 64; py++)
+            for (px = 0; px < 64; px++) {
+                int64_t cx = px * 16 + 8, cy = py * 16 + 8, e[3];
+                uint64_t num = 0, a = (uint64_t)(area < 0 ? -area : area), q;
+                uint32_t want, got;
+                int in = 1;
+                for (i = 0; i < 3; i++) {
+                    e[i] = edge_of(&v[(i + 1) % 3], &v[(i + 2) % 3], cx, cy);
+                    if (area < 0)
+                        e[i] = -e[i];
+                    in &= e[i] > 0;
+                }
+                if (!in)
+                    continue;
+                for (i = 0; i < 3; i++)
+                    num += (uint64_t)e[i] * (v[i].q >> qs);
+                q = ((num << qs) + a / 2) / a;
+                want = pbm_depth_of_q(q > 0xffffffffu ? 0xffffffffu : (uint32_t)q);
+                got = depth[py * 64 + px];
+                if (small) {
+                    spixels++;
+                    sfar += got > want;
+                    snear += got < want;
+                } else if (constant) {
+                    cpixels++;
+                    cfar += got > want;
+                    cnear += got < want;
+                } else {
+                    pixels++;
+                    farther += got > want;
+                    nearer += got < want;
+                }
+            }
+    }
+    printf("test_pbmodel: depth off a step: %ld farther, %ld nearer of %ld; "
+           "constant q %ld farther, %ld nearer of %ld; q under 2^17 %ld farther, %ld nearer of %ld\n",
+           farther, nearer, pixels, cfar, cnear, cpixels, sfar, snear, spixels);
+    check_true("random triangles cover pixels", pixels > 100000 && cpixels > 100000 && spixels > 100000);
+    check_true("depth off a step as often nearer as farther",
+               farther < nearer + nearer / 4 + 100 && nearer < farther + farther / 4 + 100);
+    // Under 2^17, qs is 0 and a depth step is 4 to 8 of q, so the last
+    // shift's rounding shows.
+    check_true("and with q under 2^17",
+               sfar < snear + snear / 4 + 100 && snear < sfar + sfar / 4 + 100);
+    check_true("a step off at most 1 pixel in 25", (farther + nearer) * 25 < pixels);
+    check_true("constant q a step off at most 1 pixel in 12", (cfar + cnear) * 12 < cpixels);
+}
+
+// A triangle whose q's are all 0 has no weights: each pixel it covers is
+// counted as unweighted, and nothing is drawn.
+static void unweighted(void)
+{
+    struct pbm_state s = state();
+    struct pbm_vertex v[3];
+    struct pbm_counts before;
+
+    model(16, 16);
+    pbm_set_state(&m, &s);
+    v[0] = vtx(0, 0, 0, 0, 0);
+    v[1] = vtx(16, 0, 0, 0, 0);
+    v[2] = vtx(0, 16, 0, 0, 0);
+    before = m.counts;
+    pbm_draw(&m, PBM_LIST, v, 3);
+    check_true("q 0 everywhere covers pixels", m.counts.covered - before.covered >= 120);
+    check("each one unweighted", (long)(m.counts.unweighted - before.unweighted),
+          (long)(m.counts.covered - before.covered));
+    check("and none drawn", (long)(m.counts.drawn - before.drawn), 0);
+    check("the colour untouched", colour[0], 0);
 }
 
 // --- textures ---
@@ -617,17 +731,24 @@ static void palette_and_alpha(void)
     check("kept 1555: 5 bits of green", colour[1],
           pbm_565(five(p[600]), five(p[601]), five(p[602])));
 
-    // RGBA8888: alpha under 128 is see-through.
+    // RGBA8888 made with alpha: alpha under 128 is see-through. Made
+    // without, alpha is dropped and every texel drawn (#16).
     {
         static const uint8_t px[16] = { 10, 20, 30, 127, 40, 50, 60, 128,
                                         0, 0, 0, 0, 255, 255, 255, 255 };
         pbm_clear_colour(&m, 0x2222);
-        pbm_texture(&m, 9, PBM_TEX_RGBA8888, 1, 1, 0, 0);
+        pbm_texture(&m, 9, PBM_TEX_RGBA8888, 1, 1, 0, 1);
         pbm_texture_load(&m, 9, 0, 0, 2, 2, px);
         bind(0, 9, 0, 0, 0);
         rect(0, 0, 2, 2, 1, 0, 0, 2, 2);
         check("alpha 127 dropped", colour[0], 0x2222);
         check("alpha 128 kept", colour[1] != 0x2222, 1);
+        pbm_clear_colour(&m, 0x2222);
+        pbm_texture(&m, 9, PBM_TEX_RGBA8888, 1, 1, 0, 0);
+        pbm_texture_load(&m, 9, 0, 0, 2, 2, px);
+        rect(0, 0, 2, 2, 1, 0, 0, 2, 2);
+        check("without alpha, alpha 127 drawn", colour[0], pbm_565(10, 20, 30));
+        check("and alpha 0 too", colour[2], 0);
     }
 
     // The alpha test passes 170 and up (GLQuake's GREATER 0.666): an
@@ -843,6 +964,26 @@ static void combine(void)
     pbm_set_state(&m, &s);
     pbm_draw(&m, PBM_FAN, v, 4);
     check("flat: the first vertex", colour[3], pbm_565(0, 0, 255));
+
+    // The mip study's count of reads from a mipmapped texture, one for
+    // each unit that reads one, under the rule (PBM_LOD_TRI) too.
+    {
+        static uint8_t grey[16];
+        uint64_t before;
+        memset(grey, 64, sizeof grey);
+        pbm_texture(&m, 3, PBM_TEX_GREY8, 2, 2, 1, 0);
+        pbm_texture_load(&m, 3, 0, 0, 4, 4, grey);
+        s.tex0 = s.tex1 = 1;
+        pbm_set_state(&m, &s);
+        bind(1, 3, 0, 0, 1);
+        before = m.study.mip_reads;
+        pbm_draw(&m, PBM_FAN, v, 4);
+        check("unit 1's mipmap read at each pixel", (long)(m.study.mip_reads - before), 4);
+        bind(0, 3, 0, 0, 1);
+        before = m.study.mip_reads;
+        pbm_draw(&m, PBM_FAN, v, 4);
+        check("and unit 0's too", (long)(m.study.mip_reads - before), 8);
+    }
 }
 
 static void blends(void)
@@ -1261,6 +1402,9 @@ static void scene(const char *png)
     // Change this only on purpose, with the picture looked at: it holds
     // the rules together (docs/PB3D.md, "Changing the rules").
     check("the scene's CRC", (long)crc, (long)0xb6fe76e8u);
+    // Every covered pixel ends one way (#21).
+    check("covered = unweighted + depth and alpha fails + drawn", (long)m.counts.covered,
+          (long)(m.counts.unweighted + m.counts.depth_fail + m.counts.alpha_fail + m.counts.drawn));
     printf("test_pbmodel: scene %08x, %u triangles, %u culled, %u pixels covered, %u drawn (%s)\n",
            crc, m.counts.tris, m.counts.culled, m.counts.covered, m.counts.drawn,
            png ? png : "no picture");
@@ -1275,6 +1419,8 @@ int main(int argc, char **argv)
     clip_rect();
     depth_format();
     depth_test();
+    depth_rounding();
+    unweighted();
     palette_and_alpha();
     mips();
     wrap_and_filter();

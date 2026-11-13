@@ -74,10 +74,12 @@ struct pbm_bind {
 struct pbm_counts {
 	uint32_t tris;        /* every triangle seen, culled ones too */
 	uint32_t culled;      /* dropped by their winding, or with no area */
-	uint32_t covered;     /* pixels inside a triangle and on the surface */
+	uint32_t covered;     /* pixels inside a triangle and on the surface: */
+	uint32_t unweighted;  /*   of those, ones whose weights sum to 0, skipped */
 	uint32_t depth_fail;
 	uint32_t alpha_fail;
-	uint32_t drawn;       /* colour written */
+	uint32_t drawn;       /* colour written: covered is unweighted +
+	                       * depth_fail + alpha_fail + drawn */
 	uint32_t blended;     /* of those, read the picture first */
 };
 
@@ -133,7 +135,8 @@ void pbm_frame(struct pbm *m);
 void pbm_palette(struct pbm *m, const uint8_t *rgb);
 
 /* Make texture id (again): format PBM_TEX_*, 2^lw x 2^lh, mips if mipmap,
- * index 255 see-through if alpha (RGBA8888 is always kept with alpha).
+ * see-through if alpha: index 255 for INDEX8, and RGBA8888 kept as 1555
+ * (its alpha read) with alpha, 565 (opaque) without.
  * Making an id again throws its texels away; the pool isn't given back
  * (pbm_textures_reset gives all of it back). */
 int pbm_texture(struct pbm *m, uint32_t id, int format, int lw, int lh,

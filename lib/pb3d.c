@@ -76,7 +76,8 @@ uint32_t pb3d_cmd_words(const uint16_t *w, uint32_t left)
 		need = PB3D_DEPTH_WORDS;
 		break;
 	case PB3D_STATE:
-		if (arg)
+		/* The depth test's fourth value names nothing (#16). */
+		if (arg || (left >= 2 && (w[1] & PB3D_S_DEPTH_MASK) == 3u))
 			return 0;
 		need = PB3D_STATE_WORDS;
 		break;
@@ -86,7 +87,8 @@ uint32_t pb3d_cmd_words(const uint16_t *w, uint32_t left)
 		need = PB3D_TEXTURE_WORDS;
 		break;
 	case PB3D_DEPTHRANGE:
-		if (arg)
+		/* far below near would store far - near + 1 < 0 (#16). */
+		if (arg || (left >= 3 && w[2] < w[1]))
 			return 0;
 		need = PB3D_DEPTHRANGE_WORDS;
 		break;
@@ -162,6 +164,10 @@ void pb3d_depth(struct pb3d_buf *b, int clear)
 
 void pb3d_state(struct pb3d_buf *b, uint32_t bits)
 {
+	if ((bits & PB3D_S_DEPTH_MASK) == 3u) {
+		b->dropped++;   /* the reader refuses it */
+		return;
+	}
 	if (room(b, PB3D_STATE_WORDS)) {
 		put(b, PB3D_WORD(PB3D_STATE, 0));
 		put(b, bits & PB3D_S_ALL);
@@ -179,6 +185,10 @@ void pb3d_texture(struct pb3d_buf *b, uint32_t unit, uint32_t id, uint32_t how)
 
 void pb3d_depthrange(struct pb3d_buf *b, uint32_t near, uint32_t far)
 {
+	if ((far & 0xffffu) < (near & 0xffffu)) {
+		b->dropped++;   /* the reader refuses it */
+		return;
+	}
 	if (room(b, PB3D_DEPTHRANGE_WORDS)) {
 		put(b, PB3D_WORD(PB3D_DEPTHRANGE, 0));
 		put(b, near & 0xffffu);
@@ -201,6 +211,14 @@ int pb3d_tris(struct pb3d_buf *b, uint32_t kind, uint32_t format, uint32_t n)
 {
 	uint32_t arg = (kind & PB3D_KIND_MASK) | (format & PB3D_FORMAT_MASK);
 	uint32_t vw = PB3D_VERTEX_WORDS(format);
+	/* A TRIS still open (fewer than its n vertices sent) is taken back
+	 * out and counted dropped, so the buffer never holds half a command
+	 * and the vertices after this call go where it says (#15). */
+	if (b->tris_left) {
+		b->n = b->tris_at - 1u;
+		b->tris_left = 0;
+		b->dropped++;
+	}
 	if ((arg & PB3D_KIND_MASK) == 3u || (arg & PB3D_F_COLOUR_MASK) == PB3D_F_COLOUR_MASK ||
 	    n < 3 || n > 0xffffu) {
 		b->dropped++;
