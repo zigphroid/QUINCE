@@ -874,9 +874,15 @@ frame, up to 128 K words, was in a 256 KB block from the PSRAM pool.
   less margin than before: 3,752 bytes spare in the cloud against 4,800,
   by the Makefile's own check, since its code, in SRAM too, grew about
   3 KB (the new checks, `flush`'s split, the ordered texture calls)
-  as its `.bss` fell 2 KB (review 1). On the Mac's GCC, whose code was
-  2.9 KB bigger, about 1.7 KB (inferred).
+  as its `.bss` fell 2 KB (review 1). On the Mac's GCC, whose code is
+  bigger, about 1.1 KB by its sizes; it loads on the board.
 - **Texture calls in order.** A texture made, or an update sent at once,
   first hands on the window's words so far, so the stream keeps GL's
   order (review 1). Such calls come at load: none in the timed runs.
-
+- **On the board** (the bafa5bf pin, one boot, two samples each, which
+  agreed): CANNER's demo1 37.8 to 32.9 ms a frame (-13%), e1m1 28.7 to
+  25.3 (-12%), main f45eff0 against 3a1f77f; GCC's build of 3a1f77f 27.7
+  and 21.4, against 32.6 and 24.7 before. The 5 ms the SRAM experiment
+  measured on the heat build is what the plain build gained too. The
+  gate held in all six runs (checksum 3500115068, state c8c17318, 164
+  entities, nothing dropped), and the selftest passed (257 checks).
