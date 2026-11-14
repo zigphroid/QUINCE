@@ -146,8 +146,10 @@ page-check:
 
 # The host suite, under the sanitizers: the check to run after every
 # change. lib/selftest.c's checks are the same ones `QUINCE /SELFTEST`
-# runs on the board; host-only ones go in tests/.
-HOST_SAN ?= -fsanitize=address,undefined -fno-sanitize-recover=undefined \
+# runs on the board; host-only ones go in tests/. float-cast-overflow
+# isn't in GCC's undefined: it catches a float to integer cast out of
+# range, NaN included, which x86 and the board's VCVT answer differently.
+HOST_SAN ?= -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=undefined,float-cast-overflow \
             -fno-omit-frame-pointer
 test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins test-float test-builds
 	$(BUILD)/test_quince

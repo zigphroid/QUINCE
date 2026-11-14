@@ -1107,3 +1107,45 @@ vertex arrays. This entry is PR 5.
   nothing was dropped, and the selftest passed (354 checks). Main on its
   own ran about 0.5 ms faster on this boot than on the first run's, so
   only builds timed on the same boot compare.
+
+## 2026-11-14: M4 PR 6, the layer's per-vertex code made cheaper
+
+The second of M4's second round (planned with PR 5's entry). Every
+vertex GLQuake sends goes through `vertex`, `send_vertex` and
+`pb3d_vertex_of`, so a few instructions there are worth a frame's
+milliseconds. Nothing PB is sent changes.
+
+- **The outcode in `vertex`.** CANNER didn't inline `outcode_of`, so
+  `vertex` stored the four clip-space coordinates, called it, and it
+  loaded them back. `vertex` now keeps them in registers and makes the
+  tests itself, in a 32-bit word (the 16-bit one took a `uxth` after
+  every `orr`); `outcode_of` is gone, and `outside` is still the
+  clipper's one-plane test.
+- **One struct for the current vertex.** glTexCoord's and glColor's
+  values were eight separate statics, and CANNER loads each one's
+  address from the literal pool, so `vertex`'s copy and every
+  `glTexCoord2f`, `pbgl_mtexcoord` and `glColor3f` took one load a
+  field. They are `cur`, a `struct vert`: one address.
+- **The vertex count once a primitive.** `pbgl_total.verts` was added to
+  on every vertex beside `prim_verts_total`; it now takes the
+  primitive's count in `glEnd`.
+- **`fix16` in range first.** It tested for a NaN, then each limit, then
+  rounded. Now the common case is two compares, which a NaN fails both
+  of, and the limits and the NaN are sorted out after: the same values
+  for every input. `fix_q`'s NaN and sign tests are one compare,
+  `!(q > 0)`. The alternative, letting VCVT's saturation do the clamping
+  (it sends a NaN to 0 and holds the range), would make the PC's build,
+  where the same C is undefined and x86 gives INT_MIN, differ from the
+  board's.
+- **Checks.** `make test` (both gates: e1m1's checksum 3500115068 and
+  demo1's fixed-clock 1849523503 with its lightmap updates), and all nine
+  maps' 300 server frames give main's checksums. SIMMER at the board's
+  pace: demo1 75.1 to 71.1 ms a frame (-5.3%), e1m1 55.6 to 53.2 (-4.3%).
+  The code is larger (`vertex` 197 instructions to 242, the outcode
+  written in) but runs fewer.
+- **On the board** (one boot of PectinOS 20978ee, two samples each,
+  alternating, main 227ce79 against 601a7e7): CANNER demo1 30.5 to 29.2
+  ms a frame (-4.4%), e1m1 24.3 to 23.6 (-3.1%). GCC's build runs demo1
+  at 25.1 and e1m1 at 20.5, with 24,144 bytes of SRAM spare. The gate
+  held in every e1m1 run, nothing was dropped, and the selftest passed
+  (354 checks).

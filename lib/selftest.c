@@ -148,6 +148,11 @@ static void pb3d_fixed(void)
     check_num("12.4: the float just under a half step", pb3d_fix_12_4(0.49999997f * 0.0625f), 0);
     check_num("12.4: held at the guard band's right", pb3d_fix_12_4(3000.0f), 32767);
     check_num("12.4: and its left", pb3d_fix_12_4(-3000.0f), -32768);
+    // The limits themselves: 32767.75 rounds to 32768, past the top, so
+    // it is held, not wrapped to -32768; -32767.75 rounds to -32768,
+    // which fits.
+    check_num("12.4: just past the top is held", pb3d_fix_12_4(32767.75f / 16.0f), 32767);
+    check_num("12.4: and the bottom fits", pb3d_fix_12_4(-32767.75f / 16.0f), -32768);
     check_num("12.4: NaN is 0", pb3d_fix_12_4(zero / zero), 0);
     check_num("10.6: a texel and a half", pb3d_fix_10_6(1.5f), 96);
     check_num("10.6: held at 512", pb3d_fix_10_6(600.0f), 32767);
@@ -158,6 +163,7 @@ static void pb3d_fixed(void)
     check_num("q: a quarter", (long)(q >> 16), 0x2000);
     check_num("q: 0 is 0", (long)pb3d_fix_q(0.0f), 0);
     check_num("q: behind the eye is 0", (long)pb3d_fix_q(-1.0f), 0);
+    check_num("q: NaN is 0", (long)pb3d_fix_q(zero / zero), 0);
     q = pb3d_fix_q(3.0f);
     check_num("q: held at the top, high half", (long)(q >> 16), 0xffff);
     check_num("q: and low half", (long)(q & 0xffffu), 0xffff);
@@ -977,7 +983,7 @@ static const char *join(char *out, const char *a, const char *b, const char *c, 
 // the inside one kept. The viewport is (x, row, w, h) in PB's rows, and
 // the projection makes GL's units its pixels; the triangles' other
 // corners are near (cx, cy). Each plane's own factor,
-// in outcode_of and the cut both, is the only one that passes all four.
+// in the outcode and the cut both, is the only one that passes all four.
 static void gl_guard_at(const char *where, int vx, int vrow, int vw, int vh, float cx, float cy)
 {
     static const float dir[4][2] = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } };
