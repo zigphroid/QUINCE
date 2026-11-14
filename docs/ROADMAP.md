@@ -150,8 +150,8 @@ transformed vertices were in primitives the layer then dropped whole.
 - PR 7: GL 1.1 vertex arrays (`glVertexPointer`, `glTexCoordPointer`,
   `glDrawArrays`) for the world's polygons: one call a polygon, not
   three a vertex, and a polygon or fan read in one loop in the layer.
-  PB's words are the same. SIMMER at the board's pace: demo1 71.1 to
-  70.4 ms a frame (-1%), e1m1 53.2 to 52.1 (-2%).
+  PB's words are the same. On the board CANNER's demo1 is 29.2 to 28.85
+  ms a frame (-1.3%) and e1m1 23.6 to 23.0 (-2.5%); GCC's 24.7 and 19.5.
 
 ## Later: drawing on the pixelboard
 
