@@ -1154,9 +1154,11 @@ milliseconds. Nothing PB is sent changes.
 
 M4 PR 7 (vertex arrays, about 3 KB of code and selftest) made CANNER's
 .JAM fail to load on SIMMER: `Headspace exceeded.` The plain build puts
-code, data and .bss in the 384 KB program area beside the 16 KB stack,
-and main (76e5d9a) used 363,592 bytes of it before the stack, about 3 KB
-under the limit (inferred from the .JAM's header and the loader's
+code, data and .bss in the 384 KB program area beside the 16 KB stack:
+main's (76e5d9a) image and .bss are 281,996 + 81,980 = 363,976 bytes, and
+by the Makefile's top-down layout (code and data may end at 366,848)
+less the default 1 KB heap, it had about 1.8 KB left, which PR 7's
+366,456 overran (inferred from the .JAM's header and the loader's
 layout, not measured on the board). PR 7 gains 1-2% at SIMMER's pace, so
 Jacob was asked: park it, make room first, or ship it with a smaller
 selftest. Jacob chose making room first.
@@ -1167,9 +1169,9 @@ selftest. Jacob chose making room first.
   `scr_centerstring`'s 1 KB, `com_token`, `mod_novis`, and the key
   tables `keybindings` and `keyshift`. Each is used at load, by the
   console, or a few bytes a frame (a demo's reads), never in the
-  frame's inner loops. .bss is 81,980 to 68,476 bytes; about 16.7 KB is
-  left. The PSRAM .pbss comes from the kernel's 1 MB heap, which held
-  599 KB of it before.
+  frame's inner loops. .bss is 81,980 to 68,476 bytes, which leaves about
+  15.0 KB by the same reckoning. The PSRAM .pbss comes from the kernel's
+  1 MB heap: 598,720 bytes (585 KB) before, 612,224 after.
 - **Not moved:** `prim[]` (9 KB) and the layer's words window (8 KB),
   written every vertex; QuakeC's `localstack` (8 KB), used on every
   QuakeC call; `d_8to24table`, read for every particle; `cl` and

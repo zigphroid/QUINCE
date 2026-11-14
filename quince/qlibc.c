@@ -154,8 +154,9 @@ struct quince_file {
 	unsigned char buf[512];
 };
 
-/* In PSRAM, as fmt_buf below: a 512-byte buffer a file, read 32 KB at a
- * time at load and a few bytes a frame for a demo (room for M4 PR 7). */
+/* In PSRAM, as fmt_buf below (room for M4 PR 7): each slot's 512-byte
+ * buffer is fgetc's read-ahead only (fread copies straight to the
+ * caller), and a demo's fread a frame touches the slot's fields. */
 static __attribute__((section(".pbss"))) struct quince_file files[QFILES];
 
 FILE *fopen(const char *path, const char *mode)
