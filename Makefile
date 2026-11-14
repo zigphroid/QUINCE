@@ -94,6 +94,10 @@ STACK  := 16384
 # longer line or a bigger environment).
 PROGRAM_SPAN := 384768
 START_BLOCK  := 512
+# The room make gcc's check keeps spare below that: the Mac's GCC writes
+# about 2.8 KB more code than the cloud's (LOG 2026-11-14), so a build
+# that fits here with less could be Headspace exceeded there (#57).
+GCC_SRAM_MARGIN := 4096
 CANNER_FLAGS ?=
 # The .JAM that sim-smoke, sim-bench and send take: CANNER's plain build,
 # or build/heat/ or build/gcc/'s (below).
@@ -156,11 +160,17 @@ test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins test-f
 # cut that no longer builds would wait for the next board comparison to
 # show (#11). A heat file that names functions gone from the build only
 # warns: heat.py's warnings say which, and the cut still builds. Built
-# here, not run: sim-smoke and sim-bench take QUINCE_JAM= for that. The heat cut needs only CANNER; GCC's build
-# skips, saying why, without $(CROSS)gcc.
+# here, not run: sim-smoke and sim-bench take QUINCE_JAM= for that. The
+# heat cut needs only CANNER; GCC's build skips, saying why, without
+# $(CROSS)gcc. Each build's output goes to a log in $(BUILD), printed
+# only if it fails (#42).
 test-builds:
-	@$(MAKE) --no-print-directory heat
-	@if command -v $(CROSS)gcc > /dev/null 2>&1; then $(MAKE) --no-print-directory gcc; \
+	@mkdir -p $(BUILD)
+	@$(MAKE) --no-print-directory heat > $(BUILD)/test-heat.log 2>&1 || \
+	    { cat $(BUILD)/test-heat.log; echo "test-builds: FAIL: make heat"; exit 1; }
+	@if command -v $(CROSS)gcc > /dev/null 2>&1; then \
+	    $(MAKE) --no-print-directory gcc > $(BUILD)/test-gcc.log 2>&1 || \
+	    { cat $(BUILD)/test-gcc.log; echo "test-builds: FAIL: make gcc"; exit 1; }; \
 	else echo "test-builds: make gcc skipped: no $(CROSS)gcc"; fi
 	@echo "test-builds: make heat$(if $(shell command -v $(CROSS)gcc 2>/dev/null), and make gcc,) built"
 
@@ -179,8 +189,8 @@ test-float: $(SRC) $(CORE) $(QUAKE_BOARD) $(wildcard lib/*.h quake/*.h quince/li
 # tests/fpu_builtins.c through it, with the SDK's math.c beside it as in
 # the real build, and any q_ function that calls sqrtf, fabsf, floorf,
 # ceilf or __builtin_roundf (lib/pb3d.c's) instead of making the
-# instruction fails it. The state and checksum
-# can't catch that: math.c's sqrtf is correctly rounded too, only slower.
+# instruction fails it. The state and checksum can't catch that: math.c's
+# sqrtf is correctly rounded too, only slower.
 test-builtins: tests/fpu_builtins.c quince/libc/math.h $(CANNER) Makefile
 	@mkdir -p $(BUILD)
 	$(CANNER) -I quince/libc -I $(SDK) -S tests/fpu_builtins.c $(filter %/math.c %/softfp.c,$(LIB)) \
@@ -355,6 +365,20 @@ PECTIN_ROOT := $(QUINCE_PECTIN_ROOT)
 GCC_DIR   := $(BUILD)/gcc/$(NAME)
 GCC_QSRC  := $(SRC) $(CORE) $(QUAKE_BOARD) $(SDKLIB)
 GCC_QOBJ  := $(patsubst %.c,$(GCC_DIR)/obj/%.o,$(GCC_QSRC))
+# GCC's build keeps all its code in SRAM, the program area, which it had
+# outgrown (#57). Two files the timed runs never enter go to PSRAM
+# instead, behind the XIP cache (.JAM v4's cold segment, $(SDK)/app.ld):
+# the menus (quake/menu.c, 21 KB) and the selftest (lib/selftest.c,
+# 15 KB). The list is every function their objects define, read from
+# their symbol tables, so a new one goes cold without a word, less
+# GCC_HOT_KEEP: M_Draw, which SCR_UpdateScreen calls every frame (it
+# returns at once with no menu up; THERMO saw it once in a demo1 run).
+# tools/heat2ld.py writes the list as cold.ld, which the link finds
+# before the SDK's empty one (-L, as pectin.mk's pectin_cold_link does).
+# Unlike make heat's cut, every function the demos run stays in SRAM, so
+# GCC's timings stay comparable with the runs before (LOG 2026-11-14).
+GCC_COLD_SRC := quake/menu.c lib/selftest.c
+GCC_HOT_KEEP := M_Draw
 GCC_CFLAGS := $(APP_ARCH) -std=gnu99 -ffreestanding -nostdlib -O2 -g -w \
               -Werror=implicit-function-declaration -fno-strict-aliasing -fcommon \
               -ffunction-sections -fdata-sections -ffp-contract=off -fno-math-errno \
@@ -363,8 +387,19 @@ gcc: $(BUILD)/gcc/$(NAME).JAM
 $(GCC_DIR)/obj/%.o: %.c $(wildcard lib/*.h quake/*.h quince/libc/*.h) $(SDK)/pectin.h Makefile
 	@mkdir -p $(dir $@)
 	$(CROSS)gcc $(GCC_CFLAGS) -c -o $@ $<
-$(GCC_DIR)/$(NAME).elf: $(GCC_QOBJ) $(APP_LIBSRC) $(SDK)/app.ld $(SDK)/cold.ld
-	$(CROSS)gcc $(APP_CFLAGS) -O2 -fno-tree-loop-distribute-patterns $(APP_LDFLAGS) \
+# One FILE:NAME line a function (heat2ld.py's format); a clone
+# (foo.constprop.0) by its function's name, which heat2ld.py's patterns
+# cover.
+$(GCC_DIR)/$(NAME).cold: $(patsubst %.c,$(GCC_DIR)/obj/%.o,$(GCC_COLD_SRC)) Makefile
+	@set -e; for o in $(patsubst %.c,$(GCC_DIR)/obj/%.o,$(GCC_COLD_SRC)); do \
+	    $(CROSS)nm --defined-only $$o | awk -v f=$$(basename $$o .o).c -v keep=' $(GCC_HOT_KEEP) ' \
+	        '$$2 ~ /^[tT]$$/ { n = $$3; sub(/\..*/, "", n); if (index(keep, " " n " ") == 0) print f ":" n }'; \
+	done | sort -u > $@
+	@test -s $@ || { echo "error: $@ is empty: GCC_COLD_SRC's objects define no functions"; exit 1; }
+$(GCC_DIR)/cold.ld: $(GCC_DIR)/$(NAME).cold $(PECTIN_ROOT)/tools/heat2ld.py
+	$(PYTHON) $(PECTIN_ROOT)/tools/heat2ld.py --cold $< -o $@
+$(GCC_DIR)/$(NAME).elf: $(GCC_QOBJ) $(APP_LIBSRC) $(SDK)/app.ld $(GCC_DIR)/cold.ld
+	$(CROSS)gcc $(APP_CFLAGS) -O2 -fno-tree-loop-distribute-patterns -L$(GCC_DIR) $(APP_LDFLAGS) \
 	    -Wl,-Map=$(GCC_DIR)/$(NAME).map -o $@ $(GCC_QOBJ) $(APP_LIBSRC)
 	@if grep -q 'libgcc\.a' $(GCC_DIR)/$(NAME).map; then \
 	    echo "error: $@ links libgcc (pectinos has none: its CLAUDE.md, #112)"; rm -f $@; exit 1; fi
@@ -387,7 +422,11 @@ $(BUILD)/gcc/$(NAME).JAM: $(GCC_DIR)/$(NAME).elf $(GCC_DIR)/stack $(PAGE) $(VERB
 	mem_hi=$$(( stack_lo - 1024 )); \
 	if [ $$mem_lo -gt $$mem_hi ]; then \
 	    echo "error: $< ends SRAM at $$mem_lo bytes, past $$mem_hi, what a $(STACK)-byte stack" \
-	         "leaves of the board's $(PROGRAM_SPAN) (Headspace exceeded.)"; rm -f $@; exit 1; fi
+	         "leaves of the board's $(PROGRAM_SPAN) (Headspace exceeded.)"; rm -f $@; exit 1; fi; \
+	if [ $$(( mem_lo + $(GCC_SRAM_MARGIN) )) -gt $$mem_hi ]; then \
+	    echo "error: $< ends SRAM at $$mem_lo bytes, $$(( mem_hi - mem_lo )) under $$mem_hi:" \
+	         "less than GCC_SRAM_MARGIN's $(GCC_SRAM_MARGIN), which another GCC's bigger code needs (#57)"; \
+	    rm -f $@; exit 1; fi
 	$(VERBUSAGE) -f $(VERB) > /dev/null
 	$(if $(PRF),$(PREFCHECK) $(PRF) > /dev/null)
 	$(PYTHON) $(PECTIN_ROOT)/tools/mkjam.py --name $(NAME) --stack $(STACK) --page $(PAGE) \

@@ -848,10 +848,11 @@ Pictures do move, a little. The scene's CRC and the 76 e1m1 frames
 `test-quake` draws through the model are unchanged, but on the demo
 dumps about 40% of frames do (demo1 418 of 1,020, demo2 344 of 1,033,
 demo3 534 of 1,143): 1 to 4 pixels each in the frames the review
-sampled, at most 33 in a channel. A constant q on a step's edge still lands a step farther
-about one pixel in 20 (one in 7 before), so the bias is cut, not gone
-(PB3D.md's depth rule). `test_pbmodel`'s `depth_rounding` holds it:
-random triangles, a pixel a step off as often nearer as farther.
+sampled, at most 33 in a channel. A constant q on a step's edge still
+lands a step farther about one pixel in 20 (one in 7 before), so the
+bias is cut, not gone (PB3D.md's depth rule). `test_pbmodel`'s
+`depth_rounding` holds it: random triangles, a pixel a step off as often
+nearer as farther.
 
 The cost to PB: one add each for the sum's and the shift's rounding,
 plus a different constant in RA's divide, which runs once a triangle.
@@ -916,6 +917,57 @@ frame, up to 128 K words, was in a 256 KB block from the PSRAM pool.
   gate held in all six runs (checksum 3500115068, state c8c17318, 164
   entities, nothing dropped), and the selftest passed (257 checks).
 
+## 2026-11-13: the later issues' second round (#41, #42, #45, #46, #52)
+
+**Decisions (Jacob, every recommendation).**
+- #45: a reversed `glDepthRange` (far below near) is counted in
+  `ignored` and dropped, and the range before it stands. GLQuake sends
+  one only with `gl_ztrick 1`, which `qvid.c` keeps at 0, now with a
+  comment saying why. The alternative, swapping near and far and
+  flipping the depth test, is more code for a setting nothing uses.
+- #52: a flat polygon's or quad's vertices always take its colour, even
+  where a texture replaces it, the same rule as a cut triangle's fan.
+  The alternative, testing "the colour is drawn" in both places, keeps
+  two conditions in step for no change on screen.
+- #46: PB3D.md says a constant q on a step's edge lands nearer "almost
+  never", not "never". Finding which triangles do it was the other
+  choice; it changes nothing PB is asked for.
+
+## 2026-11-14: GCC's build puts the menus and the selftest in PSRAM (#57)
+
+GCC's build keeps all its code in SRAM, in the program area, and had
+outgrown it on the Mac: main's build ended SRAM 2,448 bytes past what a
+16 KB stack leaves, and the pin's move (#53) adds 1,024. In the cloud it
+fit by 648 bytes until #54, after which #53 merged with main was 376
+bytes over too, since `.data` starts on a 1 KB boundary after `.text`
+and #54 left 20 bytes to it (#54's note). Jacob took every
+recommendation (2026-11-14):
+
+- **What goes.** `make gcc` puts every function `quake/menu.c` and
+  `lib/selftest.c` define in .JAM v4's cold segment, PSRAM behind the
+  XIP cache, but `M_Draw`, which `SCR_UpdateScreen` calls each frame. The
+  list is read from the two objects' symbol tables (`build/gcc/QUINCE/
+  QUINCE.cold`, 106 functions) and written as `cold.ld` by pectinos's
+  `tools/heat2ld.py`, found before the SDK's empty one. 28,096 bytes of
+  code leave SRAM: 27,272 bytes spare in the cloud now, against 648.
+- **Why these.** Neither runs in a timed demo (THERMO saw `M_Draw` once
+  in demo1, nothing else of either file in any run since M1), so every
+  function the benchmarks time stays in SRAM and GCC's numbers stay
+  comparable with the runs before. The alternatives: GCC through
+  THERMO's heat cut, which frees far more but moves hot code too (3 to
+  7% on CANNER, so a new baseline); or more `.bss` to PSRAM, a few KB at
+  most, soon gone again.
+- **A margin.** `make gcc`'s check now also fails with less than
+  `GCC_SRAM_MARGIN` (4 KB) spare, since the Mac's GCC writes about 2.8 KB
+  more code than the cloud's: a cloud `make test` catches a build the
+  Mac would refuse.
+- **Checked.** Built at the bafa5bf pin: `make test` (its test-builds
+  builds `make gcc`) and `make`; then GCC's build on SIMMER (the 20978ee
+  kernel, which takes the older .JAM, as the board did): its selftest
+  passes from PSRAM, and sim-bench's e1m1 gate holds (checksum
+  3500115068, state c8c17318, 164 entities). The Mac's build isn't
+  checked yet: by its 2.8 KB it should have about 24 KB spare.
+
 ## 2026-11-14: the pin moves to pectinos main (20978ee)
 
 `PECTIN_REV` goes from bafa5bf to 20978ee, pectinos main on 2026-11-12,
@@ -961,8 +1013,10 @@ anyway, and this one measures what has landed.
   369,296 (2,448 over) and this PR's at 370,320 (3,472 over: the SDK's
   code grows 592 bytes, 1,024 once aligned). It last fitted at 3a1f77f,
   with about 1.1 KB spare; main had already outgrown it before the pin
-  moved (#57). In the cloud it still fits at both pins, with 648 bytes
-  spare.
+  moved (#57). In the cloud it still fit at both pins, with 648 bytes
+  spare, until #54. #58 then put the menus and the selftest in PSRAM
+  (the entry before this one): at the new pin GCC's build has 27,272
+  bytes spare in the cloud, the same as at bafa5bf.
 - **THERMO on the new pin** (this PR's CANNER build, same boot), for the
   next round of speed work: demo1 34.1 ms a frame under sampling, kernel
   17.0%, then `vertex` (pbgl.c) 13.3%, `pb3d_vertex_of` 9.5%,

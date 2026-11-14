@@ -157,7 +157,8 @@ touches:
   the checkout's HEAD, in a PR of its own, below) · `make heat` (the
   cold code, by `quince/QUINCE.HOT`, a board run's THERMO heat file, out
   of the jar: `build/heat/`) · `make gcc` (GCC -O2 through the SDK's
-  flags, to compare: `build/gcc/`). `sim-smoke`, `sim-bench` and `send`
+  flags, to compare, the menus and the selftest run from PSRAM:
+  `build/gcc/`). `sim-smoke`, `sim-bench` and `send`
   take either with `QUINCE_JAM=build/heat/QUINCE.JAM`.
 - `PECTIN_REV` pins the pectinos commit the program builds and passes
   against. The board must run the same commit's PectinOS: an older kernel
