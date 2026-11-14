@@ -1204,13 +1204,14 @@ own.
   coordinate, any stride; another size or type is counted in `ignored`
   and its array draws as off. `lib/qvid.c` turns the arrays on once, and
   `R_SurfacePoly`'s multitexture path (`quake/gl_rsurf.c`, QUINCE:)
-  points them at the polygon's verts and draws: five calls a polygon
-  where it was three a vertex and two more (demo1's GL calls a frame
-  9,233 to 8,097).
+  points them at the polygon's verts and draws: six calls a polygon
+  where it was three a vertex and two more (demo1's GL calls a frame on
+  the PC's fixed clock 9,769 to 8,632).
 - **One loop.** The first version made each element through `vertex`,
   as the calls had, and was 0.6 ms a frame slower at SIMMER's pace: the
   per-vertex calls were never the cost, the work in them is. So a
-  polygon or fan that fits `prim[]` is now made in `glDrawArrays`
+  polygon or fan shorter than `prim[]` (`vertex` counts one of exactly
+  256 as split, so that one goes through it) is now made in `glDrawArrays`
   itself, the transform and outcode written there (the outcode's tests
   are a macro, `OUTCODE`, shared with `vertex`, since CANNER inlines no
   function), the texture coordinates straight from the arrays, then
@@ -1227,7 +1228,12 @@ own.
 - **Checks.** `make test` (both gates), all nine maps' 300 server
   frames give main's checksums, and the selftest draws one polygon both
   ways, on the screen and cut, with the second unit's array on and off,
-  and compares the words (372 checks). SIMMER at the board's pace: demo1
+  and compares the words; then every kind of primitive (a polygon of 256
+  and of 257, a fan, GL_TRIANGLES, GL_QUADS, a strip), from packed arrays
+  and from three strides, against the calls by checksum and counts (385
+  checks, review 1). Of review 1's 18 mutants of the new code, all fail
+  it but one that sends everything through `vertex`: the same words,
+  only slower, which the board's timing is the test of. SIMMER at the board's pace: demo1
   71.1 to 70.4 ms a frame (-1%), e1m1 53.2 to 52.1 (-2%).
 - **On the board** (one boot of PectinOS 20978ee, two samples each,
   alternating, main 37d998b against 1ab212a): CANNER's demo1 29.2 to
@@ -1235,6 +1241,6 @@ own.
   build 25.1 to 24.7 and 20.5 to 19.5, with 35,560 bytes of SRAM spare
   (1,064 less than main). GL calls a frame: demo1 9,431 to 8,298, e1m1
   5,514 to 3,620. The e1m1 gate held in every run, nothing was dropped,
-  and the selftest passed (372 checks). HEADSPACE after a run: `QUINCE,
+  and the selftest passed (372 checks, before review 1's added ones). HEADSPACE after a run: `QUINCE,
   353,848 bytes + heap 13,288 + stack 16,400`.
 

@@ -316,7 +316,7 @@ static void pb3d_commands(void)
 #else
 #define SELFTEST_PSRAM
 #endif
-static SELFTEST_PSRAM uint16_t gl_words[1024], gl_frame[1024];
+static SELFTEST_PSRAM uint16_t gl_words[PBGL_WORDS_MIN], gl_frame[1024];
 static uint8_t gl_textures[16 * PBGL_TEXTURE_BYTES], gl_scratch[256], gl_tex[256];
 static uint32_t gl_seq, gl_tex_seq, gl_nsubs, gl_sub_seq;
 static uint32_t gl_nframe, gl_tex_id, gl_tex_format, gl_tex_flags, gl_tex_w, gl_tex_h;
@@ -1345,10 +1345,12 @@ static void gl_arrays(void)
     // The last, cut: the triangles inside, the cut one's fan, the triangle.
     check_num("glDrawArrays: its words not empty", (long)pbgl_total.tris_cmds, 3);
 
-    // A pointer it doesn't take (four floats a vertex) is ignored, and
-    // its array draws nothing; so does one not enabled.
+    // pbgl_init turns the arrays off: the last scene's draw nothing. A
+    // pointer it doesn't take (four floats a vertex) is ignored, and its
+    // array draws nothing; so does one not enabled.
     gl_start(1024);
     frustum();
+    glDrawArrays(GL_POLYGON, 1, 4);
     glVertexPointer(4, GL_FLOAT, 0, gl_poly[0][1]);
     glEnableClientState(GL_VERTEX_ARRAY);
     glDrawArrays(GL_TRIANGLES, 0, 3);
@@ -1357,13 +1359,111 @@ static void gl_arrays(void)
     glDisableClientState(GL_VERTEX_ARRAY);
     glDrawArrays(GL_TRIANGLES, 0, 3);
     pbgl_end_frame();
-    check_num("glDrawArrays: nothing sent for either", (long)gl_nframe, 0);
+    check_num("glDrawArrays: nothing sent for any of them", (long)gl_nframe, 0);
+}
+
+// glDrawArrays against the calls for every kind of primitive, longer
+// than prim[] and exactly its size, from packed arrays (stride 0) and
+// with each array's stride its own, compared by the frame's checksum
+// and counts (a 257-vertex polygon's words don't fit gl_frame).
+#define ARRN 257
+static SELFTEST_PSRAM float arr_v[ARRN * 7];   // x y z, s t, s2 t2
+static SELFTEST_PSRAM float arr_xyz[ARRN * 3]; // packed
+static SELFTEST_PSRAM float arr_st[ARRN * 2];  // unit 0's, packed
+
+struct arr_sum { uint32_t sum, words, tris_cmds, sent_verts, split, prims, verts, tris, dropped; };
+
+static void arr_fill(void)
+{
+    for (int i = 0; i < ARRN; i++) {
+        float *v = &arr_v[i * 7];
+        v[0] = 20.0f + (float)(i % 16) * 37.0f + (float)(i / 16) * 3.0f;
+        v[1] = 15.0f + (float)(i / 16) * 27.0f + (float)(i % 3) * 7.0f;
+        v[2] = 0.0f;
+        v[3] = 0.25f + (float)i * 0.0625f;
+        v[4] = 1.5f - (float)(i % 5) * 0.125f;
+        v[5] = (float)(i % 7) * 0.03125f;
+        v[6] = (float)(i % 11) * 0.015625f;
+        arr_xyz[i * 3] = v[0]; arr_xyz[i * 3 + 1] = v[1]; arr_xyz[i * 3 + 2] = v[2];
+        arr_st[i * 2] = v[3]; arr_st[i * 2 + 1] = v[4];
+    }
+}
+
+// packed: the vertices and unit 0's from their own packed arrays, unit
+// 1's from the interleaved one, three strides; else all interleaved.
+static void arr_run(GLenum mode, int n, int packed, int arrays, struct arr_sum *o)
+{
+    gl_start(PBGL_WORDS_MIN);
+    ortho();
+    glEnable(GL_TEXTURE_2D);
+    pbgl_select_texture(PBGL_TEXTURE1);
+    glEnable(GL_TEXTURE_2D);
+    pbgl_select_texture(PBGL_TEXTURE0);
+    if (arrays) {
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glVertexPointer(3, GL_FLOAT, packed ? 0 : 7 * sizeof(float), packed ? arr_xyz : arr_v);
+        glTexCoordPointer(2, GL_FLOAT, packed ? 0 : 7 * sizeof(float), packed ? arr_st : &arr_v[3]);
+        pbgl_client_texture(PBGL_TEXTURE1);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glTexCoordPointer(2, GL_FLOAT, 7 * sizeof(float), &arr_v[5]);
+        glDrawArrays(mode, 0, n);
+    } else {
+        glBegin(mode);
+        for (int i = 0; i < n; i++) {
+            const float *v = &arr_v[i * 7];
+            pbgl_mtexcoord(PBGL_TEXTURE0, v[3], v[4]);
+            pbgl_mtexcoord(PBGL_TEXTURE1, v[5], v[6]);
+            glVertex3f(v[0], v[1], v[2]);
+        }
+        glEnd();
+    }
+    glBegin(GL_TRIANGLES);   // takes the last element's coordinates
+    glVertex2f(5, 5); glVertex2f(50, 5); glVertex2f(5, 50);
+    glEnd();
+    pbgl_end_frame();
+    o->sum = pbgl_checksum();
+    o->words = pbgl_total.words;
+    o->tris_cmds = pbgl_total.tris_cmds;
+    o->sent_verts = pbgl_total.sent_verts;
+    o->split = pbgl_total.split;
+    o->prims = pbgl_total.prims;
+    o->verts = pbgl_total.verts;
+    o->tris = pbgl_total.tris;
+    o->dropped = pbgl_total.dropped;
+}
+
+static void gl_arrays_kinds(void)
+{
+    static const struct { GLenum mode; int n, packed; const char *what; } cases[] = {
+        { GL_POLYGON, 256, 0, "glDrawArrays: a polygon of 256, the calls' words" },
+        { GL_POLYGON, 257, 0, "glDrawArrays: of 257, split as the calls split it" },
+        { GL_TRIANGLE_FAN, 40, 1, "glDrawArrays: a fan, packed arrays" },
+        { GL_TRIANGLES, 9, 1, "glDrawArrays: GL_TRIANGLES" },
+        { GL_QUADS, 8, 1, "glDrawArrays: GL_QUADS" },
+        { GL_TRIANGLE_STRIP, 30, 0, "glDrawArrays: GL_TRIANGLE_STRIP" },
+    };
+    arr_fill();
+    for (unsigned k = 0; k < sizeof cases / sizeof cases[0]; k++) {
+        struct arr_sum a, b;
+        arr_run(cases[k].mode, cases[k].n, cases[k].packed, 0, &a);
+        arr_run(cases[k].mode, cases[k].n, cases[k].packed, 1, &b);
+        check_num(cases[k].what,
+                  (long)(a.sum == b.sum && a.words == b.words && a.tris_cmds == b.tris_cmds &&
+                         a.sent_verts == b.sent_verts && a.split == b.split &&
+                         a.prims == b.prims && a.verts == b.verts && a.tris == b.tris),
+                  1);
+        check_num("glDrawArrays: nothing dropped, something sent",
+                  (long)(b.dropped == 0 && b.tris_cmds >= 2), 1);
+        if (cases[k].n == 257)
+            check_num("glDrawArrays: the polygon of 257 was split", (long)b.split, 1);
+    }
 }
 
 static void (*const checks[])(void) = { greeting, bench_words, pb3d_fixed, pb3d_commands,
                                          gl_screen, gl_prims, gl_clip, gl_state, gl_viewport,
                                          gl_textures_check, gl_full, gl_full_cut, gl_cuts,
-                                         gl_guard, gl_subs, gl_split, gl_flat, gl_arrays };
+                                         gl_guard, gl_subs, gl_split, gl_flat, gl_arrays, gl_arrays_kinds };
 
 int quince_selftest(void (*fail)(const char *what, const char *got, const char *want),
                     int *count)

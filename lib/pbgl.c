@@ -1434,10 +1434,12 @@ void glTexCoordPointer(GLint size, GLenum type, GLsizei stride, const GLvoid *p)
 
 /* As glBegin(mode), then for each element its texture coordinates and
  * vertex, then glEnd (section 2.8's ArrayElement), but without the
- * calls. A polygon or fan that fits prim[] is read in one loop, each
+ * calls. A polygon or fan shorter than prim[] is read in one loop, each
  * vertex made and its outcode found there, as vertex would, and then
  * sent as glEnd would; anything else goes through vertex, which splits
- * and takes GL_QUADS. GL leaves the current texture coordinates of an
+ * and takes GL_QUADS. Shorter, not as long: vertex counts a primitive of
+ * exactly PRIM_MAX as split (its last piece, two vertices, sends
+ * nothing), and the counts stay the calls'. GL leaves the current texture coordinates of an
  * enabled array undefined afterwards; here they are the last element's,
  * as the calls would have left them, so the words are the same either
  * way. */
@@ -1460,7 +1462,7 @@ void glDrawArrays(GLenum mode, GLint first, GLsizei count)
 	prim_open = 1;
 	if (mvp_stale)
 		remake_mvp();
-	if (n <= PRIM_MAX && (mode == GL_POLYGON || mode == GL_TRIANGLE_FAN)) {
+	if (n < PRIM_MAX && (mode == GL_POLYGON || mode == GL_TRIANGLE_FAN)) {
 		const float *m = mvp.m;
 		for (i = 0; i < n; i++) {
 			const float *p = (const float *)vp;

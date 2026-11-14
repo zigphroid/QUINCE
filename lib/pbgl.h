@@ -48,7 +48,10 @@ struct pbgl_counts {
 	                        * an update with a negative x or y or no size;
 	                        * textures, and updates to them, named past
 	                        * max_textures; pushes past the matrix stack's 8;
-	                        * and a depth range with far below near */
+	                        * a depth range with far below near; a vertex
+	                        * or texture coordinate pointer of another size
+	                        * or type, or with a negative stride; and a
+	                        * client state the layer doesn't know (M4 PR 7) */
 };
 
 /* Where the layer's output goes. Any of them may be 0. A frame's
