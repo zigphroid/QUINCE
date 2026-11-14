@@ -11,7 +11,7 @@ import collections
 import re
 import sys
 
-DOUBLE = re.compile(r"\tb(?:l|\.w)?\t(__aeabi_(?:d\w+|u?[fil]2d|ul2d)|sqrt|sin|cos|tan|floor|ceil|"
+DOUBLE = re.compile(r"\tb(?:l|\.w)?\t(__aeabi_(?:d\w+|u?[fil]2d)|sqrt|sin|cos|tan|floor|ceil|"
                     r"fabs|fmod|atan2?|asin|pow)$")
 
 # Calls the pattern must see, and ones it mustn't, checked on every run so

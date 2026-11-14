@@ -666,6 +666,14 @@ void glShadeModel(GLenum mode) { count_call(); shade = mode; }
 void glDepthRange(GLclampd n, GLclampd f)
 {
 	count_call();
+	/* PB takes far at or above near only (#16). GL allows a reversed
+	 * range, which GLQuake sends only with gl_ztrick 1 (qvid.c keeps it
+	 * 0): it is counted and dropped, and the range before it stands, so
+	 * the words never claim a range PB refused (#45). */
+	if (f < n) {
+		pbgl_total.ignored++;
+		return;
+	}
 	range_near = (float)n;
 	range_far = (float)f;
 }
@@ -1151,7 +1159,7 @@ static int cut_triangle(const struct vert *a, const struct vert *b, const struct
 	}
 	/* Flat: the cut's new vertices took colours between the old ones,
 	 * but GL's flat colour is the triangle's last vertex's, c (flush has
-	 * given a polygon's or quad's every vertex theirs), so the fan's
+	 * given a flat polygon's or quad's every vertex theirs), so the fan's
 	 * every vertex takes c's (#24). */
 	if (shade == GL_FLAT)
 		for (i = 0; i < n; i++) {
@@ -1190,11 +1198,12 @@ static void flush(void)
 	/* Flat shading's colour (GL 1.1, section 2.13.7) is each triangle's
 	 * last vertex's for lists, strips and fans, which PB takes itself
 	 * (lib/pb3d.h's SMOOTH). A polygon takes its first vertex's and a
-	 * quad its fourth's, so their vertices all get that one, where the
-	 * colour is drawn at all (#24). GLQuake's flat polygons are one
-	 * colour, or textured without MODULATE: this costs it nothing. */
-	if (shade == GL_FLAT && (prim_mode == GL_POLYGON || prim_mode == GL_QUADS) &&
-	    (!(s & PB3D_S_TEX0) || (s & PB3D_S_MODULATE))) {
+	 * quad its fourth's, so their vertices all get that one (#24), even
+	 * where a texture replaces the colour and it isn't drawn: the same
+	 * rule as cut_triangle's, and nothing to test (Jacob, #52). GLQuake's
+	 * flat polygons are one colour, or textured without MODULATE: this
+	 * changes no picture. */
+	if (shade == GL_FLAT && (prim_mode == GL_POLYGON || prim_mode == GL_QUADS)) {
 		const struct vert *p = &prim[prim_mode == GL_POLYGON ? 0 : nprim - 1];
 		uint8_t r = p->r, g = p->g, b = p->b, a = p->a;
 		for (i = 0; i < nprim; i++) {

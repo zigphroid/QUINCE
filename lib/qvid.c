@@ -35,6 +35,10 @@ const char *gl_renderer = "PB's 3D commands (counted, not yet drawn)";
 const char *gl_version = "1.1";
 const char *gl_extensions = "";
 
+/* Keep gl_ztrick at 0: at 1, GLQuake skips depth clears by drawing
+ * alternate frames with glDepthRange(1, 0.5) and GL_GEQUAL, a reversed
+ * range PB doesn't take (lib/pb3d.h's DEPTHRANGE), which pbgl drops and
+ * counts in ignored (#45). */
 cvar_t gl_ztrick = {"gl_ztrick", "0", false, false, 0, NULL};
 
 /* What lib/pbgl.c works in (lib/pbgl.h). A window on the frame's

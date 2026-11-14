@@ -156,11 +156,17 @@ test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins test-f
 # cut that no longer builds would wait for the next board comparison to
 # show (#11). A heat file that names functions gone from the build only
 # warns: heat.py's warnings say which, and the cut still builds. Built
-# here, not run: sim-smoke and sim-bench take QUINCE_JAM= for that. The heat cut needs only CANNER; GCC's build
-# skips, saying why, without $(CROSS)gcc.
+# here, not run: sim-smoke and sim-bench take QUINCE_JAM= for that. The
+# heat cut needs only CANNER; GCC's build skips, saying why, without
+# $(CROSS)gcc. Each build's output goes to a log in $(BUILD), printed
+# only if it fails (#42).
 test-builds:
-	@$(MAKE) --no-print-directory heat
-	@if command -v $(CROSS)gcc > /dev/null 2>&1; then $(MAKE) --no-print-directory gcc; \
+	@mkdir -p $(BUILD)
+	@$(MAKE) --no-print-directory heat > $(BUILD)/test-heat.log 2>&1 || \
+	    { cat $(BUILD)/test-heat.log; echo "test-builds: FAIL: make heat"; exit 1; }
+	@if command -v $(CROSS)gcc > /dev/null 2>&1; then \
+	    $(MAKE) --no-print-directory gcc > $(BUILD)/test-gcc.log 2>&1 || \
+	    { cat $(BUILD)/test-gcc.log; echo "test-builds: FAIL: make gcc"; exit 1; }; \
 	else echo "test-builds: make gcc skipped: no $(CROSS)gcc"; fi
 	@echo "test-builds: make heat$(if $(shell command -v $(CROSS)gcc 2>/dev/null), and make gcc,) built"
 
@@ -179,8 +185,8 @@ test-float: $(SRC) $(CORE) $(QUAKE_BOARD) $(wildcard lib/*.h quake/*.h quince/li
 # tests/fpu_builtins.c through it, with the SDK's math.c beside it as in
 # the real build, and any q_ function that calls sqrtf, fabsf, floorf,
 # ceilf or __builtin_roundf (lib/pb3d.c's) instead of making the
-# instruction fails it. The state and checksum
-# can't catch that: math.c's sqrtf is correctly rounded too, only slower.
+# instruction fails it. The state and checksum can't catch that: math.c's
+# sqrtf is correctly rounded too, only slower.
 test-builtins: tests/fpu_builtins.c quince/libc/math.h $(CANNER) Makefile
 	@mkdir -p $(BUILD)
 	$(CANNER) -I quince/libc -I $(SDK) -S tests/fpu_builtins.c $(filter %/math.c %/softfp.c,$(LIB)) \

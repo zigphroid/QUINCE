@@ -557,6 +557,8 @@ static void gl_clip(void)
     check_num("no x past 2,040 pixels", right, 2040 * 16);
 }
 
+static void tri(void);
+
 static void gl_state(void)
 {
     gl_start(1024);
@@ -585,6 +587,24 @@ static void gl_state(void)
         0x1300, 0x0000, 19661,        // DEPTHRANGE: 0 to 0.3 of 65,535
     };
     gl_check("the view weapon's depth range", 0, weapon, sizeof weapon / sizeof weapon[0]);
+    // A reversed range (GLQuake's gl_ztrick 1, which qvid.c keeps 0) has
+    // no PB command (#16): it is counted and dropped, and the range before
+    // it stands (#45).
+    pbgl_end_frame();
+    glDepthRange(1, 0.5);
+    check_num("reversed range counted", (long)pbgl_total.ignored, 1);
+    tri();
+    pbgl_end_frame();
+    {
+        long at = -1;
+        for (uint32_t i = 0; i + 2 < gl_nframe; i++)
+            if (gl_frame[i] == 0x1300) {
+                at = (long)i;
+                break;
+            }
+        check_num("and the old range kept",
+                  at >= 0 && gl_frame[at + 1] == 0 && gl_frame[at + 2] == 19661, 1);
+    }
 }
 
 // GL's viewport as PB's CLIP: y counted from the bottom turned to rows
@@ -1022,6 +1042,13 @@ static void gl_guard(void)
     // ((2,040 - 1,820) / 320, about 0.69): the screen's planes alone
     // would pass x 2,050, so guard_wider must be off for it (#34).
     gl_guard_at("a viewport at 1,500", 1500, 0, 640, 480, 1820, 240);
+    // Its mirror on each of the other three edges, so each guard factor
+    // in guard_wider is tested (#41): left (centre x -1,820), top and
+    // bottom (centres at rows -1,840 and 1,840, factor
+    // (2,040 - 1,840) / 240, about 0.83).
+    gl_guard_at("view at x -2,140", -2140, 0, 640, 480, -1820, 240);
+    gl_guard_at("view at row -2,080", 0, -2080, 640, 480, 320, -1840);
+    gl_guard_at("view at row 1,600", 0, 1600, 640, 480, 320, 1840);
 }
 
 static void gl_subs(void)

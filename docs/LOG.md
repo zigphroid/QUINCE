@@ -848,10 +848,11 @@ Pictures do move, a little. The scene's CRC and the 76 e1m1 frames
 `test-quake` draws through the model are unchanged, but on the demo
 dumps about 40% of frames do (demo1 418 of 1,020, demo2 344 of 1,033,
 demo3 534 of 1,143): 1 to 4 pixels each in the frames the review
-sampled, at most 33 in a channel. A constant q on a step's edge still lands a step farther
-about one pixel in 20 (one in 7 before), so the bias is cut, not gone
-(PB3D.md's depth rule). `test_pbmodel`'s `depth_rounding` holds it:
-random triangles, a pixel a step off as often nearer as farther.
+sampled, at most 33 in a channel. A constant q on a step's edge still
+lands a step farther about one pixel in 20 (one in 7 before), so the
+bias is cut, not gone (PB3D.md's depth rule). `test_pbmodel`'s
+`depth_rounding` holds it: random triangles, a pixel a step off as often
+nearer as farther.
 
 The cost to PB: one add each for the sum's and the shift's rounding,
 plus a different constant in RA's divide, which runs once a triangle.
@@ -915,3 +916,19 @@ frame, up to 128 K words, was in a 256 KB block from the PSRAM pool.
   measured on the heat build is what the plain build gained too. The
   gate held in all six runs (checksum 3500115068, state c8c17318, 164
   entities, nothing dropped), and the selftest passed (257 checks).
+
+## 2026-11-13: the later issues' second round (#41, #42, #45, #46, #52)
+
+**Decisions (Jacob, every recommendation).**
+- #45: a reversed `glDepthRange` (far below near) is counted in
+  `ignored` and dropped, and the range before it stands. GLQuake sends
+  one only with `gl_ztrick 1`, which `qvid.c` keeps at 0, now with a
+  comment saying why. The alternative, swapping near and far and
+  flipping the depth test, is more code for a setting nothing uses.
+- #52: a flat polygon's or quad's vertices always take its colour, even
+  where a texture replaces it, the same rule as a cut triangle's fan.
+  The alternative, testing "the colour is drawn" in both places, keeps
+  two conditions in step for no change on screen.
+- #46: PB3D.md says a constant q on a step's edge lands nearer "almost
+  never", not "never". Finding which triangles do it was the other
+  choice; it changes nothing PB is asked for.

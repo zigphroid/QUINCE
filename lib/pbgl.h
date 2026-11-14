@@ -30,7 +30,9 @@ struct pbgl_counts {
 	uint32_t texture_cmds; /* TEXTURE */
 	uint32_t other_cmds;   /* DEPTH, DEPTHRANGE and CLIP */
 	uint32_t culled;       /* primitives wholly off the screen or behind the eye */
-	uint32_t clipped;      /* primitives cut at the near plane or the guard band */
+	uint32_t clipped;      /* primitives cut at the near plane or the guard band
+	                        * into at least one fan (one wholly off the screen
+	                        * after its cut isn't counted) */
 	uint32_t clip_tris;    /* triangles those cuts made, sent as fans */
 	uint32_t dropped;      /* commands bigger than the words window */
 	uint32_t split;        /* primitives too long for one, sent as several */
@@ -42,8 +44,11 @@ struct pbgl_counts {
 	uint32_t sub_uploads;  /* the updates sent: a band of rows per block a frame */
 	uint32_t sub_bytes;    /* their bytes */
 	uint32_t ignored;      /* calls the layer drops: mip uploads, which PB builds;
+	                        * a texture not a power of two or past PB3D_TEX_MAX;
+	                        * an update with a negative x or y or no size;
 	                        * textures, and updates to them, named past
-	                        * max_textures; and pushes past the matrix stack's 8 */
+	                        * max_textures; pushes past the matrix stack's 8;
+	                        * and a depth range with far below near */
 };
 
 /* Where the layer's output goes. Any of them may be 0. A frame's
