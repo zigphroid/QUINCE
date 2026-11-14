@@ -1041,8 +1041,8 @@ vertex arrays. This entry is PR 5.
   (throwaway counters): 31% of demo1's transformed vertices were in
   primitives the layer then dropped whole, off the screen. Most were the
   world's: GLQuake culls whole BSP nodes (`R_CullBox`) but sends every
-  surface of a node that shows, and 61% of those polygons, and 81% of
-  the water's 64-unit pieces, were off the screen.
+  surface of a node that shows, and 60% of the world's polygons (81% of
+  the water's 64-unit pieces) were off the screen.
 - **What.** Each `glpoly_t` gets a bounding sphere at load
   (`GL_PolySphere`: centred on its box, its farthest vertex plus a unit).
   `R_PolyOffScreen` tests it against the frustum's four planes (each
@@ -1085,7 +1085,7 @@ vertex arrays. This entry is PR 5.
 - **On the board** (one boot of PectinOS 20978ee, two samples each,
   alternating, main aae0a51 against 18d4f80): CANNER demo1 32.7 to 30.7
   ms a frame (-6.0%), e1m1 25.0 to 24.4 (-2.4%). demo1 transforms 3,056
-  vertices a frame instead of 2,560, and the layer drops 120 primitives a
+  vertices a frame instead of 2,560, and the layer drops 119 primitives a
   frame instead of 239. GCC's build fits (23,136 bytes of SRAM spare) and
   runs demo1 at 26.1 and e1m1 at 20.8. The gate held in every e1m1 run,
   nothing was dropped, and the selftest passed (354 checks). Main on its
