@@ -932,3 +932,38 @@ frame, up to 128 K words, was in a 256 KB block from the PSRAM pool.
 - #46: PB3D.md says a constant q on a step's edge lands nearer "almost
   never", not "never". Finding which triangles do it was the other
   choice; it changes nothing PB is asked for.
+
+## 2026-11-14: GCC's build puts the menus and the selftest in PSRAM (#57)
+
+GCC's build keeps all its code in SRAM, in the program area, and had
+outgrown it on the Mac: main's build ended SRAM 2,448 bytes past what a
+16 KB stack leaves, and the pin's move (#53) adds 1,024. In the cloud it
+fit by 648 bytes until #54, after which #53 merged with main was 376
+bytes over too, since `.data` starts on a 1 KB boundary after `.text`
+and #54 left 20 bytes to it (#54's note). Jacob took every
+recommendation (2026-11-14):
+
+- **What goes.** `make gcc` puts every function `quake/menu.c` and
+  `lib/selftest.c` define in .JAM v4's cold segment, PSRAM behind the
+  XIP cache, but `M_Draw`, which `SCR_UpdateScreen` calls each frame. The
+  list is read from the two objects' symbol tables (`build/gcc/QUINCE/
+  QUINCE.cold`, 106 functions) and written as `cold.ld` by pectinos's
+  `tools/heat2ld.py`, found before the SDK's empty one. 28,096 bytes of
+  code leave SRAM: 27,272 bytes spare in the cloud now, against 648.
+- **Why these.** Neither runs in a timed demo (THERMO saw `M_Draw` once
+  in demo1, nothing else of either file in any run since M1), so every
+  function the benchmarks time stays in SRAM and GCC's numbers stay
+  comparable with the runs before. The alternatives: GCC through
+  THERMO's heat cut, which frees far more but moves hot code too (3 to
+  7% on CANNER, so a new baseline); or more `.bss` to PSRAM, a few KB at
+  most, soon gone again.
+- **A margin.** `make gcc`'s check now also fails with less than
+  `GCC_SRAM_MARGIN` (4 KB) spare, since the Mac's GCC writes about 2.8 KB
+  more code than the cloud's: a cloud `make test` catches a build the
+  Mac would refuse.
+- **Checked.** Built at the bafa5bf pin: `make test` (its test-builds
+  builds `make gcc`) and `make`; then GCC's build on SIMMER (the 20978ee
+  kernel, which takes the older .JAM, as the board did): its selftest
+  passes from PSRAM, and sim-bench's e1m1 gate holds (checksum
+  3500115068, state c8c17318, 164 entities). The Mac's build isn't
+  checked yet: by its 2.8 KB it should have about 24 KB spare.
