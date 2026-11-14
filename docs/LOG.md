@@ -946,3 +946,26 @@ anyway, and this one measures what has landed.
   to 48.2. So in instructions the new CANNER saves about 1%. Its
   scheduling change saves stalls, which instructions don't count, so the
   board can show more.
+- **On the board** (one boot of PectinOS 20978ee, two samples each,
+  alternating; the new kernel takes the old pin's .JAM): CANNER's build of
+  main e72c1be at bafa5bf ran demo1 at 32.8 and 32.9 ms a frame and e1m1
+  at 25.2 and 25.2; this PR's (a8ca1d2, at 20978ee) at 32.6 and 32.6, and
+  24.9 and 24.9: -0.8% and -1.2%, about what SIMMER's instructions said,
+  so the scheduling change bought little on the board either. The gate
+  held in all eight runs (checksum 3500115068, state c8c17318, 164
+  entities, nothing dropped) and the selftest passed (280 checks).
+- **GCC's build doesn't fit on the Mac**, at either pin, so it wasn't
+  timed: the Mac's GCC writes bigger code than the cloud's, and with the
+  16 KB stack SRAM must end by 366,848 bytes, where main's build ends at
+  369,296 (2,448 over) and this PR's at 370,320 (3,472 over: the SDK's
+  code grows 592 bytes, 1,024 once aligned). It last fitted at 3a1f77f,
+  with about 1.1 KB spare; main had already outgrown it before the pin
+  moved. In the cloud it fits at both pins (2,696 bytes spare before the
+  merge of main).
+- **THERMO on the new pin** (this PR's CANNER build, same boot), for the
+  next round of speed work: demo1 34.1 ms a frame under sampling, kernel
+  17.0%, then `vertex` (pbgl.c) 13.3%, `pb3d_vertex_of` 9.5%,
+  `outcode_of` 5.1%, `R_RecursiveWorldNode` 5.0%, `R_DrawSequentialPoly`
+  4.4%; e1m1 26.4 ms, kernel 27.6%, then `pb3d_vertex_of` 6.3%,
+  `AllocBlock` 5.9%, `vertex` 5.4%, `R_RecursiveWorldNode` 4.7%,
+  `R_DrawSequentialPoly` 4.4%.
