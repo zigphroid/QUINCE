@@ -916,7 +916,7 @@ frame, up to 128 K words, was in a 256 KB block from the PSRAM pool.
   gate held in all six runs (checksum 3500115068, state c8c17318, 164
   entities, nothing dropped), and the selftest passed (257 checks).
 
-## 2026-11-13: the pin moves to pectinos main (20978ee)
+## 2026-11-14: the pin moves to pectinos main (20978ee)
 
 `PECTIN_REV` goes from bafa5bf to 20978ee, pectinos main on 2026-11-12,
 164 commits on, to take CANNER's newer code (Jacob: "let's re pin on
@@ -933,13 +933,14 @@ anyway, and this one measures what has landed.
   map, test-builtins, test-float, test-builds), `make`, `sim-smoke` and
   `sim-bench` pass at the new pin; e1m1's gate is unchanged (checksum
   3500115068, state c8c17318, 164 entities).
-- **Sizes.** CANNER's `QUINCE.JAM` grows 793 bytes (338,473 to 339,266),
-  the inlining; its assembly 425 lines more, and the same 1,109 calls
+- **Sizes.** CANNER's `QUINCE.JAM` grows 793 bytes (341,445 to 342,238
+  with main's #51 merged; 338,473 to 339,266 before), the inlining; its assembly 425 lines more, and the same 1,109 calls
   into softfp (the calls from Quake's double code stay calls: #2107
   inlines softfp.c's own pieces into its functions). GCC's build is
   unchanged but for 120 bytes of the SDK's code, and its SRAM spare by
-  the Makefile's check is the same at both pins (2,696 bytes in the
-  cloud).
+  the Makefile's check is the same at both pins: 648 bytes in the cloud
+  (`__bss_end` at 366,200 against 366,848), after #51 took about 2 KB of
+  it (2,696 before).
 - **SIMMER at the board's pace** (`-icount`, so time is instructions),
   both pins' builds on the new pin's kernel: CANNER demo1 80.0 to 79.5 ms
   a frame (-0.6%), e1m1 57.0 to 56.4 (-1.1%); GCC 70.1 to 70.0 and 48.2
@@ -960,8 +961,8 @@ anyway, and this one measures what has landed.
   369,296 (2,448 over) and this PR's at 370,320 (3,472 over: the SDK's
   code grows 592 bytes, 1,024 once aligned). It last fitted at 3a1f77f,
   with about 1.1 KB spare; main had already outgrown it before the pin
-  moved. In the cloud it fits at both pins (2,696 bytes spare before the
-  merge of main).
+  moved (#57). In the cloud it still fits at both pins, with 648 bytes
+  spare.
 - **THERMO on the new pin** (this PR's CANNER build, same boot), for the
   next round of speed work: demo1 34.1 ms a frame under sampling, kernel
   17.0%, then `vertex` (pbgl.c) 13.3%, `pb3d_vertex_of` 9.5%,
