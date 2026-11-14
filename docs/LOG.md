@@ -1084,8 +1084,8 @@ vertex arrays. This entry is PR 5.
   the dump's fixed clock and all nine maps' 300 server frames match.
 - **On the board** (one boot of PectinOS 20978ee, two samples each,
   alternating, main aae0a51 against 18d4f80): CANNER demo1 32.7 to 30.7
-  ms a frame (-6.0%), e1m1 25.0 to 24.4 (-2.4%). demo1 transforms 3,056
-  vertices a frame instead of 2,560, and the layer drops 119 primitives a
+  ms a frame (-6.0%), e1m1 25.0 to 24.4 (-2.4%). demo1 transforms 2,560
+  vertices a frame instead of 3,056, and the layer drops 119 primitives a
   frame instead of 239. GCC's build fits (23,136 bytes of SRAM spare) and
   runs demo1 at 26.1 and e1m1 at 20.8. The gate held in every e1m1 run,
   nothing was dropped, and the selftest passed (354 checks). Main on its
