@@ -234,7 +234,7 @@ static void WaterPolys (msurface_t *fa, qboolean cull)
 
 	for (p=fa->polys ; p ; p=p->next)
 	{
-		if (cull && R_PolyOffScreen (p))
+		if (cull && R_PolyOffScreen (p, 15))
 		{
 			// QUINCE: M4 PR 5. GL's current texture coordinates
 			// outlive glEnd, so they are left as the last vertex

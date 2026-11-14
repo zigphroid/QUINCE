@@ -1265,17 +1265,23 @@ found off the screen, one vertex at a time, by the GL layer (docs/LOG.md
 2026-11-14). A polygon behind one of these planes has every vertex
 behind the GL layer's plane for it (the near plane is in front of the
 eye), so the layer would have dropped it whole: leaving it out sends PB
-the same words. Only for polygons drawn in world space: a brush model's
-are moved by its entity's matrix first.
+the same words. Only the planes clipflags names are tested, the ones its
+node isn't wholly in front of (R_RecursiveWorldNode); the world's water
+passes all four, 15. A polygon in front of all four is in front of the
+eye too, so with none left R_RecursiveWorldNode doesn't call it. Only
+for polygons drawn in world space: a brush model's are moved by its
+entity's matrix first.
 ================
 */
-qboolean R_PolyOffScreen (glpoly_t *p)
+qboolean R_PolyOffScreen (glpoly_t *p, int clipflags)
 {
 	int		i;
 	float	d;
 
 	for (i=0 ; i<4 ; i++)
 	{
+		if (!(clipflags & (1<<i)))
+			continue;
 		d = DotProduct (p->qcenter, frustum[i].normal) - frustum[i].dist;
 		if (d < -p->qradius * r_frustumlen[i])
 			return true;
@@ -1289,7 +1295,12 @@ qboolean R_PolyOffScreen (glpoly_t *p)
 R_RecursiveWorldNode
 ================
 */
-void R_RecursiveWorldNode (mnode_t *node)
+// QUINCE: clipflags, as the software renderer's (r_bsp.c), M4 PR 5: bit i
+// is set while the node may still be behind frustum plane i. A node wholly
+// in front of a plane takes that bit off for everything under it, so its
+// children's boxes and its surfaces' spheres aren't tested against it
+// again: inside the box, inside the plane.
+void R_RecursiveWorldNode (mnode_t *node, int clipflags)
 {
 	int			i, c, side, *pindex;
 	vec3_t		acceptpt, rejectpt;
@@ -1306,8 +1317,17 @@ void R_RecursiveWorldNode (mnode_t *node)
 
 	if (node->visframe != r_visframecount)
 		return;
-	if (R_CullBox (node->minmaxs, node->minmaxs+3))
-		return;
+	// QUINCE: R_CullBox's four tests, against the planes left (M4 PR 5)
+	for (i=0 ; i<4 ; i++)
+	{
+		if (!(clipflags & (1<<i)))
+			continue;
+		side = BoxOnPlaneSide (node->minmaxs, node->minmaxs+3, &frustum[i]);
+		if (side == 2)
+			return;
+		if (side == 1)
+			clipflags &= ~(1<<i);
+	}
 	
 // if a leaf node, draw stuff
 	if (node->contents < 0)
@@ -1360,7 +1380,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 		side = 1;
 
 // recurse down the children, front side first
-	R_RecursiveWorldNode (node->children[side]);
+	R_RecursiveWorldNode (node->children[side], clipflags);	// QUINCE: clipflags
 
 // draw stuff
 	c = node->numsurfaces;
@@ -1402,8 +1422,8 @@ void R_RecursiveWorldNode (mnode_t *node)
 					// QUINCE: a lightmapped surface off the screen
 					// keeps its lightmap's update, not its polygon
 					// (M4 PR 5)
-					R_SurfacePoly (surf, (surf->flags & SURF_UNDERWATER)
-						|| !R_PolyOffScreen (surf->polys));
+					R_SurfacePoly (surf, !clipflags || (surf->flags & SURF_UNDERWATER)
+						|| !R_PolyOffScreen (surf->polys, clipflags));
 
 			}
 		}
@@ -1411,7 +1431,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 	}
 
 // recurse down the back side
-	R_RecursiveWorldNode (node->children[!side]);
+	R_RecursiveWorldNode (node->children[!side], clipflags);	// QUINCE: clipflags
 }
 
 
@@ -1440,7 +1460,7 @@ void R_DrawWorld (void)
 	R_ClearSkyBox ();
 #endif
 
-	R_RecursiveWorldNode (cl.worldmodel->nodes);
+	R_RecursiveWorldNode (cl.worldmodel->nodes, 15);	// QUINCE: all four planes
 
 	DrawTextureChains ();
 

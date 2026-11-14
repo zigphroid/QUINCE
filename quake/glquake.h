@@ -162,7 +162,7 @@ extern	mplane_t	frustum[4];
 extern	float	r_frustumlen[4];	// QUINCE: each frustum normal's length (M4 PR 5)
 // QUINCE: world polygons off the screen left out (M4 PR 5, gl_rsurf.c)
 void GL_PolySphere (glpoly_t *p);
-qboolean R_PolyOffScreen (glpoly_t *p);
+qboolean R_PolyOffScreen (glpoly_t *p, int clipflags);
 void EmitWorldWaterPolys (msurface_t *fa);
 extern	int		c_brush_polys, c_alias_polys;
 
