@@ -977,7 +977,7 @@ static const char *join(char *out, const char *a, const char *b, const char *c, 
 // the inside one kept. The viewport is (x, row, w, h) in PB's rows, and
 // the projection makes GL's units its pixels; the triangles' other
 // corners are near (cx, cy). Each plane's own factor,
-// in outcode_of and the cut both, is the only one that passes all four.
+// in the outcode and the cut both, is the only one that passes all four.
 static void gl_guard_at(const char *where, int vx, int vrow, int vw, int vh, float cx, float cy)
 {
     static const float dir[4][2] = { { -1, 0 }, { 1, 0 }, { 0, -1 }, { 0, 1 } };
