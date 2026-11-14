@@ -5,7 +5,10 @@ Our own code. Runs build/quake_host's timedemo of demo1 and its server
 benchmark on e1m1, prints their lines, and checks what doesn't depend on
 the PC's speed: demo1's frame count, and the server benchmark's totals,
 which its fixed 0.1-second steps make the same every run, both what
-GLQuake asked the GL layer for and what the layer sent PB (M2). It writes
+GLQuake asked the GL layer for and what the layer sent PB (M2). demo1 is
+run again on QUINCE_PBDUMP's fixed clock, which makes its words, their
+checksum and its lightmap updates the same every run, and those are held
+too (M4 PR 5). It writes
 30 of e1m1's frames with QUINCE_PBDUMP and reads them back with
 tests/pbcheck.py, then draws them with the triangle engine's C model
 (tests/pbplay.c, docs/PB3D.md) and holds the pictures to their CRCs. It
@@ -34,6 +37,13 @@ SERVER_CHECKSUM = 3500115068   # of every word: the same commands, word for word
 # so CANNER's build on SIMMER must print these too (tools/simbench.py).
 SERVER_STATE = "c8c17318, bits 1de00068, 164 entities"
 DUMP_FRAMES = 30   # e1m1's frames written by QUINCE_PBDUMP and read back
+# demo1 on QUINCE_PBDUMP's fixed clock (tests/sys_host.c) sends the same
+# words every run, so it is held too: it is the run where M4 PR 5's cull
+# leaves out surfaces whose lightmaps change, and the checksum is of the
+# command words alone, not the lightmap uploads, so those are counted.
+DEMO1_FIXED_SENT = (14175331, 1957415, 1062745)   # words, verts, tris
+DEMO1_FIXED_CHECKSUM = 1849523503
+DEMO1_FIXED_LIGHTMAPS = (35, 74752)   # updates, bytes
 # ...drawn by the model: the CRC of every frame's picture's CRC in turn
 # (the load's frames, then the 30), and the last one's. A change to the
 # model's rules, the GL layer or Quake's drawing moves them: look at
@@ -132,6 +142,25 @@ def main():
     m = re.search(r"^timedemo: (\d+) frames", demo, re.M)
     if not m or int(m.group(1)) != DEMO1_FRAMES:
         print("FAIL: demo1 ran %s frames, want %d" % (m and m.group(1), DEMO1_FRAMES))
+        failed += 1
+    dump = os.path.join(os.path.dirname(os.path.abspath(exe)), "demo1.pb")
+    fixed = run(exe, base, "timedemo", "DEMO1", env=dict(os.environ, QUINCE_PBDUMP=dump))
+    m = re.search(r"^timedemo: sent totals (\d+) words (\d+) verts (\d+) tris", fixed, re.M)
+    got = m and tuple(int(g) for g in m.groups())
+    if got != DEMO1_FIXED_SENT:
+        print("FAIL: demo1 on the fixed clock sent PB %s (words, verts, tris), want %s"
+              % (got, DEMO1_FIXED_SENT))
+        failed += 1
+    m = re.search(r"^timedemo: checksum (\d+)", fixed, re.M)
+    if not m or int(m.group(1)) != DEMO1_FIXED_CHECKSUM:
+        print("FAIL: demo1's commands' checksum on the fixed clock is %s, want %d"
+              % (m and m.group(1), DEMO1_FIXED_CHECKSUM))
+        failed += 1
+    m = re.search(r"^timedemo: lightmap updates (\d+), (\d+) bytes", fixed, re.M)
+    got = m and tuple(int(g) for g in m.groups())
+    if got != DEMO1_FIXED_LIGHTMAPS:
+        print("FAIL: demo1 on the fixed clock sent %s lightmap (updates, bytes), want %s"
+              % (got, DEMO1_FIXED_LIGHTMAPS))
         failed += 1
     failed += check_load("demo1", demo)
     failed += check_dropped("demo1", demo)

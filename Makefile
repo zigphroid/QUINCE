@@ -274,8 +274,9 @@ $(BUILD)/quake_host: $(QHOST_OBJ)
 # library to build quake_host with (-m32: gcc-multilib on Debian and
 # Ubuntu, which the cloud session's start hook installs; Apple's clang
 # has none), so `make test` passes on a fresh machine either way.
-# Checked: demo1 is 969 frames, the server benchmark's fixed steps send
-# the same triangles and vertices every run, and every shareware map
+# Checked: demo1 is 969 frames, and on the dump's fixed clock sends the
+# same words and lightmap updates every run, the server benchmark's fixed
+# steps send the same triangles and vertices every run, and every shareware map
 # loads, and e1m1's dumped frames, drawn by the triangle engine's C model
 # (tests/pbplay.c), keep their pictures' CRCs. The times are printed, not
 # checked.

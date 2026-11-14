@@ -235,18 +235,7 @@ static void WaterPolys (msurface_t *fa, qboolean cull)
 	for (p=fa->polys ; p ; p=p->next)
 	{
 		if (cull && R_PolyOffScreen (p, 15))
-		{
-			// QUINCE: M4 PR 5. GL's current texture coordinates
-			// outlive glEnd, so they are left as the last vertex
-			// would leave them (R_SurfacePoly says why).
-			v = p->verts[p->numverts-1];
-			os = v[3];
-			ot = v[4];
-			s = os + turbsin[(int)((ot*0.125f+rt) * (float)TURBSCALE) & 255];
-			t = ot + turbsin[(int)((os*0.125f+rt) * (float)TURBSCALE) & 255];
-			glTexCoord2f (s * (1.0f/64), t * (1.0f/64));
-			continue;
-		}
+			continue;	// QUINCE: M4 PR 5
 		glBegin (GL_POLYGON);
 		for (i=0,v=p->verts[0] ; i<p->numverts ; i++, v+=VERTEXSIZE)
 		{

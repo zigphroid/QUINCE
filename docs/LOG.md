@@ -1051,17 +1051,33 @@ vertex arrays. This entry is PR 5.
   a lightmapped surface and `EmitWorldWaterPolys` for each piece of the
   world's water; a brush model's polygons are moved by its entity's
   matrix, so they aren't tested. All `QUINCE:` edits in `quake/`.
-- **The words stay the same.** A polygon behind one of those planes has
-  every vertex behind the layer's plane for it, so the layer would have
-  dropped it and sent nothing. An off-screen lightmapped surface still
-  updates and sends its lightmap and binds its textures
-  (`R_SurfacePoly` with draw false), and leaves GL's current texture
-  coordinates as its last vertex would. e1m1's gate holds (checksum
-  3500115068); GLQuake asks for 3,000 fewer triangles and 6,000 fewer
-  vertices over its 300 frames, so `SERVER_TOTALS` moves to (183776,
-  351952). The alternative, skipping an off-screen surface's lightmap
-  update too, is cheaper but changes the words, so the gate could no
-  longer show that the cull dropped nothing (Jacob: keep them).
+- **The words stay the same.** The layer's view volume lies inside
+  Quake's frustum, which is a little wider (at a fov of 90 its up and
+  down planes are 45 degrees off the view, the layer's fov_y/2, 36.9)
+  and has no near plane, so a polygon behind one of its planes is off
+  the screen, and the layer would have dropped it and sent nothing
+  whenever all its vertices are outside one of the layer's own planes. A
+  vertex behind the eye could break that: the polygon could cross two of
+  the layer's planes and be cut into a fan that draws nothing, which is
+  sent. No culled polygon of demo1's or the maps' was one (the words
+  match), nor any of five million tried at random by review 1. An
+  off-screen lightmapped surface still updates and sends its lightmap
+  and binds its textures (`R_SurfacePoly` with draw false). e1m1's gate
+  holds (checksum 3500115068); GLQuake asks for 3,000 fewer triangles
+  and 6,000 fewer vertices over its 300 frames, so `SERVER_TOTALS` moves
+  to (183776, 351952).
+- **The lightmaps' updates kept** (Jacob). They are texture updates,
+  which the checksum of the command words doesn't cover, and e1m1's
+  culled surfaces never need one, so `test-quake` now also holds demo1
+  on the dump's fixed clock: its words, their checksum (1849523503) and
+  its lightmap updates (35, 74,752 bytes). Skipping an off-screen
+  surface's update would send more, not less: the lightmap goes later
+  with more rows, 42 updates and 90,112 bytes (review 1's mutant).
+- **The texture coordinates.** The first version also left GL's current
+  texture coordinates as a skipped polygon's last vertex would. No run
+  changes without it (demo1 and every map), since each of GLQuake's
+  primitives sets them before every vertex, so review 1's fixes took it
+  out.
 - **A sphere, not a box** (Jacob): 16 bytes a polygon, and four dot
   products, against 24 bytes and `BoxOnPlaneSide`'s four. A sphere is
   looser for a long thin polygon; it only culls a little less.
