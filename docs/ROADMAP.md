@@ -136,8 +136,12 @@ transformed vertices were in primitives the layer then dropped whole.
   isn't tested against it again. PB's words are the same. On the board
   CANNER's demo1 is 32.7 to 30.7 ms a frame (-6%) and e1m1 25.0 to 24.4
   (-2.4%); GCC's 26.1 and 20.8.
-- PR 6: cheaper per-vertex code in the layer (`outcode_of` inlined,
-  `fix16`'s branches a clamp), the words the same.
+- PR 6: cheaper per-vertex code in the layer, the words the same: the
+  outcode worked out in `vertex` itself, the current texture coordinates
+  and colour one struct, the vertex count once a primitive, and `fix16`
+  and `fix_q` testing the range first. On the board CANNER's demo1 is
+  30.5 to 29.2 ms a frame (-4.4%) and e1m1 24.3 to 23.6 (-3.1%); GCC's
+  25.1 and 20.5.
 - PR 7: GL 1.1 vertex arrays (`glVertexPointer`, `glDrawArrays`) for the
   world's polygons, each sent in one pass.
 

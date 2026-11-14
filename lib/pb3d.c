@@ -18,14 +18,16 @@
  * M2's board run had this at 7% of the program (LOG 2026-11-12). */
 static uint16_t fix16(float v, float scale)
 {
-	if (!(v == v))
-		return 0;            /* NaN */
 	v *= scale;
-	if (v <= -32768.0f)
-		return 0x8000u;
+	/* In range first, as nearly every coordinate is: two compares, and
+	 * a NaN fails both, so it costs no test of its own here (M4 PR 6). */
+	if (v > -32768.0f && v < 32767.0f)
+		return (uint16_t)(int32_t)__builtin_roundf(v);
 	if (v >= 32767.0f)
 		return 0x7fffu;
-	return (uint16_t)(int32_t)__builtin_roundf(v);
+	if (v <= -32768.0f)
+		return 0x8000u;
+	return 0;            /* NaN */
 }
 
 int16_t pb3d_fix_12_4(float v)
@@ -44,8 +46,8 @@ int16_t pb3d_fix_10_6(float v)
 static uint32_t fix_q(float q)
 {
 	float v;
-	if (!(q == q) || q <= 0.0f)
-		return 0;
+	if (!(q > 0.0f))
+		return 0;            /* a NaN too, by the one compare (M4 PR 6) */
 	v = q * 2147483648.0f;
 	if (v >= 4294967040.0f)  /* the largest float under 2^32 */
 		return 0xffffffffu;

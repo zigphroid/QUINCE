@@ -240,8 +240,8 @@ static int32_t held(int32_t v, int32_t hi)
  * as PB's 12.4 positions reach, with 8 pixels to spare. There is no far
  * plane, where GL has one: what lies past GL's far distance is drawn
  * (Jacob, LOG 2026-11-12, #24). GLQuake's far plane, 4,096 units, holds
- * every shareware map, and a sixth test would cost outcode_of, the
- * layer's hottest function, time on every vertex. */
+ * every shareware map, and a sixth test would cost the outcode (in
+ * vertex, the layer's hottest function) time on every vertex. */
 #define PLANES      9
 #define P_NEAR      0x001u
 #define P_REJECT    0x01fu   /* near and the screen's edges */
@@ -307,10 +307,17 @@ static GLenum cull_which = GL_BACK, shade = GL_SMOOTH;
 static int depth_mask = 1;
 static float range_near = 0.0f, range_far = 1.0f;
 
+/* A vertex as it arrives: in clip space, with what goes with it. */
+struct vert {
+	float x, y, z, w;
+	float s, t, s2, t2;
+	uint8_t r, g, b, a;
+};
+
 /* The vertex being made: glTexCoord's, glColor's (kept with the
- * primitives below). */
-static float cur_s, cur_t, cur_s2, cur_t2;
-static uint8_t cur_r = 255, cur_g = 255, cur_b = 255, cur_a = 255;
+ * primitives below). One struct, so the code that reads or sets them
+ * takes one address, not one a field (M4 PR 6); x to w are unused. */
+static struct vert cur = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 255, 255, 255, 255};
 static uint32_t nprim;
 static int prim_open;
 
@@ -911,8 +918,8 @@ void pbgl_init(const struct pbgl_mem *m, int width, int height, const struct pbg
 	depth_mask = 1;
 	range_near = 0.0f;
 	range_far = 1.0f;
-	cur_s = cur_t = cur_s2 = cur_t2 = 0.0f;
-	cur_r = cur_g = cur_b = cur_a = 255;
+	cur.s = cur.t = cur.s2 = cur.t2 = 0.0f;
+	cur.r = cur.g = cur.b = cur.a = 255;
 	nprim = 0;
 	prim_open = 0;
 	npending = 0;
@@ -922,13 +929,6 @@ void pbgl_init(const struct pbgl_mem *m, int width, int height, const struct pbg
 }
 
 /* --- vertices --- */
-
-/* A vertex as it arrives: in clip space, with what goes with it. */
-struct vert {
-	float x, y, z, w;
-	float s, t, s2, t2;
-	uint8_t r, g, b, a;
-};
 
 /* The longest primitive kept whole. A longer one is sent in pieces: a
  * fan keeps its first and last vertex, a strip its last two (at an even
@@ -941,7 +941,9 @@ static struct vert prim[PRIM_MAX];
 static uint16_t outcode[PRIM_MAX];
 static GLenum prim_mode;
 
-/* Which planes a vertex is outside of. Every plane is one coordinate
+/* The outcode: which planes a vertex is outside of, worked out in vertex
+ * (below; it was outcode_of until M4 PR 6 wrote it out there, from the
+ * coordinates still in registers). Every plane is one coordinate
  * against w (remake_planes), so each test is a compare, or a multiply and
  * a compare for the guard band's, not a dot product of four: the same
  * sums as plane[i] . v for finite coordinates, since the terms left out
@@ -951,26 +953,9 @@ static GLenum prim_mode;
  * products at 17% of the program (LOG 2026-11-12). A vertex on the
  * screen is inside the guard band too, which is wider (guard_wider), so
  * the guard's four tests are made only off it. */
-static uint16_t outcode_of(const struct vert *v)
-{
-	float x = v->x, y = v->y, w = v->w;
-	uint16_t c = 0;
-	if (v->z + w < 0.0f) c |= 0x001u;
-	if (x + w < 0.0f) c |= 0x002u;
-	if (w - x < 0.0f) c |= 0x004u;
-	if (y + w < 0.0f) c |= 0x008u;
-	if (w - y < 0.0f) c |= 0x010u;
-	if ((c & 0x01eu) || !guard_wider) {
-		if (x + plane[5][3] * w < 0.0f) c |= 0x020u;
-		if (plane[6][3] * w - x < 0.0f) c |= 0x040u;
-		if (plane[7][3] * w - y < 0.0f) c |= 0x080u;
-		if (y + plane[8][3] * w < 0.0f) c |= 0x100u;
-	}
-	return c;
-}
 
 /* Whether a vertex is outside plane p alone: the clipper's test, as
- * outcode_of makes it for that plane. */
+ * vertex makes it for that plane. */
 static int outside(const struct vert *v, int p)
 {
 	float x = v->x, y = v->y, w = v->w;
@@ -1294,16 +1279,24 @@ void glEnd(void)
 	if (prim_mode != GL_QUADS)
 		flush();
 	pbgl_total.prims++;
+	pbgl_total.verts += prim_verts_total;   /* vertex's count, once a primitive */
 	pbgl_total.tris += gl_triangles(prim_mode, prim_verts_total);
 	prim_verts_total = 0;
 	nprim = 0;
 	prim_open = 0;
 }
 
+/* Every vertex GLQuake sends comes through here, so it is kept short
+ * (M4 PR 6): the clip-space coordinates stay in registers for the
+ * outcode, the old outcode_of's tests written out (CANNER didn't inline
+ * it), and the vertex count goes to pbgl_total once a primitive, in
+ * glEnd. */
 static void vertex(float x, float y, float z)
 {
 	const float *m;
 	struct vert *v;
+	float cx, cy, cz, cw;
+	uint32_t c = 0;
 	count_call();
 	if (!prim_open)
 		return;
@@ -1311,16 +1304,27 @@ static void vertex(float x, float y, float z)
 		remake_mvp();
 	m = mvp.m;
 	v = &prim[nprim];
-	v->x = m[0] * x + m[4] * y + m[8] * z + m[12];
-	v->y = m[1] * x + m[5] * y + m[9] * z + m[13];
-	v->z = m[2] * x + m[6] * y + m[10] * z + m[14];
-	v->w = m[3] * x + m[7] * y + m[11] * z + m[15];
-	v->s = cur_s; v->t = cur_t; v->s2 = cur_s2; v->t2 = cur_t2;
-	v->r = cur_r; v->g = cur_g; v->b = cur_b; v->a = cur_a;
-	outcode[nprim] = outcode_of(v);
+	cx = m[0] * x + m[4] * y + m[8] * z + m[12];
+	cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+	cz = m[2] * x + m[6] * y + m[10] * z + m[14];
+	cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+	v->x = cx; v->y = cy; v->z = cz; v->w = cw;
+	v->s = cur.s; v->t = cur.t; v->s2 = cur.s2; v->t2 = cur.t2;
+	v->r = cur.r; v->g = cur.g; v->b = cur.b; v->a = cur.a;
+	if (cz + cw < 0.0f) c |= 0x001u;
+	if (cx + cw < 0.0f) c |= 0x002u;
+	if (cw - cx < 0.0f) c |= 0x004u;
+	if (cy + cw < 0.0f) c |= 0x008u;
+	if (cw - cy < 0.0f) c |= 0x010u;
+	if ((c & 0x01eu) || !guard_wider) {
+		if (cx + plane[5][3] * cw < 0.0f) c |= 0x020u;
+		if (plane[6][3] * cw - cx < 0.0f) c |= 0x040u;
+		if (plane[7][3] * cw - cy < 0.0f) c |= 0x080u;
+		if (cy + plane[8][3] * cw < 0.0f) c |= 0x100u;
+	}
+	outcode[nprim] = (uint16_t)c;
 	nprim++;
 	prim_verts_total++;
-	pbgl_total.verts++;
 	if (prim_mode == GL_QUADS) {
 		if (nprim == 4) {   /* each quad is a fan of its own */
 			flush();
@@ -1347,18 +1351,18 @@ void glVertex2f(GLfloat x, GLfloat y) { vertex(x, y, 0.0f); }
 void glVertex3f(GLfloat x, GLfloat y, GLfloat z) { vertex(x, y, z); }
 void glVertex3fv(const GLfloat *v) { vertex(v[0], v[1], v[2]); }
 
-void glTexCoord2f(GLfloat s, GLfloat t) { count_call(); cur_s = s; cur_t = t; }
-void glTexCoord2fv(const GLfloat *v) { count_call(); cur_s = v[0]; cur_t = v[1]; }
+void glTexCoord2f(GLfloat s, GLfloat t) { count_call(); cur.s = s; cur.t = t; }
+void glTexCoord2fv(const GLfloat *v) { count_call(); cur.s = v[0]; cur.t = v[1]; }
 
 void pbgl_mtexcoord(unsigned int which, float s, float t)
 {
 	count_call();
 	if (which == PBGL_TEXTURE1) {
-		cur_s2 = s;
-		cur_t2 = t;
+		cur.s2 = s;
+		cur.t2 = t;
 	} else {
-		cur_s = s;
-		cur_t = t;
+		cur.s = s;
+		cur.t = t;
 	}
 }
 
@@ -1374,31 +1378,31 @@ static uint8_t byte_of(float c)
 void glColor3f(GLfloat r, GLfloat g, GLfloat b)
 {
 	count_call();
-	cur_r = byte_of(r); cur_g = byte_of(g); cur_b = byte_of(b); cur_a = 255;
+	cur.r = byte_of(r); cur.g = byte_of(g); cur.b = byte_of(b); cur.a = 255;
 }
 
 void glColor4f(GLfloat r, GLfloat g, GLfloat b, GLfloat a)
 {
 	count_call();
-	cur_r = byte_of(r); cur_g = byte_of(g); cur_b = byte_of(b); cur_a = byte_of(a);
+	cur.r = byte_of(r); cur.g = byte_of(g); cur.b = byte_of(b); cur.a = byte_of(a);
 }
 
 void glColor4fv(const GLfloat *v)
 {
 	count_call();
-	cur_r = byte_of(v[0]); cur_g = byte_of(v[1]); cur_b = byte_of(v[2]); cur_a = byte_of(v[3]);
+	cur.r = byte_of(v[0]); cur.g = byte_of(v[1]); cur.b = byte_of(v[2]); cur.a = byte_of(v[3]);
 }
 
 void glColor3ubv(const unsigned char *v)
 {
 	count_call();
-	cur_r = v[0]; cur_g = v[1]; cur_b = v[2]; cur_a = 255;
+	cur.r = v[0]; cur.g = v[1]; cur.b = v[2]; cur.a = 255;
 }
 
 void glColor4ubv(const unsigned char *v)
 {
 	count_call();
-	cur_r = v[0]; cur_g = v[1]; cur_b = v[2]; cur_a = v[3];
+	cur.r = v[0]; cur.g = v[1]; cur.b = v[2]; cur.a = v[3];
 }
 
 /* --- calls that change nothing PB is sent --- */
