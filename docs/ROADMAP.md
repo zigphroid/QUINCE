@@ -142,6 +142,11 @@ transformed vertices were in primitives the layer then dropped whole.
   and `fix_q` testing the range first. On the board CANNER's demo1 is
   30.5 to 29.2 ms a frame (-4.4%) and e1m1 24.3 to 23.6 (-3.1%); GCC's
   25.1 and 20.5.
+- PR 6b: room in the program area. With PR 7 CANNER's .JAM no longer
+  loaded (`Headspace exceeded.`): main had about 1.8 KB left. Nine cold
+  statics (13.5 KB: the file table, message and format strings, the key
+  tables, `com_token`, `mod_novis`) go to PSRAM, leaving about 15 KB. On the board the frame
+  times are main's (CANNER 29.2 and 23.6 ms, GCC 25.1 and 20.5).
 - PR 7: GL 1.1 vertex arrays (`glVertexPointer`, `glDrawArrays`) for the
   world's polygons, each sent in one pass.
 

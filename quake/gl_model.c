@@ -32,7 +32,7 @@ void Mod_LoadBrushModel (model_t *mod, void *buffer);
 void Mod_LoadAliasModel (model_t *mod, void *buffer);
 model_t *Mod_LoadModel (model_t *mod, qboolean crash);
 
-byte	mod_novis[MAX_MAP_LEAFS/8];
+QPSRAM byte	mod_novis[MAX_MAP_LEAFS/8];	// QUINCE: in PSRAM, cold (lib/qproto.h; room for M4 PR 7)
 
 // QUINCE: 256, not 512, as id's own model.c: each brush model's parts take a
 // slot too (e1m3 needs more than 128), and each is a model_t in PSRAM

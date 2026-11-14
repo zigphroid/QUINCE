@@ -100,7 +100,7 @@ void Sys_mkdir(char *path)
 
 void Sys_Error(char *fmt, ...)
 {
-	static char text[1024];
+	static __attribute__((section(".pbss"))) char text[1024];   /* PSRAM: cold (room for M4 PR 7) */
 	va_list ap;
 	va_start(ap, fmt);
 	vsnprintf(text, sizeof text, fmt, ap);

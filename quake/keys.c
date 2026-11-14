@@ -39,10 +39,10 @@ keydest_t	key_dest;
 
 int		key_count;			// incremented every key event
 
-char	*keybindings[256];
+QPSRAM char	*keybindings[256];	// QUINCE: in PSRAM, cold (lib/qproto.h; room for M4 PR 7)
 qboolean	consolekeys[256];	// if true, can't be rebound while in console
 qboolean	menubound[256];	// if true, can't be rebound while in menu
-int		keyshift[256];		// key to map to if shift held down in console
+QPSRAM int		keyshift[256];		// key to map to if shift held down in console; QUINCE: in PSRAM, cold (lib/qproto.h; room for M4 PR 7)
 int		key_repeats[256];	// if > 1, it is autorepeating
 qboolean	keydown[256];
 
