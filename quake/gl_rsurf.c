@@ -411,7 +411,25 @@ Systems that have fast state and texture changes can
 just do everything as it passes with no need to sort
 ================
 */
+// QUINCE: R_DrawSequentialPoly with what it draws made optional (M4 PR
+// 5): with draw false, a lightmapped surface's lightmap is still brought
+// up to date and sent, and its textures bound, but its polygon isn't
+// sent. R_RecursiveWorldNode passes false for one off the screen, so the
+// lightmap updates PB gets are the same as before. They are texture
+// updates, which the command words' checksum doesn't cover, so
+// tests/test_quake.py counts demo1's. Leaving an off-screen surface's
+// update out too would send more, not less: a lightmap changed then goes
+// later, with more rows (demo1, 35 updates and 74,752 bytes to 42 and
+// 90,112, docs/LOG.md 2026-11-14). The other kinds of surface (sky,
+// water, underwater) are always drawn.
+static void R_SurfacePoly (msurface_t *s, qboolean draw);
+
 void R_DrawSequentialPoly (msurface_t *s)
+{
+	R_SurfacePoly (s, true);
+}
+
+static void R_SurfacePoly (msurface_t *s, qboolean draw)
 {
 	glpoly_t	*p;
 	float		*v;
@@ -454,6 +472,8 @@ void R_DrawSequentialPoly (msurface_t *s)
 				theRect->w = 0;
 			}
 			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_BLEND);
+			if (!draw)
+				return;		// QUINCE: off the screen (M4 PR 5)
 			glBegin(GL_POLYGON);
 			v = p->verts[0];
 			for (i=0 ; i<p->numverts ; i++, v+= VERTEXSIZE)
@@ -469,6 +489,12 @@ void R_DrawSequentialPoly (msurface_t *s)
 
 			t = R_TextureAnimation (s->texinfo->texture);
 			GL_Bind (t->gl_texturenum);
+			if (!draw)		// QUINCE: off the screen (M4 PR 5)
+			{
+				// the binds as the two polygons would leave them
+				GL_Bind (lightmap_textures + s->lightmaptexturenum);
+				return;
+			}
 			glBegin (GL_POLYGON);
 			v = p->verts[0];
 			for (i=0 ; i<p->numverts ; i++, v+= VERTEXSIZE)
@@ -982,7 +1008,7 @@ void R_DrawWaterSurfaces (void)
 
 		for ( s = waterchain ; s ; s=s->texturechain) {
 			GL_Bind (s->texinfo->texture->gl_texturenum);
-			EmitWaterPolys (s);
+			EmitWorldWaterPolys (s);	// QUINCE: M4 PR 5
 		}
 		
 		waterchain = NULL;
@@ -1004,7 +1030,7 @@ void R_DrawWaterSurfaces (void)
 			GL_Bind (t->gl_texturenum);
 
 			for ( ; s ; s=s->texturechain)
-				EmitWaterPolys (s);
+				EmitWorldWaterPolys (s);	// QUINCE: M4 PR 5
 			
 			t->texturechain = NULL;
 		}
@@ -1185,10 +1211,96 @@ e->angles[0] = -e->angles[0];	// stupid quake bug
 
 /*
 ================
+GL_PolySphere
+
+QUINCE (M4 PR 5): a polygon's bounding sphere, for R_PolyOffScreen:
+centred on its box, as wide as its farthest vertex, and a unit wider,
+so the test's rounding can't leave a vertex outside it. Made before
+BuildSurfaceDisplayList takes the co-linear points out, so it holds
+them too: a sphere a little loose only culls a little less.
+================
+*/
+void GL_PolySphere (glpoly_t *p)
+{
+	vec3_t	mins, maxs, d;
+	float	r2 = 0, d2;
+	int		i, j;
+
+	VectorCopy (p->verts[0], mins);
+	VectorCopy (p->verts[0], maxs);
+	for (i=1 ; i<p->numverts ; i++)
+		for (j=0 ; j<3 ; j++)
+		{
+			if (p->verts[i][j] < mins[j]) mins[j] = p->verts[i][j];
+			if (p->verts[i][j] > maxs[j]) maxs[j] = p->verts[i][j];
+		}
+	for (j=0 ; j<3 ; j++)
+		p->qcenter[j] = 0.5f * (mins[j] + maxs[j]);
+	for (i=0 ; i<p->numverts ; i++)
+	{
+		VectorSubtract (p->verts[i], p->qcenter, d);
+		d2 = DotProduct (d, d);
+		if (d2 > r2)
+			r2 = d2;
+	}
+	p->qradius = sqrtf (r2) + 1.0f;
+}
+
+/*
+================
+R_PolyOffScreen
+
+QUINCE (M4 PR 5): whether a world polygon is wholly off the screen: its
+sphere behind one of the frustum's four planes, or behind the eye.
+GLQuake culls only whole nodes (R_CullBox), so every surface of a node
+that shows was sent, and on demo1 three in five polygons were then
+found off the screen, one vertex at a time, by the GL layer (docs/LOG.md
+2026-11-14). The layer's view volume lies inside Quake's frustum, which
+is a little wider (at a fov of 90, frustum[2] and [3] are 45 degrees off
+the view and the layer's planes fov_y/2, 36.9) and has no near plane, so
+a polygon behind one of these planes is off the screen. The layer would
+have dropped it whole, and leaving it out sends PB the same words,
+whenever its vertices are all outside one of the layer's own planes. A
+vertex behind the eye could break that: the polygon could then cross
+two of the layer's planes and be cut into a fan that draws nothing,
+which is sent. No culled polygon of demo1's or the shareware maps' was
+one (the words match), nor any of five million tried at random (review
+1 of #60). Only the planes clipflags names are tested, the ones its
+node isn't wholly in front of (R_RecursiveWorldNode); the world's water
+passes all four, 15. A polygon in front of all four is in front of the
+eye too, so with none left R_RecursiveWorldNode doesn't call it. Only
+for polygons drawn in world space: a brush model's are moved by its
+entity's matrix first.
+================
+*/
+qboolean R_PolyOffScreen (glpoly_t *p, int clipflags)
+{
+	int		i;
+	float	d;
+
+	for (i=0 ; i<4 ; i++)
+	{
+		if (!(clipflags & (1<<i)))
+			continue;
+		d = DotProduct (p->qcenter, frustum[i].normal) - frustum[i].dist;
+		if (d < -p->qradius * r_frustumlen[i])
+			return true;
+	}
+	d = DotProduct (p->qcenter, vpn) - DotProduct (r_origin, vpn);
+	return d < -p->qradius;
+}
+
+/*
+================
 R_RecursiveWorldNode
 ================
 */
-void R_RecursiveWorldNode (mnode_t *node)
+// QUINCE: clipflags, as the software renderer's (r_bsp.c), M4 PR 5: bit i
+// is set while the node may still be behind frustum plane i. A node wholly
+// in front of a plane takes that bit off for everything under it, so its
+// children's boxes and its surfaces' spheres aren't tested against it
+// again: inside the box, inside the plane.
+void R_RecursiveWorldNode (mnode_t *node, int clipflags)
 {
 	int			i, c, side, *pindex;
 	vec3_t		acceptpt, rejectpt;
@@ -1205,8 +1317,17 @@ void R_RecursiveWorldNode (mnode_t *node)
 
 	if (node->visframe != r_visframecount)
 		return;
-	if (R_CullBox (node->minmaxs, node->minmaxs+3))
-		return;
+	// QUINCE: R_CullBox's four tests, against the planes left (M4 PR 5)
+	for (i=0 ; i<4 ; i++)
+	{
+		if (!(clipflags & (1<<i)))
+			continue;
+		side = BoxOnPlaneSide (node->minmaxs, node->minmaxs+3, &frustum[i]);
+		if (side == 2)
+			return;
+		if (side == 1)
+			clipflags &= ~(1<<i);
+	}
 	
 // if a leaf node, draw stuff
 	if (node->contents < 0)
@@ -1259,7 +1380,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 		side = 1;
 
 // recurse down the children, front side first
-	R_RecursiveWorldNode (node->children[side]);
+	R_RecursiveWorldNode (node->children[side], clipflags);	// QUINCE: clipflags
 
 // draw stuff
 	c = node->numsurfaces;
@@ -1298,7 +1419,11 @@ void R_RecursiveWorldNode (mnode_t *node)
 					surf->texturechain = waterchain;
 					waterchain = surf;
 				} else
-					R_DrawSequentialPoly (surf);
+					// QUINCE: a lightmapped surface off the screen
+					// keeps its lightmap's update, not its polygon
+					// (M4 PR 5)
+					R_SurfacePoly (surf, !clipflags || (surf->flags & SURF_UNDERWATER)
+						|| !R_PolyOffScreen (surf->polys, clipflags));
 
 			}
 		}
@@ -1306,7 +1431,7 @@ void R_RecursiveWorldNode (mnode_t *node)
 	}
 
 // recurse down the back side
-	R_RecursiveWorldNode (node->children[!side]);
+	R_RecursiveWorldNode (node->children[!side], clipflags);	// QUINCE: clipflags
 }
 
 
@@ -1335,7 +1460,7 @@ void R_DrawWorld (void)
 	R_ClearSkyBox ();
 #endif
 
-	R_RecursiveWorldNode (cl.worldmodel->nodes);
+	R_RecursiveWorldNode (cl.worldmodel->nodes, 15);	// QUINCE: all four planes
 
 	DrawTextureChains ();
 
@@ -1525,6 +1650,8 @@ void BuildSurfaceDisplayList (msurface_t *fa)
 		poly->verts[i][5] = s;
 		poly->verts[i][6] = t;
 	}
+
+	GL_PolySphere (poly);	// QUINCE: M4 PR 5, before co-linear points go
 
 	//
 	// remove co-linear points - Ed

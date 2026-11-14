@@ -118,6 +118,12 @@ typedef struct glpoly_s
 	struct	glpoly_s	*chain;
 	int		numverts;
 	int		flags;			// for SURF_UNDERWATER
+	// QUINCE: a sphere round the polygon, made at load (GL_PolySphere),
+	// so a world polygon off the screen can be left out of the GL layer
+	// (R_PolyOffScreen, M4 PR 5). Before verts, which runs on past the
+	// struct's end.
+	vec3_t	qcenter;
+	float	qradius;
 	float	verts[4][VERTEXSIZE];	// variable sized (xyz s1t1 s2t2)
 } glpoly_t;
 

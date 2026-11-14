@@ -23,7 +23,7 @@ MAPS = ["START"] + ["E1M%d" % i for i in range(1, 9)]
 # exactly. demo1's totals follow the clock (the
 # client's interpolation), so only its frame count is checked.
 SERVER_FRAMES = 300
-SERVER_TOTALS = (186776, 357952)   # triangles, vertices GLQuake asked for
+SERVER_TOTALS = (183776, 351952)   # triangles, vertices GLQuake asked for (fewer since M4 PR 5)
 SERVER_SENT = (2837701, 330356, 162178)   # words, vertices, triangles sent PB
 SERVER_CHECKSUM = 3500115068   # of every word: the same commands, word for word
 # Where those frames leave the game, as the PC's (tests/test_quake.py):

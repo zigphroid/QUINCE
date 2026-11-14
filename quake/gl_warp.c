@@ -141,6 +141,7 @@ void SubdividePolygon (int numverts, float *verts)
 		poly->verts[i][3] = s;
 		poly->verts[i][4] = t;
 	}
+	GL_PolySphere (poly);	// QUINCE: M4 PR 5
 }
 
 /*
@@ -200,7 +201,22 @@ EmitWaterPolys
 Does a water warp on the pre-fragmented glpoly_t chain
 =============
 */
+// QUINCE: EmitWaterPolys with a cull (M4 PR 5): the world's water,
+// drawn under the world's matrix, leaves out a piece off the screen
+// (R_PolyOffScreen). On demo1 four in five of the pieces were.
+static void WaterPolys (msurface_t *fa, qboolean cull);
+
 void EmitWaterPolys (msurface_t *fa)
+{
+	WaterPolys (fa, false);
+}
+
+void EmitWorldWaterPolys (msurface_t *fa)
+{
+	WaterPolys (fa, true);
+}
+
+static void WaterPolys (msurface_t *fa, qboolean cull)
 {
 	glpoly_t	*p;
 	float		*v;
@@ -218,6 +234,8 @@ void EmitWaterPolys (msurface_t *fa)
 
 	for (p=fa->polys ; p ; p=p->next)
 	{
+		if (cull && R_PolyOffScreen (p, 15))
+			continue;	// QUINCE: M4 PR 5
 		glBegin (GL_POLYGON);
 		for (i=0,v=p->verts[0] ; i<p->numverts ; i++, v+=VERTEXSIZE)
 		{
