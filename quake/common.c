@@ -46,7 +46,7 @@ void COM_InitFilesystem (void);
 #define PAK0_COUNT              339
 #define PAK0_CRC                32981
 
-char	com_token[1024];
+QPSRAM char	com_token[1024];	// QUINCE: in PSRAM, cold (lib/qproto.h; room for M4 PR 7)
 int		com_argc;
 char	**com_argv;
 
@@ -696,7 +696,7 @@ float MSG_ReadFloat (void)
 
 char *MSG_ReadString (void)
 {
-	static char     string[2048];
+	static QPSRAM char     string[2048];	// QUINCE: in PSRAM, cold (lib/qproto.h; room for M4 PR 7)
 	int             l,c;
 	
 	l = 0;
@@ -1172,7 +1172,7 @@ FIXME: make this buffer size safe someday
 char    *va(char *format, ...)
 {
 	va_list         argptr;
-	static char             string[1024];
+	static QPSRAM char             string[1024];	// QUINCE: in PSRAM, cold (lib/qproto.h; room for M4 PR 7)
 	
 	va_start (argptr, format);
 	vsprintf (string, format,argptr);

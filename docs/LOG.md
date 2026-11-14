@@ -1149,3 +1149,33 @@ milliseconds. Nothing PB is sent changes.
   at 25.1 and e1m1 at 20.5, with 24,144 bytes of SRAM spare. The gate
   held in every e1m1 run, nothing was dropped, and the selftest passed
   (354 checks).
+
+## 2026-11-14: room in the program area before M4 PR 7
+
+M4 PR 7 (vertex arrays, about 3 KB of code and selftest) made CANNER's
+.JAM fail to load on SIMMER: `Headspace exceeded.` The plain build puts
+code, data and .bss in the 384 KB program area beside the 16 KB stack,
+and main (76e5d9a) used 363,592 bytes of it before the stack, about 3 KB
+under the limit (inferred from the .JAM's header and the loader's
+layout, not measured on the board). PR 7 gains 1-2% at SIMMER's pace, so
+Jacob was asked: park it, make room first, or ship it with a smaller
+selftest. Jacob chose making room first.
+
+- **Nine cold statics to PSRAM** (`.pbss`, as `lib/qproto.h`'s QPSRAM),
+  13,504 bytes: `quince/qlibc.c`'s file table with its 512-byte buffers
+  (4,288), `MSG_ReadString`'s 2 KB string, `va`'s, `Sys_Error`'s and
+  `scr_centerstring`'s 1 KB, `com_token`, `mod_novis`, and the key
+  tables `keybindings` and `keyshift`. Each is used at load, by the
+  console, or a few bytes a frame (a demo's reads), never in the
+  frame's inner loops. .bss is 81,980 to 68,476 bytes; about 16.7 KB is
+  left. The PSRAM .pbss comes from the kernel's 1 MB heap, which held
+  599 KB of it before.
+- **Not moved:** `prim[]` (9 KB) and the layer's words window (8 KB),
+  written every vertex; QuakeC's `localstack` (8 KB), used on every
+  QuakeC call; `d_8to24table`, read for every particle; `cl` and
+  `cls`.
+- **Alternatives:** `make heat`'s cut (the cold code to PSRAM by the
+  heat file) frees far more, but its build ran 3-7% slower in M1 and
+  again at M4 PR 3, uninvestigated; or a smaller stack, against the
+  16 KB rule.
+

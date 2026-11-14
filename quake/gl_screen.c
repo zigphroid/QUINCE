@@ -125,7 +125,7 @@ CENTER PRINTING
 ===============================================================================
 */
 
-char		scr_centerstring[1024];
+QPSRAM char		scr_centerstring[1024];	// QUINCE: in PSRAM, cold (lib/qproto.h; room for M4 PR 7)
 float		scr_centertime_start;	// for slow victory printing
 float		scr_centertime_off;
 int			scr_center_lines;
