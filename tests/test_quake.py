@@ -23,7 +23,10 @@ import sys
 DEMO1_FRAMES = 969
 # 300 server frames of e1m1 from the start, this build's renderer:
 SERVER_FRAMES = 300
-SERVER_TOTALS = (186776, 357952)   # triangles, vertices GLQuake asked for
+# GLQuake asked for these triangles and vertices; 3,000 and 6,000 fewer
+# since M4 PR 5 left the world's polygons off the screen out (the words
+# sent are the same).
+SERVER_TOTALS = (183776, 351952)   # triangles, vertices
 SERVER_SENT = (2837701, 330356, 162178)   # words, vertices, triangles sent PB
 SERVER_CHECKSUM = 3500115068   # of every word: the same commands, word for word
 # ...and where those frames leave the game (lib/qbench.c's print_state).

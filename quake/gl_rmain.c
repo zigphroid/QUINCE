@@ -32,6 +32,10 @@ int			r_visframecount;	// bumped when going to a new PVS
 int			r_framecount;		// used for dlight push checking
 
 mplane_t	frustum[4];
+// QUINCE: the length of each frustum normal, for R_RecursiveWorldNode's
+// sphere test (M4 PR 5): at a fov of 90 the normals are vpn plus or minus
+// vright or vup, sqrt(2) long, and a sphere's radius is in world units.
+float		r_frustumlen[4];
 
 int			c_brush_polys, c_alias_polys;
 
@@ -803,6 +807,7 @@ void R_SetFrustum (void)
 		frustum[i].type = PLANE_ANYZ;
 		frustum[i].dist = DotProduct (r_origin, frustum[i].normal);
 		frustum[i].signbits = SignbitsForPlane (&frustum[i]);
+		r_frustumlen[i] = sqrtf (DotProduct (frustum[i].normal, frustum[i].normal));	// QUINCE: M4 PR 5
 	}
 }
 

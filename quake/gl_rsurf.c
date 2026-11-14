@@ -411,7 +411,20 @@ Systems that have fast state and texture changes can
 just do everything as it passes with no need to sort
 ================
 */
+// QUINCE: R_DrawSequentialPoly with what it draws made optional (M4 PR
+// 5): with draw false, a lightmapped surface's lightmap is still brought
+// up to date and sent, and its textures bound, but its polygon isn't
+// sent. R_RecursiveWorldNode passes false for one off the screen, so the
+// lightmap updates, and so PB's words, are the same as before. The other
+// kinds of surface (sky, water, underwater) are always drawn.
+static void R_SurfacePoly (msurface_t *s, qboolean draw);
+
 void R_DrawSequentialPoly (msurface_t *s)
+{
+	R_SurfacePoly (s, true);
+}
+
+static void R_SurfacePoly (msurface_t *s, qboolean draw)
 {
 	glpoly_t	*p;
 	float		*v;
@@ -454,6 +467,17 @@ void R_DrawSequentialPoly (msurface_t *s)
 				theRect->w = 0;
 			}
 			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_BLEND);
+			if (!draw)
+			{
+				// QUINCE: off the screen (M4 PR 5). GL's current
+				// texture coordinates outlive glEnd, and a later
+				// primitive that doesn't set them takes them, so
+				// they are left as the last vertex would leave them.
+				v = p->verts[p->numverts-1];
+				qglMTexCoord2fSGIS (TEXTURE0_SGIS, v[3], v[4]);
+				qglMTexCoord2fSGIS (TEXTURE1_SGIS, v[5], v[6]);
+				return;
+			}
 			glBegin(GL_POLYGON);
 			v = p->verts[0];
 			for (i=0 ; i<p->numverts ; i++, v+= VERTEXSIZE)
@@ -469,6 +493,15 @@ void R_DrawSequentialPoly (msurface_t *s)
 
 			t = R_TextureAnimation (s->texinfo->texture);
 			GL_Bind (t->gl_texturenum);
+			if (!draw)		// QUINCE: off the screen (M4 PR 5)
+			{
+				// the binds and the current texture coordinates as
+				// the two polygons would leave them (as above)
+				GL_Bind (lightmap_textures + s->lightmaptexturenum);
+				v = p->verts[p->numverts-1];
+				glTexCoord2f (v[5], v[6]);
+				return;
+			}
 			glBegin (GL_POLYGON);
 			v = p->verts[0];
 			for (i=0 ; i<p->numverts ; i++, v+= VERTEXSIZE)
@@ -982,7 +1015,7 @@ void R_DrawWaterSurfaces (void)
 
 		for ( s = waterchain ; s ; s=s->texturechain) {
 			GL_Bind (s->texinfo->texture->gl_texturenum);
-			EmitWaterPolys (s);
+			EmitWorldWaterPolys (s);	// QUINCE: M4 PR 5
 		}
 		
 		waterchain = NULL;
@@ -1004,7 +1037,7 @@ void R_DrawWaterSurfaces (void)
 			GL_Bind (t->gl_texturenum);
 
 			for ( ; s ; s=s->texturechain)
-				EmitWaterPolys (s);
+				EmitWorldWaterPolys (s);	// QUINCE: M4 PR 5
 			
 			t->texturechain = NULL;
 		}
@@ -1185,6 +1218,74 @@ e->angles[0] = -e->angles[0];	// stupid quake bug
 
 /*
 ================
+GL_PolySphere
+
+QUINCE (M4 PR 5): a polygon's bounding sphere, for R_PolyOffScreen:
+centred on its box, as wide as its farthest vertex, and a unit wider,
+so the test's rounding can't leave a vertex outside it. Made before
+BuildSurfaceDisplayList takes the co-linear points out, so it holds
+them too: a sphere a little loose only culls a little less.
+================
+*/
+void GL_PolySphere (glpoly_t *p)
+{
+	vec3_t	mins, maxs, d;
+	float	r2 = 0, d2;
+	int		i, j;
+
+	VectorCopy (p->verts[0], mins);
+	VectorCopy (p->verts[0], maxs);
+	for (i=1 ; i<p->numverts ; i++)
+		for (j=0 ; j<3 ; j++)
+		{
+			if (p->verts[i][j] < mins[j]) mins[j] = p->verts[i][j];
+			if (p->verts[i][j] > maxs[j]) maxs[j] = p->verts[i][j];
+		}
+	for (j=0 ; j<3 ; j++)
+		p->qcenter[j] = 0.5f * (mins[j] + maxs[j]);
+	for (i=0 ; i<p->numverts ; i++)
+	{
+		VectorSubtract (p->verts[i], p->qcenter, d);
+		d2 = DotProduct (d, d);
+		if (d2 > r2)
+			r2 = d2;
+	}
+	p->qradius = sqrtf (r2) + 1.0f;
+}
+
+/*
+================
+R_PolyOffScreen
+
+QUINCE (M4 PR 5): whether a world polygon is wholly off the screen: its
+sphere behind one of the frustum's four planes, or behind the eye.
+GLQuake culls only whole nodes (R_CullBox), so every surface of a node
+that shows was sent, and on demo1 three in five polygons were then
+found off the screen, one vertex at a time, by the GL layer (docs/LOG.md
+2026-11-14). A polygon behind one of these planes has every vertex
+behind the GL layer's plane for it (the near plane is in front of the
+eye), so the layer would have dropped it whole: leaving it out sends PB
+the same words. Only for polygons drawn in world space: a brush model's
+are moved by its entity's matrix first.
+================
+*/
+qboolean R_PolyOffScreen (glpoly_t *p)
+{
+	int		i;
+	float	d;
+
+	for (i=0 ; i<4 ; i++)
+	{
+		d = DotProduct (p->qcenter, frustum[i].normal) - frustum[i].dist;
+		if (d < -p->qradius * r_frustumlen[i])
+			return true;
+	}
+	d = DotProduct (p->qcenter, vpn) - DotProduct (r_origin, vpn);
+	return d < -p->qradius;
+}
+
+/*
+================
 R_RecursiveWorldNode
 ================
 */
@@ -1298,7 +1399,11 @@ void R_RecursiveWorldNode (mnode_t *node)
 					surf->texturechain = waterchain;
 					waterchain = surf;
 				} else
-					R_DrawSequentialPoly (surf);
+					// QUINCE: a lightmapped surface off the screen
+					// keeps its lightmap's update, not its polygon
+					// (M4 PR 5)
+					R_SurfacePoly (surf, (surf->flags & SURF_UNDERWATER)
+						|| !R_PolyOffScreen (surf->polys));
 
 			}
 		}
@@ -1525,6 +1630,8 @@ void BuildSurfaceDisplayList (msurface_t *fa)
 		poly->verts[i][5] = s;
 		poly->verts[i][6] = t;
 	}
+
+	GL_PolySphere (poly);	// QUINCE: M4 PR 5, before co-linear points go
 
 	//
 	// remove co-linear points - Ed

@@ -11,6 +11,7 @@ VectorNormalize
 EmitWaterPolys          fmod d2f           # the clock wrapped to 2*pi, once a call
 EmitSkyPolys
 R_RecursiveWorldNode
+R_PolyOffScreen
 R_DrawParticles         dsub d2f d2f       # the frame's time and the clock as a float, once a frame
 Draw_Character
 R_DrawAliasModel        d2f dmul d2iz      # the clock as a float, and the skin's animation from it, once a model
