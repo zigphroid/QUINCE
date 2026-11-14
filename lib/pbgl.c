@@ -118,11 +118,17 @@ void glLoadMatrixf(const GLfloat *m)
 void glPushMatrix(void)
 {
 	count_call();
+	/* A push past STACK_DEPTH is dropped and counted, so a GL user
+	 * that deep sees it in ignored, not as wrong transforms alone (#7).
+	 * GLQuake never goes near it. */
 	if (matrix_mode == GL_PROJECTION) {
 		if (pr_top + 1 < STACK_DEPTH) { projection[pr_top + 1] = projection[pr_top]; pr_top++; }
+		else pbgl_total.ignored++;
 	} else if (mv_top + 1 < STACK_DEPTH) {
 		modelview[mv_top + 1] = modelview[mv_top];
 		mv_top++;
+	} else {
+		pbgl_total.ignored++;
 	}
 }
 
@@ -231,7 +237,11 @@ static int32_t held(int32_t v, int32_t hi)
 /* Each plane a x + b y + c z + d w, 0 or more inside. The first five
  * only drop primitives wholly outside one: the near plane (also cut at)
  * and the screen's four edges. The last four are the guard band: as far
- * as PB's 12.4 positions reach, with 8 pixels to spare. */
+ * as PB's 12.4 positions reach, with 8 pixels to spare. There is no far
+ * plane, where GL has one: what lies past GL's far distance is drawn
+ * (Jacob, LOG 2026-11-12, #24). GLQuake's far plane, 4,096 units, holds
+ * every shareware map, and a sixth test would cost outcode_of, the
+ * layer's hottest function, time on every vertex. */
 #define PLANES      9
 #define P_NEAR      0x001u
 #define P_REJECT    0x01fu   /* near and the screen's edges */
@@ -392,11 +402,15 @@ static void tex_made(uint32_t id, uint32_t w, uint32_t h, uint32_t flags, uint32
 	/* The window's words so far, and an update held for a texture,
 	 * go before it is made again: the stream keeps GL's order. */
 	spill(&buf);
-	if (ti) {
-		ti[0] = (uint8_t)(log2_of(w) | log2_of(h) << 4);
-		ti[1] = (uint8_t)(TI_KNOWN | ((flags & PB3D_TEXF_MIPMAP) ? TI_MIPMAP : 0) |
-		                  ((flags & PB3D_TEXF_ALPHA) ? TI_ALPHA : 0));
+	if (!ti) {
+		/* A name past the table couldn't be drawn (bound as 0), so it
+		 * isn't sent either (#24): GLQuake makes about 1,200 of 4,096. */
+		pbgl_total.ignored++;
+		return;
 	}
+	ti[0] = (uint8_t)(log2_of(w) | log2_of(h) << 4);
+	ti[1] = (uint8_t)(TI_KNOWN | ((flags & PB3D_TEXF_MIPMAP) ? TI_MIPMAP : 0) |
+	                  ((flags & PB3D_TEXF_ALPHA) ? TI_ALPHA : 0));
 	pbgl_total.tex_uploads++;
 	pbgl_total.tex_bytes += bytes;
 	if (format == PB3D_TEX_RGBA8888)
@@ -561,8 +575,14 @@ void glTexSubImage2D(GLenum target, GLint level, GLint x, GLint y, GLsizei w, GL
 		pbgl_total.ignored++;
 		return;
 	}
+	if (!ti) {
+		/* A name past the table: tex_made didn't send the texture, so
+		 * an update to it would be for one PB never made (#24). */
+		pbgl_total.ignored++;
+		return;
+	}
 	pbgl_total.sub_calls++;
-	if (x != 0 || !ti || !(ti[1] & TI_KNOWN) || (uint32_t)w != 1u << (ti[0] & 15u)) {
+	if (x != 0 || !(ti[1] & TI_KNOWN) || (uint32_t)w != 1u << (ti[0] & 15u)) {
 		spill(&buf);   /* after the words before it, as tex_made */
 		send_sub(id, format, (uint32_t)x, (uint32_t)y, (uint32_t)w, (uint32_t)h, px);
 		return;
@@ -1105,8 +1125,8 @@ static void cross(const struct vert *a, const struct vert *b, int p, struct vert
 /* One triangle cut by each plane in cuts, in turn (Sutherland and
  * Hodgman): a triangle and five planes make at most eight vertices. */
 #define CUT_MAX (3 + 5)
-static void cut_triangle(const struct vert *a, const struct vert *b, const struct vert *c,
-                         uint16_t cuts, const struct sendfmt *f)
+static int cut_triangle(const struct vert *a, const struct vert *b, const struct vert *c,
+                        uint16_t cuts, const struct sendfmt *f)
 {
 	struct vert poly[2][CUT_MAX];
 	uint32_t n = 3, i, src = 0;
@@ -1127,13 +1147,23 @@ static void cut_triangle(const struct vert *a, const struct vert *b, const struc
 		n = m;
 		src ^= 1;
 		if (n < 3)
-			return;
+			return 0;
 	}
+	/* Flat: the cut's new vertices took colours between the old ones,
+	 * but GL's flat colour is the triangle's last vertex's, c (flush has
+	 * given a polygon's or quad's every vertex theirs), so the fan's
+	 * every vertex takes c's (#24). */
+	if (shade == GL_FLAT)
+		for (i = 0; i < n; i++) {
+			poly[src][i].r = c->r; poly[src][i].g = c->g;
+			poly[src][i].b = c->b; poly[src][i].a = c->a;
+		}
 	if (open_tris(PB3D_KIND_FAN, f, n) != 0)
-		return;
+		return 0;
 	pbgl_total.clip_tris++;
 	for (i = 0; i < n; i++)
 		send_vertex(&poly[src][i], f);
+	return 1;
 }
 
 /* The primitive kept since glBegin (or since its last piece), sent. */
@@ -1157,6 +1187,20 @@ static void flush(void)
 	}
 	s = state_bits();
 	sync_state(s);
+	/* Flat shading's colour (GL 1.1, section 2.13.7) is each triangle's
+	 * last vertex's for lists, strips and fans, which PB takes itself
+	 * (lib/pb3d.h's SMOOTH). A polygon takes its first vertex's and a
+	 * quad its fourth's, so their vertices all get that one, where the
+	 * colour is drawn at all (#24). GLQuake's flat polygons are one
+	 * colour, or textured without MODULATE: this costs it nothing. */
+	if (shade == GL_FLAT && (prim_mode == GL_POLYGON || prim_mode == GL_QUADS) &&
+	    (!(s & PB3D_S_TEX0) || (s & PB3D_S_MODULATE))) {
+		const struct vert *p = &prim[prim_mode == GL_POLYGON ? 0 : nprim - 1];
+		uint8_t r = p->r, g = p->g, b = p->b, a = p->a;
+		for (i = 0; i < nprim; i++) {
+			prim[i].r = r; prim[i].g = g; prim[i].b = b; prim[i].a = a;
+		}
+	}
 	choose_format(s, &f);
 	if (!(any & P_CUT)) {
 		if (open_tris(kind, &f, kind == PB3D_KIND_LIST ? ntri * 3 : nprim) != 0)
@@ -1166,10 +1210,11 @@ static void flush(void)
 		return;
 	}
 	/* Cut: the triangles wholly inside as one list, then each one that
-	 * crosses a plane as a fan of its own. */
-	pbgl_total.clipped++;
+	 * crosses a plane as a fan of its own. The primitive counts as
+	 * clipped only if a fan went: a crossing triangle can still be wholly
+	 * off the screen, and drops (#24). */
 	{
-		uint32_t k, a, b, c, inside = 0;
+		uint32_t k, a, b, c, inside = 0, fans = 0;
 		for (k = 0; k < ntri; k++) {
 			tri_of(kind, k, &a, &b, &c);
 			if (!((outcode[a] | outcode[b] | outcode[c]) & P_CUT))
@@ -1203,8 +1248,10 @@ static void flush(void)
 			o = (uint16_t)(outcode[a] | outcode[b] | outcode[c]);
 			if (!(o & P_CUT) || (outcode[a] & outcode[b] & outcode[c] & P_REJECT))
 				continue;
-			cut_triangle(&prim[a], &prim[b], &prim[c], o, &f);
+			fans += (uint32_t)cut_triangle(&prim[a], &prim[b], &prim[c], o, &f);
 		}
+		if (fans)
+			pbgl_total.clipped++;
 	}
 }
 

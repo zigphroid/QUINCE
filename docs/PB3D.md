@@ -52,8 +52,11 @@ the edge function of v0 to v1 at v2.
   takes the whole surface whatever the rectangle.
 
 A strip's odd triangles are taken as (k + 1, k, k + 2), so every triangle
-in a strip winds the same way. Flat shading uses each triangle's first
-vertex in that order.
+in a strip winds the same way. Flat shading uses each triangle's last
+vertex: 3k + 2 of a list, k + 2 of a strip or a fan, as GL 1.1 does for
+those three (section 2.13.7). GL's polygons and quads take another
+vertex, so the GL layer gives their vertices that colour itself.
+(Until #24 it was the first, which matches GL for none of them.)
 
 ## Perspective (Jacob: a divide every pixel)
 
@@ -165,7 +168,7 @@ them, and rounding took off as much shimmer as GL's per-pixel rule
 
 In order, at 8 bits a channel:
 1. **The vertex colour V:** the perspective mean if `SMOOTH`, else the
-   triangle's first vertex's.
+   triangle's last vertex's.
 2. **Unit 0:** if `TEX0` is off, C = V. If it is on, T is its texel (white
    and opaque if no texture is bound). With `MODULATE`, C = floor(T (V + 1) / 256)
    per channel, alpha included. Otherwise C = T.

@@ -23,8 +23,11 @@ the pixelboard would be sent for them: its commands' words, of each
 kind, and the bytes a second its link would carry at that rate, the
 commands and the lightmaps' updates. The primitives dropped as off the
 screen, the ones cut at the near plane or at the guard band (2,040
-pixels out, past which PB's 12.4 positions can't reach), and any commands
-too big for the GL layer's 8 KB window of words are counted too. The textures sent at load are
+pixels out, past which PB's 12.4 positions can't reach) into at least
+one fan, any commands too big for the GL layer's 8 KB window of words,
+and the GL calls it ignored (mip levels, which PB builds itself; a
+texture, or an update to one, named past its table; a push past the
+matrix stack) are counted too. The textures sent at load are
 counted apart, sent once, and any reloaded during the run are added to
 the rate.
 

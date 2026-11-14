@@ -957,13 +957,18 @@ static void combine(void)
         v[i] = st2(v[i], 0.5, 0.5);
     pbm_draw(&m, PBM_FAN, v, 4);
     check("the lightmap: 255 x (256 - 64) / 256", colour[0], pbm_565(191, 191, 191));
-    // Flat shading takes the triangle's first vertex.
-    v[0] = rgba(v[0], 0, 0, 255, 255);
+    // Flat shading takes each triangle's last vertex, as GL 1.1 does
+    // (#24): the fan's (0, 1, 2) takes 2's blue, its (0, 2, 3) 3's green,
+    // and 0's red goes nowhere.
+    v[0] = rgba(v[0], 255, 0, 0, 255);
+    v[2] = rgba(v[2], 0, 0, 255, 255);
+    v[3] = rgba(v[3], 0, 255, 0, 255);
     s.tex0 = s.tex1 = 0;
     s.smooth = 0;
     pbm_set_state(&m, &s);
     pbm_draw(&m, PBM_FAN, v, 4);
-    check("flat: the first vertex", colour[3], pbm_565(0, 0, 255));
+    check("flat: the first triangle's last vertex", colour[1], pbm_565(0, 0, 255));
+    check("flat: the second's", colour[2], pbm_565(0, 255, 0));
 
     // The mip study's count of reads from a mipmapped texture, one for
     // each unit that reads one, under the rule (PBM_LOD_TRI) too.

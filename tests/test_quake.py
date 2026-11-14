@@ -159,11 +159,21 @@ def main():
     # The dump, read back by a reader written apart from the writer.
     dump = os.path.join(os.path.dirname(os.path.abspath(exe)), "e1m1.pb")
     env = dict(os.environ, QUINCE_PBDUMP=dump)
-    run(exe, base, "server", "E1M1", str(DUMP_FRAMES), env=env)
+    dumped = run(exe, base, "server", "E1M1", str(DUMP_FRAMES), env=env)
     check = subprocess.run([sys.executable, os.path.join(os.path.dirname(__file__), "pbcheck.py"),
-                            dump], capture_output=True, text=True)
+                            dump, "--last", str(DUMP_FRAMES)], capture_output=True, text=True)
     sys.stdout.write(check.stdout)
     if check.returncode != 0:
+        failed += 1
+    # The reader's totals for the timed window, the dump's last frames,
+    # against the layer's own for the same run (#24).
+    m = re.search(r"^server: sent totals (\d+) words (\d+) verts (\d+) tris", dumped, re.M)
+    sent = m and tuple(int(g) for g in m.groups())
+    m = re.search(r"the last \d+ frames: (\d+) words, (\d+) vertices, (\d+) triangles", check.stdout)
+    read = m and tuple(int(g) for g in m.groups())
+    if not sent or sent != read:
+        print("FAIL: the layer says it sent %s (words, verts, tris), pbcheck read %s"
+              % (sent, read))
         failed += 1
     s = first_state(dump)
     if s is None or s & FIRST_STATE_BITS != FIRST_STATE_BITS:
