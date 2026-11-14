@@ -1189,3 +1189,44 @@ selftest. Jacob chose making room first.
   again at M4 PR 3, uninvestigated; or a smaller stack, against the
   16 KB rule.
 
+## 2026-11-14: M4 PR 7, the world's polygons as vertex arrays
+
+The last of round 2's plan (Jacob, all recommendations): GL 1.1's vertex
+arrays for the world's polygons, standard calls rather than one of our
+own.
+
+- **The calls.** `lib/GL/gl.h` gains `glEnableClientState`,
+  `glDisableClientState`, `glVertexPointer`, `glTexCoordPointer` and
+  `glDrawArrays`, and `lib/pbgl.h` `pbgl_client_texture`, the unit the
+  texture coordinate array goes to (GL_ARB_multitexture's
+  `glClientActiveTextureARB`; GLQuake's SGIS calls have no such call).
+  Only what GLQuake uses is taken: three floats a vertex, two a
+  coordinate, any stride; another size or type is counted in `ignored`
+  and its array draws as off. `lib/qvid.c` turns the arrays on once, and
+  `R_SurfacePoly`'s multitexture path (`quake/gl_rsurf.c`, QUINCE:)
+  points them at the polygon's verts and draws: five calls a polygon
+  where it was three a vertex and two more (demo1's GL calls a frame
+  9,233 to 8,097).
+- **One loop.** The first version made each element through `vertex`,
+  as the calls had, and was 0.6 ms a frame slower at SIMMER's pace: the
+  per-vertex calls were never the cost, the work in them is. So a
+  polygon or fan that fits `prim[]` is now made in `glDrawArrays`
+  itself, the transform and outcode written there (the outcode's tests
+  are a macro, `OUTCODE`, shared with `vertex`, since CANNER inlines no
+  function), the texture coordinates straight from the arrays, then
+  sent as `glEnd` sends; anything else still goes through `vertex`.
+  `prim[]` is still filled: the plan's "no prim[] when uncut" would
+  need a second send path, for a gain the first version's numbers
+  don't promise.
+- **The current coordinates.** GL leaves an enabled array's current
+  values undefined after `glDrawArrays`; here they are the last
+  element's, as the calls left them, so a later primitive that sets
+  none sends the same words.
+- **Room.** About 3 KB more code and selftest, which PR 6b's room took
+  (it didn't fit before: `Headspace exceeded.`).
+- **Checks.** `make test` (both gates), all nine maps' 300 server
+  frames give main's checksums, and the selftest draws one polygon both
+  ways, on the screen and cut, with the second unit's array on and off,
+  and compares the words (372 checks). SIMMER at the board's pace: demo1
+  71.1 to 70.4 ms a frame (-1%), e1m1 53.2 to 52.1 (-2%).
+

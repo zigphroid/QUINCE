@@ -117,6 +117,9 @@ void pbgl_upload8(const uint8_t *data, int w, int h, int mipmap, int alpha, int 
 #define PBGL_TEXTURE1 0x835Fu
 void pbgl_mtexcoord(unsigned int unit, float s, float t);
 void pbgl_select_texture(unsigned int unit);
+/* The unit glTexCoordPointer and GL_TEXTURE_COORD_ARRAY's client state
+ * go to (GL_ARB_multitexture's glClientActiveTextureARB): M4 PR 7. */
+void pbgl_client_texture(unsigned int unit);
 
 /* lib/qvid.c's: the sink it gives pbgl_init, 0 on the board. The PC's
  * main sets it before Quake starts (tests/pbdump.c). */

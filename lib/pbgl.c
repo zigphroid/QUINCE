@@ -320,6 +320,14 @@ struct vert {
 static struct vert cur = {0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 0.0f, 255, 255, 255, 255};
 static uint32_t nprim;
 static int prim_open;
+/* The vertex arrays (glDrawArrays, below; M4 PR 7). */
+struct array {
+	const uint8_t *p;    /* 0 until a pointer is given */
+	uint32_t stride;     /* in bytes, 0 made the size's own */
+	int on;              /* glEnableClientState */
+};
+static struct array va_vert, va_tex[UNITS];
+static int client_unit;
 
 /* --- textures: 2 bytes each in mem.textures, by GL's name --- */
 
@@ -922,6 +930,9 @@ void pbgl_init(const struct pbgl_mem *m, int width, int height, const struct pbg
 	cur.r = cur.g = cur.b = cur.a = 255;
 	nprim = 0;
 	prim_open = 0;
+	memset(&va_vert, 0, sizeof va_vert);
+	memset(va_tex, 0, sizeof va_tex);
+	client_unit = 0;
 	npending = 0;
 	glViewport(0, 0, width, height);
 	pbgl_reset();
@@ -1273,9 +1284,8 @@ static uint32_t gl_triangles(GLenum mode, uint32_t n)
 
 static uint32_t prim_verts_total;
 
-void glEnd(void)
+static void end_prim(void)
 {
-	count_call();
 	if (prim_mode != GL_QUADS)
 		flush();
 	pbgl_total.prims++;
@@ -1285,6 +1295,29 @@ void glEnd(void)
 	nprim = 0;
 	prim_open = 0;
 }
+
+void glEnd(void)
+{
+	count_call();
+	end_prim();
+}
+
+/* The outcode's tests, as a macro so vertex and glDrawArrays share one
+ * copy written out where the coordinates are (CANNER inlines no
+ * function, M4 PR 6): c gets the bits of the planes outside. */
+#define OUTCODE(c, cx, cy, cz, cw) do { \
+	if ((cz) + (cw) < 0.0f) (c) |= 0x001u; \
+	if ((cx) + (cw) < 0.0f) (c) |= 0x002u; \
+	if ((cw) - (cx) < 0.0f) (c) |= 0x004u; \
+	if ((cy) + (cw) < 0.0f) (c) |= 0x008u; \
+	if ((cw) - (cy) < 0.0f) (c) |= 0x010u; \
+	if (((c) & 0x01eu) || !guard_wider) { \
+		if ((cx) + plane[5][3] * (cw) < 0.0f) (c) |= 0x020u; \
+		if (plane[6][3] * (cw) - (cx) < 0.0f) (c) |= 0x040u; \
+		if (plane[7][3] * (cw) - (cy) < 0.0f) (c) |= 0x080u; \
+		if ((cy) + plane[8][3] * (cw) < 0.0f) (c) |= 0x100u; \
+	} \
+} while (0)
 
 /* Every vertex GLQuake sends comes through here, so it is kept short
  * (M4 PR 6): the clip-space coordinates stay in registers for the
@@ -1297,7 +1330,6 @@ static void vertex(float x, float y, float z)
 	struct vert *v;
 	float cx, cy, cz, cw;
 	uint32_t c = 0;
-	count_call();
 	if (!prim_open)
 		return;
 	if (mvp_stale)
@@ -1311,17 +1343,7 @@ static void vertex(float x, float y, float z)
 	v->x = cx; v->y = cy; v->z = cz; v->w = cw;
 	v->s = cur.s; v->t = cur.t; v->s2 = cur.s2; v->t2 = cur.t2;
 	v->r = cur.r; v->g = cur.g; v->b = cur.b; v->a = cur.a;
-	if (cz + cw < 0.0f) c |= 0x001u;
-	if (cx + cw < 0.0f) c |= 0x002u;
-	if (cw - cx < 0.0f) c |= 0x004u;
-	if (cy + cw < 0.0f) c |= 0x008u;
-	if (cw - cy < 0.0f) c |= 0x010u;
-	if ((c & 0x01eu) || !guard_wider) {
-		if (cx + plane[5][3] * cw < 0.0f) c |= 0x020u;
-		if (plane[6][3] * cw - cx < 0.0f) c |= 0x040u;
-		if (plane[7][3] * cw - cy < 0.0f) c |= 0x080u;
-		if (cy + plane[8][3] * cw < 0.0f) c |= 0x100u;
-	}
+	OUTCODE(c, cx, cy, cz, cw);
 	outcode[nprim] = (uint16_t)c;
 	nprim++;
 	prim_verts_total++;
@@ -1347,9 +1369,152 @@ static void vertex(float x, float y, float z)
 	}
 }
 
-void glVertex2f(GLfloat x, GLfloat y) { vertex(x, y, 0.0f); }
-void glVertex3f(GLfloat x, GLfloat y, GLfloat z) { vertex(x, y, z); }
-void glVertex3fv(const GLfloat *v) { vertex(v[0], v[1], v[2]); }
+void glVertex2f(GLfloat x, GLfloat y) { count_call(); vertex(x, y, 0.0f); }
+void glVertex3f(GLfloat x, GLfloat y, GLfloat z) { count_call(); vertex(x, y, z); }
+void glVertex3fv(const GLfloat *v) { count_call(); vertex(v[0], v[1], v[2]); }
+
+/* --- vertex arrays (GL 1.1, section 2.8; M4 PR 7) ---
+ *
+ * GLQuake's world polygon was a glBegin, then for each vertex two
+ * texture coordinates and a glVertex3fv, then a glEnd: three calls a
+ * vertex, each through the layer's checks. With the arrays pointed at
+ * the polygon's verts (quake/gl_rsurf.c, QUINCE:), glDrawArrays reads
+ * them in one loop. Only what GLQuake would use is taken: three floats a
+ * vertex, two a texture coordinate, colour and normal from the current
+ * values. A pointer of another size or type is ignored (and counted), so
+ * its array draws as if off.
+ *
+ * Texture coordinates go per unit, the unit chosen by
+ * pbgl_client_texture (what GL_ARB_multitexture calls
+ * glClientActiveTextureARB; SGIS had glSelectTextureCoordSetSGIS).
+ * pbgl_init turns them all off. */
+
+void pbgl_client_texture(unsigned int which)
+{
+	count_call();
+	client_unit = which == PBGL_TEXTURE1 ? 1 : 0;
+}
+
+static void client_state(GLenum what, int on)
+{
+	if (what == GL_VERTEX_ARRAY)
+		va_vert.on = on;
+	else if (what == GL_TEXTURE_COORD_ARRAY)
+		va_tex[client_unit].on = on;
+	else
+		pbgl_total.ignored++;
+}
+
+void glEnableClientState(GLenum what) { count_call(); client_state(what, 1); }
+void glDisableClientState(GLenum what) { count_call(); client_state(what, 0); }
+
+static void set_array(struct array *a, GLint size, GLint want, GLenum type, GLsizei stride,
+                      const GLvoid *p)
+{
+	if (size != want || type != GL_FLOAT || stride < 0) {
+		a->p = 0;
+		pbgl_total.ignored++;
+		return;
+	}
+	a->p = (const uint8_t *)p;
+	a->stride = stride ? (uint32_t)stride : (uint32_t)want * 4u;
+}
+
+void glVertexPointer(GLint size, GLenum type, GLsizei stride, const GLvoid *p)
+{
+	count_call();
+	set_array(&va_vert, size, 3, type, stride, p);
+}
+
+void glTexCoordPointer(GLint size, GLenum type, GLsizei stride, const GLvoid *p)
+{
+	count_call();
+	set_array(&va_tex[client_unit], size, 2, type, stride, p);
+}
+
+/* As glBegin(mode), then for each element its texture coordinates and
+ * vertex, then glEnd (section 2.8's ArrayElement), but without the
+ * calls. A polygon or fan that fits prim[] is read in one loop, each
+ * vertex made and its outcode found there, as vertex would, and then
+ * sent as glEnd would; anything else goes through vertex, which splits
+ * and takes GL_QUADS. GL leaves the current texture coordinates of an
+ * enabled array undefined afterwards; here they are the last element's,
+ * as the calls would have left them, so the words are the same either
+ * way. */
+void glDrawArrays(GLenum mode, GLint first, GLsizei count)
+{
+	const uint8_t *vp, *t0, *t1;
+	uint32_t vs, ts0, ts1, i, n;
+	count_call();
+	if (count <= 0 || first < 0 || !va_vert.on || !va_vert.p)
+		return;
+	n = (uint32_t)count;
+	vs = va_vert.stride;
+	ts0 = va_tex[0].stride;
+	ts1 = va_tex[1].stride;
+	vp = va_vert.p + (uint32_t)first * vs;
+	t0 = va_tex[0].on && va_tex[0].p ? va_tex[0].p + (uint32_t)first * ts0 : 0;
+	t1 = va_tex[1].on && va_tex[1].p ? va_tex[1].p + (uint32_t)first * ts1 : 0;
+	prim_mode = mode;
+	nprim = 0;
+	prim_open = 1;
+	if (mvp_stale)
+		remake_mvp();
+	if (n <= PRIM_MAX && (mode == GL_POLYGON || mode == GL_TRIANGLE_FAN)) {
+		const float *m = mvp.m;
+		for (i = 0; i < n; i++) {
+			const float *p = (const float *)vp;
+			struct vert *v = &prim[i];
+			float x = p[0], y = p[1], z = p[2], cx, cy, cz, cw;
+			uint32_t c = 0;
+			cx = m[0] * x + m[4] * y + m[8] * z + m[12];
+			cy = m[1] * x + m[5] * y + m[9] * z + m[13];
+			cz = m[2] * x + m[6] * y + m[10] * z + m[14];
+			cw = m[3] * x + m[7] * y + m[11] * z + m[15];
+			v->x = cx; v->y = cy; v->z = cz; v->w = cw;
+			if (t0) {
+				v->s = ((const float *)t0)[0];
+				v->t = ((const float *)t0)[1];
+				t0 += ts0;
+			} else {
+				v->s = cur.s; v->t = cur.t;
+			}
+			if (t1) {
+				v->s2 = ((const float *)t1)[0];
+				v->t2 = ((const float *)t1)[1];
+				t1 += ts1;
+			} else {
+				v->s2 = cur.s2; v->t2 = cur.t2;
+			}
+			v->r = cur.r; v->g = cur.g; v->b = cur.b; v->a = cur.a;
+			OUTCODE(c, cx, cy, cz, cw);
+			outcode[i] = (uint16_t)c;
+			vp += vs;
+		}
+		cur.s = prim[n - 1].s; cur.t = prim[n - 1].t;
+		cur.s2 = prim[n - 1].s2; cur.t2 = prim[n - 1].t2;
+		nprim = n;
+		prim_verts_total = n;
+		end_prim();
+		return;
+	}
+	for (i = 0; i < n; i++) {
+		const float *p = (const float *)vp;
+		if (t0) {
+			cur.s = ((const float *)t0)[0];
+			cur.t = ((const float *)t0)[1];
+			t0 += ts0;
+		}
+		if (t1) {
+			cur.s2 = ((const float *)t1)[0];
+			cur.t2 = ((const float *)t1)[1];
+			t1 += ts1;
+		}
+		vertex(p[0], p[1], p[2]);
+		vp += vs;
+	}
+	end_prim();
+}
 
 void glTexCoord2f(GLfloat s, GLfloat t) { count_call(); cur.s = s; cur.t = t; }
 void glTexCoord2fv(const GLfloat *v) { count_call(); cur.s = v[0]; cur.t = v[1]; }

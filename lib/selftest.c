@@ -1256,10 +1256,114 @@ static void gl_flat(void)
     glMatrixMode(GL_MODELVIEW);
 }
 
+// Vertex arrays (M4 PR 7): glDrawArrays sends what the same polygon's
+// glBegin, texture coordinates and glVertex calls send, word for word,
+// with the arrays laid out as a glpoly_t's verts (seven floats a vertex:
+// x y z, s t, then the lightmap's s t) and drawn from the second.
+static const float gl_poly[2][5][7] = {
+    {   // on the screen
+        {9, 9, 9, 9, 9, 9, 9},   // before first: never read
+        {0, 0, -2, 1.25f, 2.5f, 0.125f, 0.25f},
+        {1, 0, -2, 2.0f, 2.5f, 0.5f, 0.25f},
+        {1, 1, -2.5f, 2.0f, 3.75f, 0.5f, 0.75f},
+        {-1, 0.5f, -3, 0.5f, 3.0f, 0.0625f, 0.5f},
+    },
+    {   // its third vertex in front of the near plane: cut
+        {9, 9, 9, 9, 9, 9, 9},
+        {0, 0, -2, 1.25f, 2.5f, 0.125f, 0.25f},
+        {1, 0, -2, 2.0f, 2.5f, 0.5f, 0.25f},
+        {1, 1, -0.5f, 2.0f, 3.75f, 0.5f, 0.75f},
+        {-1, 0.5f, -3, 0.5f, 3.0f, 0.0625f, 0.5f},
+    },
+};
+static SELFTEST_PSRAM uint16_t gl_want[256];
+
+#define ARR_CUT   1   // gl_poly[1]
+#define ARR_NO_T1 2   // the lightmap's coordinates not an array: the current ones
+#define ARR_DRAW  4   // glDrawArrays, not the calls
+
+// The polygon, then a triangle with no coordinates of its own, which
+// takes the polygon's last as the current ones.
+static void arrays_scene(int how)
+{
+    const float (*v)[7] = gl_poly[how & ARR_CUT];
+    gl_start(1024);
+    frustum();
+    glEnable(GL_TEXTURE_2D);
+    pbgl_select_texture(PBGL_TEXTURE1);
+    glEnable(GL_TEXTURE_2D);
+    pbgl_select_texture(PBGL_TEXTURE0);
+    pbgl_mtexcoord(PBGL_TEXTURE1, 0.375f, 0.625f);
+    if (how & ARR_DRAW) {
+        glVertexPointer(3, GL_FLOAT, 7 * sizeof(float), v[0]);
+        glEnableClientState(GL_VERTEX_ARRAY);
+        glTexCoordPointer(2, GL_FLOAT, 7 * sizeof(float), &v[0][3]);
+        glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        pbgl_client_texture(PBGL_TEXTURE1);
+        glTexCoordPointer(2, GL_FLOAT, 7 * sizeof(float), &v[0][5]);
+        if (!(how & ARR_NO_T1))
+            glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+        glDrawArrays(GL_POLYGON, 1, 4);
+    } else {
+        glBegin(GL_POLYGON);
+        for (int i = 1; i < 5; i++) {
+            pbgl_mtexcoord(PBGL_TEXTURE0, v[i][3], v[i][4]);
+            if (!(how & ARR_NO_T1))
+                pbgl_mtexcoord(PBGL_TEXTURE1, v[i][5], v[i][6]);
+            glVertex3fv(v[i]);
+        }
+        glEnd();
+    }
+    glBegin(GL_TRIANGLES);
+    glVertex3f(0, 0, -4); glVertex3f(1, 0, -4); glVertex3f(0, 1, -4);
+    glEnd();
+    pbgl_end_frame();
+}
+
+static void gl_arrays(void)
+{
+    static const char *const what[] = {
+        "glDrawArrays: the calls' words", "glDrawArrays: and cut",
+        "glDrawArrays: one unit's array off", "glDrawArrays: and cut",
+    };
+    for (int how = 0; how < 4; how++) {
+        uint32_t n, prims, verts, tris, clipped;
+        arrays_scene(how);
+        n = gl_nframe < 256 ? gl_nframe : 256;
+        for (uint32_t i = 0; i < n; i++)
+            gl_want[i] = gl_frame[i];
+        prims = pbgl_total.prims; verts = pbgl_total.verts;
+        tris = pbgl_total.tris; clipped = pbgl_total.clipped;
+        arrays_scene(how | ARR_DRAW);
+        check_words(what[how], gl_frame, gl_nframe, gl_want, n);
+        check_num("glDrawArrays: GL's counts the calls'",
+                  (long)(pbgl_total.prims == prims && pbgl_total.verts == verts &&
+                         pbgl_total.tris == tris && pbgl_total.clipped == clipped),
+                  1);
+        check_num("glDrawArrays: cut if it should be", (long)clipped, how & ARR_CUT);
+    }
+    // The last, cut: the triangles inside, the cut one's fan, the triangle.
+    check_num("glDrawArrays: its words not empty", (long)pbgl_total.tris_cmds, 3);
+
+    // A pointer it doesn't take (four floats a vertex) is ignored, and
+    // its array draws nothing; so does one not enabled.
+    gl_start(1024);
+    frustum();
+    glVertexPointer(4, GL_FLOAT, 0, gl_poly[0][1]);
+    glEnableClientState(GL_VERTEX_ARRAY);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    check_num("glVertexPointer: four floats ignored", (long)pbgl_total.ignored, 1);
+    glVertexPointer(3, GL_FLOAT, 0, gl_poly[0][1]);
+    glDisableClientState(GL_VERTEX_ARRAY);
+    glDrawArrays(GL_TRIANGLES, 0, 3);
+    pbgl_end_frame();
+    check_num("glDrawArrays: nothing sent for either", (long)gl_nframe, 0);
+}
+
 static void (*const checks[])(void) = { greeting, bench_words, pb3d_fixed, pb3d_commands,
                                          gl_screen, gl_prims, gl_clip, gl_state, gl_viewport,
                                          gl_textures_check, gl_full, gl_full_cut, gl_cuts,
-                                         gl_guard, gl_subs, gl_split, gl_flat };
+                                         gl_guard, gl_subs, gl_split, gl_flat, gl_arrays };
 
 int quince_selftest(void (*fail)(const char *what, const char *got, const char *want),
                     int *count)

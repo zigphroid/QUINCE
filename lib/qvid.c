@@ -92,6 +92,14 @@ static void init_gl(void)
 	gl_mtexable = true;
 	qglMTexCoord2fSGIS = pbgl_mtexcoord;
 	qglSelectTextureSGIS = pbgl_select_texture;
+	/* The world's polygons are drawn from vertex arrays (M4 PR 7,
+	 * quake/gl_rsurf.c's R_SurfacePoly), with both units' coordinates;
+	 * nothing else draws from them, so they stay on. */
+	glEnableClientState(GL_VERTEX_ARRAY);
+	pbgl_client_texture(PBGL_TEXTURE1);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
+	pbgl_client_texture(PBGL_TEXTURE0);
+	glEnableClientState(GL_TEXTURE_COORD_ARRAY);
 }
 
 void VID_SetPalette(unsigned char *palette)
