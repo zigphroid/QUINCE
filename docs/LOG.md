@@ -967,3 +967,60 @@ recommendation (2026-11-14):
   passes from PSRAM, and sim-bench's e1m1 gate holds (checksum
   3500115068, state c8c17318, 164 entities). The Mac's build isn't
   checked yet: by its 2.8 KB it should have about 24 KB spare.
+
+## 2026-11-14: the pin moves to pectinos main (20978ee)
+
+`PECTIN_REV` goes from bafa5bf to 20978ee, pectinos main on 2026-11-12,
+164 commits on, to take CANNER's newer code (Jacob: "let's re pin on
+pectin main and check it out"): softfp.c's pieces always inlined
+(pectinos#2107), small struct copies and zeroings as straight-line code,
+late results spaced from their uses, a 0/1 used as it is, and shifts
+folded into SSAT, PKHBT and RSB. The SDK gained the `__pectin_user`
+qualifier and its VERSION went up, so the board needs PectinOS built at
+the new pin. Nothing in QUINCE had to change. The alternative, waiting
+for more of CANNER's phase 5, was declined: each pin move is its own PR
+anyway, and this one measures what has landed.
+
+- **Checks.** `make test` (test-quake's demo1, e1m1 and every shareware
+  map, test-builtins, test-float, test-builds), `make`, `sim-smoke` and
+  `sim-bench` pass at the new pin; e1m1's gate is unchanged (checksum
+  3500115068, state c8c17318, 164 entities).
+- **Sizes.** CANNER's `QUINCE.JAM` grows 793 bytes (341,445 to 342,238
+  with main's #51 merged; 338,473 to 339,266 before), the inlining; its assembly 425 lines more, and the same 1,109 calls
+  into softfp (the calls from Quake's double code stay calls: #2107
+  inlines softfp.c's own pieces into its functions). GCC's build is
+  unchanged but for 120 bytes of the SDK's code, and its SRAM spare by
+  the Makefile's check is the same at both pins: 648 bytes in the cloud
+  (`__bss_end` at 366,200 against 366,848), after #51 took about 2 KB of
+  it (2,696 before).
+- **SIMMER at the board's pace** (`-icount`, so time is instructions),
+  both pins' builds on the new pin's kernel: CANNER demo1 80.0 to 79.5 ms
+  a frame (-0.6%), e1m1 57.0 to 56.4 (-1.1%); GCC 70.1 to 70.0 and 48.2
+  to 48.2. So in instructions the new CANNER saves about 1%. Its
+  scheduling change saves stalls, which instructions don't count, so the
+  board can show more.
+- **On the board** (one boot of PectinOS 20978ee, two samples each,
+  alternating; the new kernel takes the old pin's .JAM): CANNER's build of
+  main e72c1be at bafa5bf ran demo1 at 32.8 and 32.9 ms a frame and e1m1
+  at 25.2 and 25.2; this PR's (a8ca1d2, at 20978ee) at 32.6 and 32.6, and
+  24.9 and 24.9: -0.8% and -1.2%, about what SIMMER's instructions said,
+  so the scheduling change bought little on the board either. The gate
+  held in all eight runs (checksum 3500115068, state c8c17318, 164
+  entities, nothing dropped) and the selftest passed (280 checks).
+- **GCC's build doesn't fit on the Mac**, at either pin, so it wasn't
+  timed: the Mac's GCC writes bigger code than the cloud's, and with the
+  16 KB stack SRAM must end by 366,848 bytes, where main's build ends at
+  369,296 (2,448 over) and this PR's at 370,320 (3,472 over: the SDK's
+  code grows 592 bytes, 1,024 once aligned). It last fitted at 3a1f77f,
+  with about 1.1 KB spare; main had already outgrown it before the pin
+  moved (#57). In the cloud it still fit at both pins, with 648 bytes
+  spare, until #54. #58 then put the menus and the selftest in PSRAM
+  (the entry before this one): at the new pin GCC's build has 27,272
+  bytes spare in the cloud, the same as at bafa5bf.
+- **THERMO on the new pin** (this PR's CANNER build, same boot), for the
+  next round of speed work: demo1 34.1 ms a frame under sampling, kernel
+  17.0%, then `vertex` (pbgl.c) 13.3%, `pb3d_vertex_of` 9.5%,
+  `outcode_of` 5.1%, `R_RecursiveWorldNode` 5.0%, `R_DrawSequentialPoly`
+  4.4%; e1m1 26.4 ms, kernel 27.6%, then `pb3d_vertex_of` 6.3%,
+  `AllocBlock` 5.9%, `vertex` 5.4%, `R_RecursiveWorldNode` 4.7%,
+  `R_DrawSequentialPoly` 4.4%.
