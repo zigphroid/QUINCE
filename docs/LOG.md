@@ -1024,3 +1024,70 @@ anyway, and this one measures what has landed.
   4.4%; e1m1 26.4 ms, kernel 27.6%, then `pb3d_vertex_of` 6.3%,
   `AllocBlock` 5.9%, `vertex` 5.4%, `R_RecursiveWorldNode` 4.7%,
   `R_DrawSequentialPoly` 4.4%.
+
+## 2026-11-14: M4 PR 5, the world's polygons off the screen left out
+
+M4's second round (Jacob, "all recs", the plan in the thread): PR 5 culls
+the world's polygons before they reach the GL layer, PR 6 makes the
+layer's per-vertex code cheaper, PR 7 gives the world's polygons GL 1.1
+vertex arrays. This entry is PR 5.
+
+- **Why.** THERMO samples the whole run, the load too (demo1 42.2 s
+  sampled against 33.1 s timed, e1m1 17.1 against 7.9), so `AllocBlock`,
+  `FanLength`, `StripLength`, `Mod_FloodFillSkin`, `PR_LoadProgs`,
+  `pbgl_upload8` and most of the kernel's share are the load's, not the
+  frame's. In demo1's frame the GL layer is about 17 of 34 ms, about
+  2.5 µs a vertex transformed. Counted on the PC by `glBegin`'s mode
+  (throwaway counters): 31% of demo1's transformed vertices were in
+  primitives the layer then dropped whole, off the screen. Most were the
+  world's: GLQuake culls whole BSP nodes (`R_CullBox`) but sends every
+  surface of a node that shows, and 61% of those polygons, and 81% of
+  the water's 64-unit pieces, were off the screen.
+- **What.** Each `glpoly_t` gets a bounding sphere at load
+  (`GL_PolySphere`: centred on its box, its farthest vertex plus a unit).
+  `R_PolyOffScreen` tests it against the frustum's four planes (each
+  normal's length kept in `r_frustumlen`, since at a fov of 90 they are
+  sqrt(2) long) and the eye's plane. `R_RecursiveWorldNode` calls it for
+  a lightmapped surface and `EmitWorldWaterPolys` for each piece of the
+  world's water; a brush model's polygons are moved by its entity's
+  matrix, so they aren't tested. All `QUINCE:` edits in `quake/`.
+- **The words stay the same.** A polygon behind one of those planes has
+  every vertex behind the layer's plane for it, so the layer would have
+  dropped it and sent nothing. An off-screen lightmapped surface still
+  updates and sends its lightmap and binds its textures
+  (`R_SurfacePoly` with draw false), and leaves GL's current texture
+  coordinates as its last vertex would. e1m1's gate holds (checksum
+  3500115068); GLQuake asks for 3,000 fewer triangles and 6,000 fewer
+  vertices over its 300 frames, so `SERVER_TOTALS` moves to (183776,
+  351952). The alternative, skipping an off-screen surface's lightmap
+  update too, is cheaper but changes the words, so the gate could no
+  longer show that the cull dropped nothing (Jacob: keep them).
+- **A sphere, not a box** (Jacob): 16 bytes a polygon, and four dot
+  products, against 24 bytes and `BoxOnPlaneSide`'s four. A sphere is
+  looser for a long thin polygon; it only culls a little less.
+- **Clipflags.** The first board run (8d9a4d5) had demo1 5.1% faster but
+  e1m1 2% slower, and SIMMER's instruction count said the same: e1m1
+  culls 13 polygons a frame and tested about 250. So
+  `R_RecursiveWorldNode` now carries clipflags, as the software
+  renderer's does (`r_bsp.c`): a node wholly in front of a plane drops
+  it for everything under it, and a surface with no plane left isn't
+  tested. That makes `R_CullBox`'s node tests cheaper too. SIMMER at the
+  board's pace (instructions): demo1 79.9 to 75.3 ms a frame, e1m1 57.0
+  to 55.6.
+- **A struct's size moves Quake's cache.** Growing `glpoly_t` by 16
+  bytes, with nothing else changed, changes E1M2's, E1M3's and E1M6's
+  words: about 6,000 polygons a map make the hunk about 96 KB fuller,
+  Quake's model cache, already evicting near its limit, evicts other
+  models, and `GL_LoadTexture` uploads their skins again in another
+  order. demo1 and e1m1 are unaffected. So the words were compared with
+  main built with the same `glpoly_t` (16 bytes of padding): demo1 on
+  the dump's fixed clock and all nine maps' 300 server frames match.
+- **On the board** (one boot of PectinOS 20978ee, two samples each,
+  alternating, main aae0a51 against 18d4f80): CANNER demo1 32.7 to 30.7
+  ms a frame (-6.0%), e1m1 25.0 to 24.4 (-2.4%). demo1 transforms 3,056
+  vertices a frame instead of 2,560, and the layer drops 120 primitives a
+  frame instead of 239. GCC's build fits (23,136 bytes of SRAM spare) and
+  runs demo1 at 26.1 and e1m1 at 20.8. The gate held in every e1m1 run,
+  nothing was dropped, and the selftest passed (354 checks). Main on its
+  own ran about 0.5 ms faster on this boot than on the first run's, so
+  only builds timed on the same boot compare.

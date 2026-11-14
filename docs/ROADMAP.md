@@ -125,6 +125,22 @@ for odd values past 2^23 and is now right.
   buffer). Done (#47): on the board CANNER's demo1 is 37.8 to 32.9
   ms a frame (-13%) and e1m1 28.7 to 25.3; GCC's 27.7 and 21.4.
 
+Round 2, planned 2026-11-14 (Jacob, all recommendations) from THERMO at
+the new pin and a count of what the layer throws away: 31% of demo1's
+transformed vertices were in primitives the layer then dropped whole.
+
+- PR 5: the world's polygons off the screen left out before the GL
+  layer: a bounding sphere for each polygon, made at load, tested
+  against the frustum in `R_RecursiveWorldNode` and the world's water,
+  with clipflags as the software renderer's, so a node inside a plane
+  isn't tested against it again. PB's words are the same. On the board
+  CANNER's demo1 is 32.7 to 30.7 ms a frame (-6%) and e1m1 25.0 to 24.4
+  (-2.4%); GCC's 26.1 and 20.8.
+- PR 6: cheaper per-vertex code in the layer (`outcode_of` inlined,
+  `fix16`'s branches a clamp), the words the same.
+- PR 7: GL 1.1 vertex arrays (`glVertexPointer`, `glDrawArrays`) for the
+  world's polygons, each sent in one pass.
+
 ## Later: drawing on the pixelboard
 
 Planned 2026-11-12 (`docs/PB-ASKS.md`; Jacob, all recommendations). PB
