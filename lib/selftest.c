@@ -309,7 +309,8 @@ static void pb3d_commands(void)
 // The GL layer (lib/pbgl.c): what PB is sent for GL calls, read back
 // from a sink that keeps the last frame and the last texture.
 // In PSRAM on the board, as lib/qproto.h's QPSRAM (which needs id's
-// types, so it isn't included here): 4 KB only the selftest uses, which
+// types, so it isn't included here): about 20 KB only the selftest uses
+// (the words window and frame here, and M4 PR 7's arrays below), which
 // GCC's build, all its code in SRAM, couldn't spare (LOG 2026-11-12).
 #if defined(__CANNER__) || defined(__arm__)
 #define SELFTEST_PSRAM __attribute__((section(".pbss")))

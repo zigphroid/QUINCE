@@ -1237,7 +1237,7 @@ own.
   71.1 to 70.4 ms a frame (-1%), e1m1 53.2 to 52.1 (-2%).
 - **On the board** (one boot of PectinOS 20978ee, two samples each,
   alternating, main 37d998b against 1ab212a): CANNER's demo1 29.2 to
-  28.8 and 28.9 ms a frame (-1.3%), e1m1 23.6 to 23.0 (-2.5%). GCC's
+  28.8 and 28.9 ms a frame (-1.2%), e1m1 23.6 to 23.0 (-2.5%). GCC's
   build 25.1 to 24.7 and 20.5 to 19.5, with 35,560 bytes of SRAM spare
   (1,064 less than main). GL calls a frame: demo1 9,431 to 8,298, e1m1
   5,514 to 3,620. The e1m1 gate held in every run, nothing was dropped,
