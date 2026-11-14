@@ -20,6 +20,7 @@ Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
 // r_surf.c: surface-related refresh code
 
 #include "quakedef.h"
+#include "pbgl.h"	// QUINCE: pbgl_client_texture, for the vertex arrays (M4 PR 7)
 
 int			skytexturenum;
 
@@ -474,15 +475,16 @@ static void R_SurfacePoly (msurface_t *s, qboolean draw)
 			glTexEnvf(GL_TEXTURE_ENV, GL_TEXTURE_ENV_MODE, GL_BLEND);
 			if (!draw)
 				return;		// QUINCE: off the screen (M4 PR 5)
-			glBegin(GL_POLYGON);
+			// QUINCE: the polygon as vertex arrays, one call for its
+			// vertices, not three a vertex (M4 PR 7). lib/qvid.c's init_gl
+			// enabled the arrays; the pointers are this polygon's verts.
 			v = p->verts[0];
-			for (i=0 ; i<p->numverts ; i++, v+= VERTEXSIZE)
-			{
-				qglMTexCoord2fSGIS (TEXTURE0_SGIS, v[3], v[4]);
-				qglMTexCoord2fSGIS (TEXTURE1_SGIS, v[5], v[6]);
-				glVertex3fv (v);
-			}
-			glEnd ();
+			glVertexPointer (3, GL_FLOAT, VERTEXSIZE * sizeof(float), v);
+			pbgl_client_texture (TEXTURE0_SGIS);
+			glTexCoordPointer (2, GL_FLOAT, VERTEXSIZE * sizeof(float), v + 3);
+			pbgl_client_texture (TEXTURE1_SGIS);
+			glTexCoordPointer (2, GL_FLOAT, VERTEXSIZE * sizeof(float), v + 5);
+			glDrawArrays (GL_POLYGON, 0, p->numverts);
 			return;
 		} else {
 			p = s->polys;

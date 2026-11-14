@@ -80,6 +80,9 @@ typedef void GLvoid;
 #define GL_ZERO                           0x134
 #define GL_COLOR_BUFFER_BIT               0x001
 #define GL_DEPTH_BUFFER_BIT               0x002
+#define GL_FLOAT                          0x135
+#define GL_VERTEX_ARRAY                   0x136
+#define GL_TEXTURE_COORD_ARRAY            0x137
 
 void glBegin(GLenum mode);
 void glEnd(void);
@@ -93,6 +96,11 @@ void glColor4f(GLfloat r, GLfloat g, GLfloat b, GLfloat a);
 void glColor4fv(const GLfloat *v);
 void glColor3ubv(const unsigned char *v);
 void glColor4ubv(const unsigned char *v);
+void glEnableClientState(GLenum what);
+void glDisableClientState(GLenum what);
+void glVertexPointer(GLint size, GLenum type, GLsizei stride, const GLvoid *p);
+void glTexCoordPointer(GLint size, GLenum type, GLsizei stride, const GLvoid *p);
+void glDrawArrays(GLenum mode, GLint first, GLsizei count);
 
 void glMatrixMode(GLenum mode);
 void glLoadIdentity(void);

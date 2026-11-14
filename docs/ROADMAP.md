@@ -147,8 +147,11 @@ transformed vertices were in primitives the layer then dropped whole.
   statics (13.5 KB: the file table, message and format strings, the key
   tables, `com_token`, `mod_novis`) go to PSRAM, leaving about 15 KB. On the board the frame
   times are main's (CANNER 29.2 and 23.6 ms, GCC 25.1 and 20.5).
-- PR 7: GL 1.1 vertex arrays (`glVertexPointer`, `glDrawArrays`) for the
-  world's polygons, each sent in one pass.
+- PR 7: GL 1.1 vertex arrays (`glVertexPointer`, `glTexCoordPointer`,
+  `glDrawArrays`) for the world's polygons: one call a polygon, not
+  three a vertex, and a polygon or fan read in one loop in the layer.
+  PB's words are the same. On the board CANNER's demo1 is 29.2 to 28.85
+  ms a frame (-1.2%) and e1m1 23.6 to 23.0 (-2.5%); GCC's 24.7 and 19.5.
 
 ## Later: drawing on the pixelboard
 

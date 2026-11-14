@@ -1189,3 +1189,58 @@ selftest. Jacob chose making room first.
   again at M4 PR 3, uninvestigated; or a smaller stack, against the
   16 KB rule.
 
+## 2026-11-14: M4 PR 7, the world's polygons as vertex arrays
+
+The last of round 2's plan (Jacob, all recommendations): GL 1.1's vertex
+arrays for the world's polygons, standard calls rather than one of our
+own.
+
+- **The calls.** `lib/GL/gl.h` gains `glEnableClientState`,
+  `glDisableClientState`, `glVertexPointer`, `glTexCoordPointer` and
+  `glDrawArrays`, and `lib/pbgl.h` `pbgl_client_texture`, the unit the
+  texture coordinate array goes to (GL_ARB_multitexture's
+  `glClientActiveTextureARB`; GLQuake's SGIS calls have no such call).
+  Only what GLQuake uses is taken: three floats a vertex, two a
+  coordinate, any stride; another size or type is counted in `ignored`
+  and its array draws as off. `lib/qvid.c` turns the arrays on once, and
+  `R_SurfacePoly`'s multitexture path (`quake/gl_rsurf.c`, QUINCE:)
+  points them at the polygon's verts and draws: six calls a polygon
+  where it was three a vertex and two more (demo1's GL calls a frame on
+  the PC's fixed clock 9,769 to 8,632).
+- **One loop.** The first version made each element through `vertex`,
+  as the calls had, and was 0.6 ms a frame slower at SIMMER's pace: the
+  per-vertex calls were never the cost, the work in them is. So a
+  polygon or fan shorter than `prim[]` (`vertex` counts one of exactly
+  256 as split, so that one goes through it) is now made in `glDrawArrays`
+  itself, the transform and outcode written there (the outcode's tests
+  are a macro, `OUTCODE`, shared with `vertex`, since CANNER inlines no
+  function), the texture coordinates straight from the arrays, then
+  sent as `glEnd` sends; anything else still goes through `vertex`.
+  `prim[]` is still filled: the plan's "no prim[] when uncut" would
+  need a second send path, for a gain the first version's numbers
+  don't promise.
+- **The current coordinates.** GL leaves an enabled array's current
+  values undefined after `glDrawArrays`; here they are the last
+  element's, as the calls left them, so a later primitive that sets
+  none sends the same words.
+- **Room.** About 3 KB more code and selftest, which PR 6b's room took
+  (it didn't fit before: `Headspace exceeded.`).
+- **Checks.** `make test` (both gates), all nine maps' 300 server
+  frames give main's checksums, and the selftest draws one polygon both
+  ways, on the screen and cut, with the second unit's array on and off,
+  and compares the words; then every kind of primitive (a polygon of 256
+  and of 257, a fan, GL_TRIANGLES, GL_QUADS, a strip), from packed arrays
+  and from three strides, against the calls by checksum and counts (385
+  checks, review 1). Of review 1's 18 mutants of the new code, all fail
+  it but one that sends everything through `vertex`: the same words,
+  only slower, which the board's timing is the test of. SIMMER at the board's pace: demo1
+  71.1 to 70.4 ms a frame (-1%), e1m1 53.2 to 52.1 (-2%).
+- **On the board** (one boot of PectinOS 20978ee, two samples each,
+  alternating, main 37d998b against 1ab212a): CANNER's demo1 29.2 to
+  28.8 and 28.9 ms a frame (-1.2%), e1m1 23.6 to 23.0 (-2.5%). GCC's
+  build 25.1 to 24.7 and 20.5 to 19.5, with 35,560 bytes of SRAM spare
+  (1,064 less than main). GL calls a frame: demo1 9,431 to 8,298, e1m1
+  5,514 to 3,620. The e1m1 gate held in every run, nothing was dropped,
+  and the selftest passed (372 checks, before review 1's added ones). HEADSPACE after a run: `QUINCE,
+  353,848 bytes + heap 13,288 + stack 16,400`.
+

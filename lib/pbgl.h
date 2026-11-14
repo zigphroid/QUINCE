@@ -48,7 +48,10 @@ struct pbgl_counts {
 	                        * an update with a negative x or y or no size;
 	                        * textures, and updates to them, named past
 	                        * max_textures; pushes past the matrix stack's 8;
-	                        * and a depth range with far below near */
+	                        * a depth range with far below near; a vertex
+	                        * or texture coordinate pointer of another size
+	                        * or type, or with a negative stride; and a
+	                        * client state the layer doesn't know (M4 PR 7) */
 };
 
 /* Where the layer's output goes. Any of them may be 0. A frame's
@@ -117,6 +120,9 @@ void pbgl_upload8(const uint8_t *data, int w, int h, int mipmap, int alpha, int 
 #define PBGL_TEXTURE1 0x835Fu
 void pbgl_mtexcoord(unsigned int unit, float s, float t);
 void pbgl_select_texture(unsigned int unit);
+/* The unit glTexCoordPointer and GL_TEXTURE_COORD_ARRAY's client state
+ * go to (GL_ARB_multitexture's glClientActiveTextureARB): M4 PR 7. */
+void pbgl_client_texture(unsigned int unit);
 
 /* lib/qvid.c's: the sink it gives pbgl_init, 0 on the board. The PC's
  * main sets it before Quake starts (tests/pbdump.c). */
