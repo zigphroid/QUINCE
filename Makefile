@@ -103,7 +103,7 @@ CANNER_FLAGS ?=
 # or build/heat/ or build/gcc/'s (below).
 QUINCE_JAM ?= $(BUILD)/$(NAME).JAM
 
-.PHONY: FORCE all app heat gcc test test-builds quake-host test-quake test-builtins test-float pb-frames sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
+.PHONY: FORCE all app heat gcc test test-builds quake-host test-quake test-builtins test-float test-trigraphs pb-frames sim-bench page-check sim-kernel sim-smoke sim send dist os pin clean
 all: app $(BUILD)/pbmodel.jo $(BUILD)/pbdecode.jo
 app: $(BUILD)/$(NAME).JAM
 
@@ -151,7 +151,7 @@ page-check:
 # range, NaN included, which x86 and the board's VCVT answer differently.
 HOST_SAN ?= -fsanitize=address,undefined,float-cast-overflow -fno-sanitize-recover=undefined,float-cast-overflow \
             -fno-omit-frame-pointer
-test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins test-float test-builds
+test: $(BUILD)/test_quince $(BUILD)/test_pbmodel test-quake test-builtins test-float test-builds test-trigraphs
 	$(BUILD)/test_quince
 	$(PYTHON) tests/pbcheck.py --self-test
 	@mkdir -p $(BUILD)/pbmodel
@@ -175,6 +175,16 @@ test-builds:
 	    { cat $(BUILD)/test-gcc.log; echo "test-builds: FAIL: make gcc"; exit 1; }; \
 	else echo "test-builds: make gcc skipped: no $(CROSS)gcc"; fi
 	@echo "test-builds: make heat$(if $(shell command -v $(CROSS)gcc 2>/dev/null), and make gcc,) built"
+
+# No trigraphs (LOG 2026-11-18): C reads ?? and one of =/'()!<>- as
+# another character, even in a string or a comment, and CANNER since
+# pectinos #2283 refuses them. The pinned CANNER may be older and take
+# them, so this catches one before a pin move does. Write ?\? in a string.
+TRIGRAPH_SRC = $(shell find quake quince lib tests -name '*.[ch]')
+test-trigraphs:
+	@if grep -nE "\?\?[=/'()!<>-]" $(TRIGRAPH_SRC); then \
+	    echo "test-trigraphs: FAIL: trigraphs above (write ?\\? in a string)"; exit 1; fi
+	@echo "test-trigraphs: no trigraphs in $(words $(TRIGRAPH_SRC)) files"
 
 # Quake's hot functions stay float (M3 PR 2, LOG 2026-11-12): CANNER writes
 # the whole program as assembly, and tools/floatcheck.py fails if a

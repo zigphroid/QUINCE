@@ -128,7 +128,9 @@ touches:
    double code than it allows. A new `QUINCE:` float edit to a hot
    function goes on that list. `make test-builds` builds `make heat`
    and `make gcc` (GCC's skips without `arm-none-eabi-gcc`), without
-   running them.
+   running them. `make test-trigraphs` fails on a trigraph anywhere in
+   `quake/`, `quince/`, `lib/` or `tests/`, which newer CANNERs refuse:
+   write `?\?` in a string.
 2. **`make sim-smoke`**: SIMMER, PectinOS in QEMU, with no window. It runs
    `/SELFTEST` on CANNER's code, then the program, then reads its screen
    back as text. The `simmer` skill has the recipes. `make sim-bench
