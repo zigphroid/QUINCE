@@ -1244,3 +1244,27 @@ own.
   and the selftest passed (372 checks, before review 1's added ones). HEADSPACE after a run: `QUINCE,
   353,848 bytes + heap 13,288 + stack 16,400`.
 
+
+## 2026-11-18: no trigraphs, before the pin moves to PectinOS 1.2
+
+Since pectinos #2283, CANNER refuses a trigraph anywhere, strings
+included (the PectinOS CANNER thread's note for QUINCE, measured against
+`v1.2-rc1`, `511d6c15`). QUINCE's pin builds today because its CANNER is
+older; the 1.2 pin would not.
+
+- **The edit.** The only two in the tree are `quake/pr_edict.c`'s
+  `"%i(???)"`, in `PR_GlobalString` and `PR_GlobalStringNoContents`.
+  C's translation phase 1 reads the last two question marks and the `)`
+  as `]`, so a strict C compiler prints `(?]` (checked: GCC `-std=c11`).
+  id's compilers ignored trigraphs and printed `(???)`. Both become
+  `"%i(??\?)"`, marked `QUINCE:`: the same bytes in every compiler, and
+  the pinned CANNER takes it.
+- **Alternative.** A switch to ignore trigraphs, as GCC's `-std=gnu11`
+  does: CANNER has none, and pectinos chose to refuse rather than
+  guess.
+- **The check** (Jacob). `make test-trigraphs`, in `make test`, greps
+  every `.c` and `.h` under `quake/`, `quince/`, `lib/` and `tests/` for
+  `??` and one of `=/'()!<>-`, so a new one fails here on the pinned
+  CANNER, not at the next pin move.
+- **Next.** The pin PR to pectinos 1.2 (`v1.2` once tagged), with the
+  full checks and a board run.

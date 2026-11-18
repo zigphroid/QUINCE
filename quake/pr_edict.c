@@ -389,7 +389,7 @@ char *PR_GlobalString (int ofs)
 	val = (void *)&pr_globals[ofs];
 	def = ED_GlobalAtOfs(ofs);
 	if (!def)
-		sprintf (line,"%i(???)", ofs);
+		sprintf (line,"%i(??\?)", ofs);	// QUINCE: \? breaks the trigraph the last two question marks and ) would make, which means ] (CANNER refuses trigraphs, pectinos #2283)
 	else
 	{
 		s = PR_ValueString (def->type, val);
@@ -412,7 +412,7 @@ char *PR_GlobalStringNoContents (int ofs)
 	
 	def = ED_GlobalAtOfs(ofs);
 	if (!def)
-		sprintf (line,"%i(???)", ofs);
+		sprintf (line,"%i(??\?)", ofs);	// QUINCE: \? breaks the trigraph the last two question marks and ) would make, which means ] (CANNER refuses trigraphs, pectinos #2283)
 	else
 		sprintf (line,"%i(%s)", ofs, pr_strings + def->s_name);
 	
